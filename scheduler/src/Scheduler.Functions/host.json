@@ -1,0 +1,24 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      },
+      "enableLiveMetricsFilters": true
+    },
+    "logLevel": {
+      "default": "Information",
+      "Scheduler": "Information"
+    }
+  },
+  "extensions": {
+    "serviceBus": {
+      "clientRetryOptions": {
+        "mode": "Exponential",
+        "maxRetries": 3
+      }
+    }
+  }
+}

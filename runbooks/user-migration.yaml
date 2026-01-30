@@ -1,0 +1,107 @@
+name: user-migration
+description: Scheduled mailbox migration with T-minus phased execution
+
+data_source:
+  type: dataverse
+  connection: DATAVERSE_CONNECTION_STRING
+  query: |
+    SELECT
+      u.cr_sourceobjectid       AS SourceObjectId,
+      u.cr_sourceupn            AS SourceUPN,
+      u.cr_targetupn            AS TargetUPN,
+      u.cr_targetobjectid       AS TargetObjectId,
+      u.cr_displayname          AS DisplayName,
+      u.cr_proxyaddresses       AS ProxyAddresses,
+      u.cr_exchangeguid         AS ExchangeGuid,
+      w.cr_migrationdatetime    AS MigrationDateTime
+    FROM cr_migrationusers AS u
+    JOIN cr_migrationwaves AS w ON u.cr_waveid = w.cr_waveid
+    WHERE w.cr_migrationdatetime BETWEEN GETUTCDATE() AND DATEADD(day, 6, GETUTCDATE())
+      AND u.cr_status = 'Approved'
+  primary_key: SourceObjectId
+  batch_time_column: MigrationDateTime
+  multi_valued_columns:
+    - name: ProxyAddresses
+      format: semicolon_delimited
+
+init:
+  - name: create-migration-batch
+    worker_id: cloud-worker
+    function: New-MigrationBatch
+    params:
+      BatchName: "batch-{{_batch_id}}"
+
+phases:
+  - name: pre-stage
+    offset: T-5d
+    steps:
+      - name: create-target-user
+        worker_id: cloud-worker
+        function: New-EntraUser
+        params:
+          DisplayName: "{{DisplayName}}"
+          UserPrincipalName: "{{TargetUPN}}"
+        on_failure: rollback-user-creation
+
+      - name: set-proxy-addresses
+        worker_id: cloud-worker
+        function: Set-EntraProxyAddresses
+        params:
+          UserId: "{{TargetObjectId}}"
+          ProxyAddresses: "{{ProxyAddresses}}"
+
+  - name: verify
+    offset: T-1d
+    steps:
+      - name: verify-proxy-sync
+        worker_id: cloud-worker
+        function: Test-EntraAttributeMatch
+        params:
+          UserId: "{{TargetObjectId}}"
+          AttributeName: proxyAddresses
+          ExpectedValues: "{{ProxyAddresses}}"
+        poll:
+          interval: 15m
+          timeout: 24h
+
+  - name: cutover
+    offset: T-0
+    steps:
+      - name: set-exchange-guids
+        worker_id: cloud-worker
+        function: Set-ExchangeMailUserGuids
+        params:
+          Identity: "{{TargetUPN}}"
+          ExchangeGuid: "{{ExchangeGuid}}"
+
+      - name: set-primary-email
+        worker_id: cloud-worker
+        function: Set-ExchangePrimaryEmail
+        params:
+          Identity: "{{SourceUPN}}"
+          NewPrimaryEmail: "{{TargetUPN}}"
+        on_failure: rollback-email
+
+on_member_removed:
+  - name: revert-primary-email
+    worker_id: cloud-worker
+    function: Set-ExchangePrimaryEmail
+    params:
+      Identity: "{{SourceUPN}}"
+      NewPrimaryEmail: "{{SourceUPN}}"
+
+rollbacks:
+  rollback-user-creation:
+    - name: delete-target-user
+      worker_id: cloud-worker
+      function: Remove-EntraUser
+      params:
+        UserId: "{{TargetObjectId}}"
+
+  rollback-email:
+    - name: revert-email
+      worker_id: cloud-worker
+      function: Set-ExchangePrimaryEmail
+      params:
+        Identity: "{{SourceUPN}}"
+        NewPrimaryEmail: "{{SourceUPN}}"

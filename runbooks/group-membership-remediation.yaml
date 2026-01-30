@@ -1,0 +1,45 @@
+name: group-membership-remediation
+description: Immediate remediation for missing group memberships
+
+data_source:
+  type: databricks
+  connection: DATABRICKS_CONNECTION_STRING
+  warehouse_id: DATABRICKS_WAREHOUSE_ID
+  query: |
+    SELECT
+      r.remediation_id    AS RemediationId,
+      r.group_id          AS GroupId,
+      r.group_name        AS GroupDisplayName,
+      r.user_id           AS UserId,
+      r.user_upn          AS UserPrincipalName,
+      r.action            AS Action
+    FROM analytics.remediation.group_membership_queue r
+    WHERE r.status = 'pending'
+  primary_key: RemediationId
+  batch_time: immediate
+
+init: []
+
+phases:
+  - name: remediate
+    offset: T-0
+    steps:
+      - name: apply-membership-change
+        worker_id: cloud-worker
+        function: "{{Action}}"
+        params:
+          GroupId: "{{GroupId}}"
+          UserId: "{{UserId}}"
+
+      - name: verify-membership
+        worker_id: cloud-worker
+        function: Test-EntraGroupMembership
+        params:
+          GroupId: "{{GroupId}}"
+          UserId: "{{UserId}}"
+        poll:
+          interval: 30s
+          timeout: 5m
+
+on_member_removed: []
+rollbacks: {}

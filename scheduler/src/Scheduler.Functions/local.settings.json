@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "Scheduler__SqlConnectionString": "Server=localhost;Database=matoolkit;Trusted_Connection=true;TrustServerCertificate=true;",
+    "Scheduler__ServiceBusNamespace": "matoolkit-sb.servicebus.windows.net",
+    "Scheduler__OrchestratorTopicName": "orchestrator-events",
+    "DATAVERSE_CONNECTION_STRING": "Server=yourorg.crm.dynamics.com,5558;Authentication=Active Directory Default",
+    "DATABRICKS_CONNECTION_STRING": "https://your-workspace.azuredatabricks.net",
+    "DATABRICKS_WAREHOUSE_ID": "your-warehouse-id"
+  }
+}
