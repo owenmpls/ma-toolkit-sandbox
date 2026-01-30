@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:michev.info)",
+      "Bash(pwsh:*)"
+    ]
+  }
+}

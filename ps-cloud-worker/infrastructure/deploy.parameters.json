@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": {
+      "value": "matoolkit"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "targetTenantId": {
+      "value": "<TARGET-TENANT-ID>"
+    },
+    "appId": {
+      "value": "<APP-REGISTRATION-CLIENT-ID>"
+    },
+    "workerId": {
+      "value": "worker-01"
+    },
+    "maxParallelism": {
+      "value": 4
+    },
+    "containerImage": {
+      "value": "matoolkitacr.azurecr.io/ps-cloud-worker:latest"
+    },
+    "containerCpu": {
+      "value": "1.0"
+    },
+    "containerMemory": {
+      "value": "2.0Gi"
+    },
+    "idleTimeoutSeconds": {
+      "value": 300
+    }
+  }
+}

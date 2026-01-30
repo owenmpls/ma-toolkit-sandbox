@@ -1,0 +1,8 @@
+*.md
+docs/
+tests/
+infrastructure/
+docker-compose.yml
+.git/
+.gitignore
+.vscode/
