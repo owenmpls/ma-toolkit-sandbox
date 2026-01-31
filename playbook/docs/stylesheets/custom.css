@@ -56,7 +56,7 @@
 /* Align header title with nav text
    Nav text offset = sidebar padding-left (1rem)
                    + scrollwrap margin (0.2rem)
-                   + label width (16px) + gap (4px)
+                   + link left padding (19px ≈ 1.2rem)
    Header must match via padding + title margin */
 .md-header__inner.md-grid {
   max-width: 100%;
@@ -137,7 +137,7 @@
 }
 
 /* =============================================================
-   Navigation – 11pt, collapsible, tight
+   Navigation – 11pt, always-expanded, tight
    ============================================================= */
 .md-nav__item {
   padding: 0 !important;
@@ -153,66 +153,33 @@
   color: var(--md-default-fg-color);
 }
 
-/* Home and any direct non-nested links: 16px label + 4px gap - 1px nudge = 19px */
+/* All top-level standalone links (Home, About, etc.) */
 .md-nav--primary > .md-nav__list > .md-nav__item > a.md-nav__link {
   padding: 2px 8px 2px 19px !important;
 }
 
-/* Section container: flex row, small gap between toggle and text */
+/* Section container */
 .md-nav--primary .md-nav__container {
   display: flex !important;
   align-items: center !important;
   padding: 0 !important;
   margin: 0 !important;
-  gap: 4px !important;
 }
 
-/* Toggle label: 16px-wide slot at the left */
+/* Hide collapse/expand toggle – sections are always expanded */
 .md-nav--primary .md-nav__container > label {
-  order: -1;
-  flex: 0 0 16px;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  padding: 0 !important;
-  margin: 0 !important;
-  cursor: pointer;
-}
-
-/* Section text: starts right after the 16px label = same offset as Home */
-.md-nav--primary .md-nav__container > a {
-  order: 0;
-  flex: 1;
-  padding: 2px 8px 2px 0 !important;
-}
-
-/* Replace default icon with › character */
-.md-nav__icon::after {
   display: none !important;
 }
 
-.md-nav--primary .md-nav__container > label .md-nav__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  height: auto;
-  transform: none;
+/* Section heading text: same left padding as standalone links */
+.md-nav--primary .md-nav__container > a {
+  flex: 1;
+  padding: 2px 8px 2px 19px !important;
 }
 
-.md-nav--primary .md-nav__container > label .md-nav__icon::before {
-  content: "›";
-  display: block;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--md-default-fg-color);
-  opacity: 0.5;
-  transition: transform 0.15s ease;
-}
-
-/* Rotate when expanded */
-.md-nav__item--nested .md-toggle:checked ~ .md-nav__container > label .md-nav__icon::before {
-  transform: rotate(90deg);
+/* Force nested navigation always visible (no collapse) */
+.md-nav--primary .md-toggle ~ .md-nav {
+  display: block !important;
 }
 
 /* Child pages: indented past parent text */
