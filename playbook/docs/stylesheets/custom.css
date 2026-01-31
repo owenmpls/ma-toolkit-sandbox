@@ -137,7 +137,7 @@
 }
 
 /* =============================================================
-   Navigation – 11pt, always-expanded, tight
+   Navigation – 11pt, collapsible, tight
    ============================================================= */
 .md-nav__item {
   padding: 0 !important;
@@ -158,8 +158,11 @@
   padding: 2px 8px 2px 19px !important;
 }
 
-/* Section container – hide toggle, show heading link only */
+/* Section container – toggle icon is absolutely positioned so
+   heading text aligns with standalone links regardless of
+   whether an expand/collapse icon is present */
 .md-nav--primary .md-nav__container {
+  position: relative;
   display: flex !important;
   align-items: center !important;
   padding: 0 !important;
@@ -167,7 +170,17 @@
 }
 
 .md-nav--primary .md-nav__container > label {
-  display: none !important;
+  position: absolute;
+  left: 4px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 100%;
+  padding: 0 !important;
+  margin: 0 !important;
+  cursor: pointer;
+  z-index: 1;
 }
 
 .md-nav--primary .md-nav__container > a {
@@ -175,17 +188,33 @@
   padding: 2px 8px 2px 19px !important;
 }
 
-/* Always-expanded: override every hiding mechanism the theme uses
-   and disable transitions to prevent ghost-space artifacts */
-.md-nav--primary .md-nav[data-md-level] {
-  display: block !important;
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  transition: none !important;
-  pointer-events: auto !important;
+/* Replace default icon with › character */
+.md-nav__icon::after {
+  display: none !important;
+}
+
+.md-nav--primary .md-nav__container > label .md-nav__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  transform: none;
+}
+
+.md-nav--primary .md-nav__container > label .md-nav__icon::before {
+  content: "›";
+  display: block;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--md-default-fg-color);
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+/* Rotate icon when section is expanded */
+.md-nav__item--nested .md-toggle:checked ~ .md-nav__container > label .md-nav__icon::before {
+  transform: rotate(90deg);
 }
 
 /* Child pages: indented past parent text */
@@ -209,7 +238,7 @@
 }
 
 /* =============================================================
-   Layout – nav 25 %, content 60 %, TOC 15 %
+   Layout – nav 25 %, content 55 %, TOC 20 %
    ============================================================= */
 @media screen and (min-width: 76.25em) {
   .md-main__inner.md-grid {
@@ -228,7 +257,7 @@
   }
 
   .md-sidebar--secondary {
-    width: 15%;
+    width: 20%;
   }
 
   .md-content {
