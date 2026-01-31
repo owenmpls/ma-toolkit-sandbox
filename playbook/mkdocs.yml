@@ -49,18 +49,16 @@ extra_css:
 # ---------------------------------------------------------------
 nav:
   - Home: index.md
+  - About: about.md
   - Reference architectures:
       - reference-architectures/index.md
       - Sample page: reference-architectures/sample-page.md
-  - Secure landing zone:
-      - secure-landing-zone/index.md
-      - Sample page: secure-landing-zone/sample-page.md
   - Coexistence:
       - coexistence/index.md
       - Sample page: coexistence/sample-page.md
-  - Zero trust integration:
-      - zero-trust-integration/index.md
-      - Sample page: zero-trust-integration/sample-page.md
+  - Secure landing zone:
+      - secure-landing-zone/index.md
+      - Sample page: secure-landing-zone/sample-page.md
   - User migration:
       - user-migration/index.md
       - Sample page: user-migration/sample-page.md
@@ -70,16 +68,16 @@ nav:
   - Domain branding migration:
       - domain-branding-migration/index.md
       - Sample page: domain-branding-migration/sample-page.md
+  - Shared data migration:
+      - shared-data-migration/index.md
+      - Sample page: shared-data-migration/sample-page.md
   - Data retention:
       - data-retention/index.md
       - Sample page: data-retention/sample-page.md
   - Data encryption:
       - data-encryption/index.md
       - Sample page: data-encryption/sample-page.md
-  - Shared data migration:
-      - shared-data-migration/index.md
-      - Sample page: shared-data-migration/sample-page.md
-  - Teams phone & rooms migration:
+  - Teams Phone & Rooms migration:
       - teams-phone-and-rooms-migration/index.md
       - Sample page: teams-phone-and-rooms-migration/sample-page.md
   - Power Platform migration:
