@@ -3,27 +3,18 @@
    Targets MkDocs Material 9.x CSS variable API
    ============================================================= */
 
-/* ── Shared design tokens ── */
-:root {
-  --md-primary-fg-color: transparent;
-  --md-primary-bg-color: transparent;
-}
-
 /* ── Dark (default) ── */
 [data-md-color-scheme="slate"] {
   --md-default-bg-color: #1b1b1f;
   --md-default-fg-color: #e8e8e8;
   --md-primary-fg-color: #1b1b1f;
-  --md-primary-bg-color: #1b1b1f;
+  --md-primary-bg-color: #e8e8e8;
   --md-accent-fg-color: #4da6ff;
   --md-typeset-a-color: #4da6ff;
   --md-code-bg-color: #2d2d30;
   --md-code-fg-color: #d4d4d4;
   --md-footer-bg-color: #141417;
   --md-footer-fg-color: #ffffffb3;
-  /* header */
-  --md-primary-fg-color: #1b1b1f;
-  --md-primary-bg-color: #e8e8e8;
 }
 
 /* ── Light ── */
@@ -41,6 +32,14 @@
 }
 
 /* =============================================================
+   Hide logo icon (header + mobile sidebar)
+   ============================================================= */
+.md-header__button.md-logo,
+.md-nav__title .md-logo {
+  display: none;
+}
+
+/* =============================================================
    Header – blend with page background
    ============================================================= */
 .md-header {
@@ -50,46 +49,41 @@
   border-bottom: 1px solid rgba(128, 128, 128, 0.15);
 }
 
-.md-header__title {
+.md-header__title,
+.md-header__topic,
+.md-header__button {
   color: var(--md-default-fg-color);
 }
 
-.md-header__button,
-.md-header__topic {
-  color: var(--md-default-fg-color);
-}
-
-/* search bar inherits bg */
 .md-search__input {
   background-color: rgba(128, 128, 128, 0.12);
 }
 
 /* =============================================================
-   Typography – match Microsoft Learn sizes
-   Body 15px, H1 32px, H2 24px, H3 18px
+   Typography – Microsoft Learn sizes
+   Body 15px · H1 32px · H2 24px · H3 18px
    ============================================================= */
 .md-typeset {
-  font-size: 0.9375rem;  /* 15px */
+  font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--md-default-fg-color);
 }
 
 .md-typeset h1 {
-  font-size: 2rem;       /* 32px */
+  font-size: 2rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--md-default-fg-color);
-  margin-bottom: 0.5em;
 }
 
 .md-typeset h2 {
-  font-size: 1.5rem;     /* 24px */
+  font-size: 1.5rem;
   font-weight: 600;
   color: var(--md-default-fg-color);
 }
 
 .md-typeset h3 {
-  font-size: 1.125rem;   /* 18px */
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--md-default-fg-color);
 }
@@ -102,50 +96,106 @@
 }
 
 /* =============================================================
-   Sidebar navigation – dense & collapsible
-   MS Learn nav items are ~13px with ~4-6px vertical padding
+   Sidebar navigation – dense, compact, left-caret toggle
+   MS Learn: ~14px nav items, ~6px vertical padding, tight tree
    ============================================================= */
 
-/* nav link base */
-.md-nav__link {
-  font-size: 0.8125rem;  /* 13px */
-  padding: 0.25rem 0.6rem;
-  margin: 0;
-}
-
-/* section labels (collapsible toggles) */
-.md-nav__item--nested > .md-nav__link {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  padding: 0.25rem 0.6rem;
-}
-
-/* tighter vertical spacing between items */
+/* ── Reset spacing on all nav items ── */
 .md-nav__item {
   padding: 0;
 }
 
-/* reduce nested indentation */
-.md-nav--primary .md-nav .md-nav {
-  margin-left: 0.6rem;
+/* ── All nav links: 14px, tight padding ── */
+.md-nav--primary .md-nav__link,
+.md-nav--primary .md-nav__container > a {
+  font-size: 0.875rem;
+  padding: 0.3rem 0.75rem;
+  margin: 0;
 }
 
-/* table-of-contents (right sidebar) */
+/* ── Section headings (collapsible parents) ── */
+.md-nav__item--nested > .md-nav__link,
+.md-nav__item--nested > .md-nav__container > a {
+  font-weight: 600;
+}
+
+/* ── Reorder container: caret BEFORE text ── */
+.md-nav__container {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.md-nav__container > label.md-nav__link {
+  order: -1;
+  flex: 0 0 auto;
+  padding: 0 0 0 0.75rem;
+  margin: 0;
+  width: 1.2rem;
+  min-width: 0;
+}
+
+.md-nav__container > a.md-nav__link {
+  order: 0;
+  padding-left: 0;
+}
+
+/* ── Caret icon: small triangle ── */
+.md-nav__icon::after {
+  display: none !important;
+}
+
+.md-nav__container > label .md-nav__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  transform: none;
+}
+
+.md-nav__container > label .md-nav__icon::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--md-default-fg-color);
+  transition: transform 0.2s;
+  opacity: 0.6;
+}
+
+/* Caret rotates down when section is expanded */
+.md-nav__item--nested .md-toggle:checked ~ .md-nav__container > label .md-nav__icon::before {
+  transform: rotate(90deg);
+}
+
+/* ── Child items: indented under parent ── */
+.md-nav--primary .md-nav__list .md-nav__list {
+  padding-left: 1.25rem;
+}
+
+/* ── Remove extra indentation Material adds by default ── */
+.md-nav--primary .md-nav .md-nav {
+  margin-left: 0;
+}
+
+/* ── Active link indicator ── */
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+/* ── Table-of-contents sidebar (right) ── */
 .md-nav--secondary .md-nav__link {
   font-size: 0.8125rem;
   padding: 0.2rem 0.6rem;
 }
 
-/* active item accent */
-.md-nav__link--active,
-.md-nav__link:is([data-md-state="current"]) {
-  font-weight: 600;
-}
-
-/* sidebar width – slightly narrower for density */
+/* ── Trim sidebar inner padding ── */
 @media screen and (min-width: 76.25em) {
   .md-sidebar--primary .md-sidebar__inner {
-    padding-right: 0.4rem;
+    padding-right: 0;
   }
 }
 
