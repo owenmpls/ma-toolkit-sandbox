@@ -26,7 +26,7 @@
   --md-typeset-a-color: #0066cc;
   --md-code-bg-color: #f5f5f5;
   --md-code-fg-color: #000000;
-  --md-footer-bg-color: #f0f0f0;
+  --md-footer-bg-color: #ffffff;
   --md-footer-fg-color: #000000;
 }
 
@@ -69,6 +69,20 @@
 .md-search__input {
   background-color: rgba(128, 128, 128, 0.15);
   color: var(--md-default-fg-color);
+  font-size: 11pt;
+}
+
+.md-search__input::placeholder {
+  color: rgba(128, 128, 128, 0.6);
+}
+
+[data-md-color-scheme="default"] .md-search__input {
+  background-color: #ffffff;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+[data-md-color-scheme="default"] .md-search__input::placeholder {
+  color: #bfbfbf;
 }
 
 /* =============================================================
