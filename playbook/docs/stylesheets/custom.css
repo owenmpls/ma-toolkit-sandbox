@@ -150,9 +150,9 @@
   color: var(--md-default-fg-color);
 }
 
-/* Home and any direct non-nested links: 16px label + 4px gap = 20px */
+/* Home and any direct non-nested links: 16px label + 4px gap - 1px nudge = 19px */
 .md-nav--primary > .md-nav__list > .md-nav__item > a.md-nav__link {
-  padding: 2px 8px 2px 20px !important;
+  padding: 2px 8px 2px 19px !important;
 }
 
 /* Section container: flex row, small gap between toggle and text */
