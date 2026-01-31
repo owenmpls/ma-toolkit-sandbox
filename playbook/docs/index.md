@@ -1,3 +1,3 @@
 # M&A Playbook
 
-Microsoft 365 tenant-to-tenant migration playbook.
+Microsoft tenant restructuring playbook, supporting mergers, acquisitions, divestitures, and related scenarios.
