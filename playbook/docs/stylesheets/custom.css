@@ -144,7 +144,7 @@
   margin: 0 !important;
 }
 
-/* Nuclear reset: zero out ALL nav link padding in primary nav */
+/* Base reset for all nav links */
 .md-nav--primary .md-nav__link {
   font-size: 11pt;
   font-weight: 400 !important;
@@ -153,12 +153,12 @@
   color: var(--md-default-fg-color);
 }
 
-/* All top-level standalone links (Home, About, etc.) */
+/* Top-level links (Home, About, etc.) */
 .md-nav--primary > .md-nav__list > .md-nav__item > a.md-nav__link {
   padding: 2px 8px 2px 19px !important;
 }
 
-/* Section container */
+/* Section container – hide toggle, show heading link only */
 .md-nav--primary .md-nav__container {
   display: flex !important;
   align-items: center !important;
@@ -166,20 +166,26 @@
   margin: 0 !important;
 }
 
-/* Hide collapse/expand toggle – sections are always expanded */
 .md-nav--primary .md-nav__container > label {
   display: none !important;
 }
 
-/* Section heading text: same left padding as standalone links */
 .md-nav--primary .md-nav__container > a {
   flex: 1;
   padding: 2px 8px 2px 19px !important;
 }
 
-/* Force nested navigation always visible (no collapse) */
-.md-nav--primary .md-toggle ~ .md-nav {
+/* Always-expanded: override every hiding mechanism the theme uses
+   and disable transitions to prevent ghost-space artifacts */
+.md-nav--primary .md-nav[data-md-level] {
   display: block !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: none !important;
+  pointer-events: auto !important;
 }
 
 /* Child pages: indented past parent text */
@@ -203,7 +209,7 @@
 }
 
 /* =============================================================
-   Layout – nav at 30% width, flush left
+   Layout – nav 25 %, content 60 %, TOC 15 %
    ============================================================= */
 @media screen and (min-width: 76.25em) {
   .md-main__inner.md-grid {
@@ -213,13 +219,16 @@
   }
 
   .md-sidebar--primary {
-    width: 30%;
-    max-width: 22rem;
+    width: 25%;
     padding-left: 1rem;
   }
 
   .md-sidebar--primary .md-sidebar__inner {
     padding-right: 0;
+  }
+
+  .md-sidebar--secondary {
+    width: 15%;
   }
 
   .md-content {

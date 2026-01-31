@@ -58,8 +58,8 @@ nav:
       - secure-landing-zone/index.md
   - User migration:
       - user-migration/index.md
-      - Setup checklist: user-migration/setup.md
-      - Test cases: user-migration/tests.md
+      - Setup: user-migration/setup.md
+      - Tests: user-migration/tests.md
   - Device migration:
       - device-migration/index.md
   - Domain branding migration:
