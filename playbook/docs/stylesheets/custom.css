@@ -104,51 +104,48 @@
 }
 
 /* =============================================================
-   Navigation – 11pt, collapsible, dense
+   Navigation – 11pt, collapsible, tight
    ============================================================= */
 .md-nav__item {
   padding: 0;
+  margin: 0;
 }
 
-.md-nav--primary .md-nav__link,
-.md-nav--primary .md-nav__container > a {
+/* All nav links: 11pt, tight, no bold, consistent left edge */
+.md-nav--primary .md-nav__link {
   font-size: 11pt;
-  padding: 4px 12px;
+  font-weight: 400;
+  padding: 2px 8px 2px 12px;
   margin: 0;
   color: var(--md-default-fg-color);
 }
 
-/* No bold anywhere in nav */
-.md-nav--primary .md-nav__link,
-.md-nav--primary .md-nav__container > a,
-.md-nav__item--nested > .md-nav__link,
-.md-nav__item--nested > .md-nav__container > a {
-  font-weight: 400;
-}
-
-/* Expand/collapse toggle: caret sits in the left gutter,
-   text aligns with "Home" at padding-left: 12px */
+/* Reset the container so it adds no extra space */
 .md-nav__container {
   display: flex;
   align-items: center;
   position: relative;
+  padding: 0;
+  margin: 0;
 }
 
+/* Caret label: absolutely positioned in the left gutter */
 .md-nav__container > label.md-nav__link {
   order: -1;
   position: absolute;
-  left: 0;
+  left: 1px;
   padding: 0;
   margin: 0;
-  width: 12px;
+  width: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* Section text: same 12px left padding as Home */
 .md-nav__container > a.md-nav__link {
   order: 0;
-  padding-left: 12px;
+  padding: 2px 8px 2px 12px;
 }
 
 /* Replace default icon with a small triangle caret */
@@ -169,7 +166,7 @@
   content: "";
   display: block;
   border-style: solid;
-  border-width: 3.5px 0 3.5px 5px;
+  border-width: 3px 0 3px 4.5px;
   border-color: transparent transparent transparent var(--md-default-fg-color);
   transition: transform 0.15s ease;
 }
@@ -179,9 +176,9 @@
   transform: rotate(90deg);
 }
 
-/* Child items indented */
+/* Child items: slight indent from parent */
 .md-nav--primary .md-nav__list .md-nav__list {
-  padding-left: 16px;
+  padding-left: 8px;
 }
 
 .md-nav--primary .md-nav .md-nav {
@@ -196,7 +193,7 @@
 /* TOC sidebar (right) */
 .md-nav--secondary .md-nav__link {
   font-size: 10pt;
-  padding: 2px 8px;
+  padding: 1px 8px;
   color: var(--md-default-fg-color);
 }
 
