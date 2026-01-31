@@ -34,9 +34,18 @@ jobs:
 
       - run: mkdocs build --strict
 
+      # Nest build output under /playbook/ so other sites can
+      # coexist at the root of GitHub Pages later.
+      - name: Assemble site structure
+        run: |
+          mkdir -p _site/playbook
+          cp -r playbook/site/* _site/playbook/
+          echo '<meta http-equiv="refresh" content="0;url=playbook/">' > _site/index.html
+        working-directory: ${{ github.workspace }}
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: playbook/site
+          path: _site
 
   deploy:
     needs: build
