@@ -107,55 +107,52 @@
    Navigation – 11pt, collapsible, tight
    ============================================================= */
 .md-nav__item {
-  padding: 0;
-  margin: 0;
-}
-
-/* All top-level nav links (e.g. Home): text starts at 16px */
-.md-nav--primary > .md-nav__list > .md-nav__item > .md-nav__link {
-  font-size: 11pt;
-  font-weight: 400;
-  padding: 2px 8px 2px 16px;
-  margin: 0;
-  color: var(--md-default-fg-color);
-}
-
-/* Fallback for any other nav links */
-.md-nav--primary .md-nav__link {
-  font-size: 11pt;
-  font-weight: 400;
-  margin: 0;
-  color: var(--md-default-fg-color);
-}
-
-/* Reset container: no spacing of its own */
-.md-nav--primary .md-nav__container {
-  display: flex;
-  align-items: center;
   padding: 0 !important;
   margin: 0 !important;
 }
 
-/* ">" toggle: fixed-width slot before the text */
-.md-nav--primary .md-nav__container > label.md-nav__link {
+/* Nuclear reset: zero out ALL nav link padding in primary nav */
+.md-nav--primary .md-nav__link {
+  font-size: 11pt;
+  font-weight: 400 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: var(--md-default-fg-color);
+}
+
+/* Home and any direct non-nested links: text at 16px */
+.md-nav--primary > .md-nav__list > .md-nav__item > a.md-nav__link {
+  padding: 2px 8px 2px 16px !important;
+}
+
+/* Section container: flex row, zero spacing */
+.md-nav--primary .md-nav__container {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Toggle label: 16px-wide slot at the left */
+.md-nav--primary .md-nav__container > label {
   order: -1;
   flex: 0 0 16px;
-  position: static;
-  padding: 0;
-  margin: 0;
-  width: 16px;
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
+  padding: 0 !important;
+  margin: 0 !important;
+  cursor: pointer;
 }
 
-/* Section text: no left padding — the 16px label provides the offset */
-.md-nav--primary .md-nav__container > a.md-nav__link {
+/* Section text: starts right after the 16px label = same offset as Home */
+.md-nav--primary .md-nav__container > a {
   order: 0;
-  padding: 2px 8px 2px 0;
+  flex: 1;
+  padding: 2px 8px 2px 0 !important;
 }
 
-/* Replace default icon with ">" character */
+/* Replace default icon with › character */
 .md-nav__icon::after {
   display: none !important;
 }
@@ -179,43 +176,53 @@
   transition: transform 0.15s ease;
 }
 
-/* Rotate when expanded: points down */
+/* Rotate when expanded */
 .md-nav__item--nested .md-toggle:checked ~ .md-nav__container > label .md-nav__icon::before {
   transform: rotate(90deg);
 }
 
-/* Child items: indented to the right of parent text */
+/* Child pages: indented past parent text */
+.md-nav--primary .md-nav[data-md-level="1"] > .md-nav__list > .md-nav__item > a.md-nav__link {
+  padding: 2px 8px 2px 32px !important;
+}
+
 .md-nav--primary .md-nav__list .md-nav__list {
-  padding-left: 0;
+  padding-left: 0 !important;
 }
 
 .md-nav--primary .md-nav .md-nav {
-  margin-left: 0;
-}
-
-.md-nav--primary .md-nav .md-nav .md-nav__link {
-  padding: 2px 8px 2px 28px;
-}
-
-/* Active link – no bold */
-.md-nav__link--active {
-  font-weight: 400 !important;
+  margin-left: 0 !important;
 }
 
 /* TOC sidebar (right) */
 .md-nav--secondary .md-nav__link {
   font-size: 10pt;
-  padding: 1px 8px;
+  padding: 1px 8px !important;
   color: var(--md-default-fg-color);
 }
 
-/* Move sidebar closer to the left edge */
+/* =============================================================
+   Layout – nav at 30% width, flush left
+   ============================================================= */
 @media screen and (min-width: 76.25em) {
-  .md-sidebar--primary {
-    width: 11rem;
+  .md-main__inner.md-grid {
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
   }
+
+  .md-sidebar--primary {
+    width: 30%;
+    max-width: 22rem;
+    padding-left: 1rem;
+  }
+
   .md-sidebar--primary .md-sidebar__inner {
     padding-right: 0;
+  }
+
+  .md-content {
+    margin-left: 1rem;
   }
 }
 
