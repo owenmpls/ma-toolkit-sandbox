@@ -118,29 +118,37 @@
   color: var(--md-default-fg-color);
 }
 
-/* Section labels */
+/* No bold anywhere in nav */
+.md-nav--primary .md-nav__link,
+.md-nav--primary .md-nav__container > a,
 .md-nav__item--nested > .md-nav__link,
 .md-nav__item--nested > .md-nav__container > a {
-  font-weight: 600;
+  font-weight: 400;
 }
 
-/* Expand/collapse toggle: position caret before text */
+/* Expand/collapse toggle: caret sits in the left gutter,
+   text aligns with "Home" at padding-left: 12px */
 .md-nav__container {
   display: flex;
   align-items: center;
+  position: relative;
 }
 
 .md-nav__container > label.md-nav__link {
   order: -1;
-  flex: 0 0 auto;
-  padding: 0 0 0 12px;
+  position: absolute;
+  left: 0;
+  padding: 0;
   margin: 0;
-  width: 16px;
+  width: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .md-nav__container > a.md-nav__link {
   order: 0;
-  padding-left: 2px;
+  padding-left: 12px;
 }
 
 /* Replace default icon with a small triangle caret */
@@ -180,9 +188,9 @@
   margin-left: 0;
 }
 
-/* Active link */
+/* Active link – no bold */
 .md-nav__link--active {
-  font-weight: 600;
+  font-weight: 400;
 }
 
 /* TOC sidebar (right) */
