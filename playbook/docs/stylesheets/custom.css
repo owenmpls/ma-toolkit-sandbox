@@ -50,16 +50,20 @@
   display: none;
 }
 
-/* Align header title with nav text */
+/* Align header title with nav text
+   Nav text offset = sidebar padding-left (1rem)
+                   + scrollwrap margin (0.2rem)
+                   + label width (16px) + gap (4px)
+   Header must match via padding + title margin */
 .md-header__inner.md-grid {
   max-width: 100%;
   margin-left: 0;
   margin-right: 0;
-  padding-left: 1rem;
+  padding-left: 1.2rem;
 }
 
 [dir=ltr] .md-header__title {
-  margin-left: 1rem;
+  margin-left: 1.2rem;
 }
 
 .md-search__input {
@@ -132,18 +136,18 @@
   color: var(--md-default-fg-color);
 }
 
-/* Home and any direct non-nested links: text at 16px */
+/* Home and any direct non-nested links: 16px label + 4px gap = 20px */
 .md-nav--primary > .md-nav__list > .md-nav__item > a.md-nav__link {
-  padding: 2px 8px 2px 16px !important;
+  padding: 2px 8px 2px 20px !important;
 }
 
-/* Section container: flex row, zero spacing, zero gap */
+/* Section container: flex row, small gap between toggle and text */
 .md-nav--primary .md-nav__container {
   display: flex !important;
   align-items: center !important;
   padding: 0 !important;
   margin: 0 !important;
-  gap: 0 !important;
+  gap: 4px !important;
 }
 
 /* Toggle label: 16px-wide slot at the left */
@@ -196,7 +200,7 @@
 
 /* Child pages: indented past parent text */
 .md-nav--primary .md-nav[data-md-level="1"] > .md-nav__list > .md-nav__item > a.md-nav__link {
-  padding: 2px 8px 2px 42px !important;
+  padding: 2px 8px 2px 37px !important;
 }
 
 .md-nav--primary .md-nav__list .md-nav__list {

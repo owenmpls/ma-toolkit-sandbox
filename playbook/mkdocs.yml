@@ -5,6 +5,8 @@ site_url: https://owenmpls.github.io/ma-toolkit-sandbox/
 theme:
   name: material
   features:
+    - navigation.instant
+    - navigation.instant.progress
     - navigation.indexes
     - navigation.top
     - search.suggest
