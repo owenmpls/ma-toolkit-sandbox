@@ -8,13 +8,13 @@ C# Azure Functions project using the **isolated worker model** (.NET 8, Function
 
 ```bash
 # Build
-dotnet build scheduler/src/Scheduler.Functions/
+dotnet build src/automation/scheduler/src/Scheduler.Functions/
 
 # Run locally (requires Azure Functions Core Tools v4)
-cd scheduler/src/Scheduler.Functions && func start
+cd src/automation/scheduler/src/Scheduler.Functions && func start
 
 # Publish (release build)
-dotnet publish scheduler/src/Scheduler.Functions/ -c Release -o scheduler/src/Scheduler.Functions/publish
+dotnet publish src/automation/scheduler/src/Scheduler.Functions/ -c Release -o src/automation/scheduler/src/Scheduler.Functions/publish
 ```
 
 ## Directory Structure
@@ -27,9 +27,6 @@ scheduler/
     deployment-guide.md          # Azure deployment and local dev setup
     runbook-format.md            # Complete YAML schema reference
     orchestrator-contract.md     # Service Bus messages, SQL tables, protocols
-  infrastructure/
-    deploy.bicep                 # Azure resources (Function App, SQL, Service Bus topic, RBAC)
-    deploy.parameters.json       # Parameter values for Bicep deployment
   src/
     Scheduler.Functions/
       Scheduler.Functions.csproj

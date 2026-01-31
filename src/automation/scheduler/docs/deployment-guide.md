@@ -12,7 +12,7 @@
 
 ## Infrastructure Deployment
 
-The Bicep template at `scheduler/infrastructure/deploy.bicep` provisions:
+The Bicep template at `infrastructure/automation/scheduler/deploy.bicep` (relative to the repo root) provisions:
 
 - Azure Functions App (Flex Consumption plan, .NET 8 isolated, Linux, system-assigned managed identity)
 - Storage Account (for Functions runtime)
@@ -28,8 +28,8 @@ The Bicep template at `scheduler/infrastructure/deploy.bicep` provisions:
 ```bash
 az deployment group create \
   --resource-group <your-resource-group> \
-  --template-file scheduler/infrastructure/deploy.bicep \
-  --parameters scheduler/infrastructure/deploy.parameters.json \
+  --template-file infrastructure/automation/scheduler/deploy.bicep \
+  --parameters infrastructure/automation/scheduler/deploy.parameters.json \
   --parameters \
     environmentName='dev' \
     serviceBusNamespaceName='matoolkit-sb' \
@@ -43,7 +43,7 @@ Update the parameter values or edit `deploy.parameters.json` before deploying. T
 
 ### Deploy the SQL Schema
 
-After the SQL Server and database are provisioned, run the schema script against the database. The schema is located at `scheduler/database/schema.sql` (if present) or must be created manually. The required tables are:
+After the SQL Server and database are provisioned, run the schema script against the database. The schema is located at `src/automation/database/schema.sql` (relative to the repo root) or must be created manually. The required tables are:
 
 - `runbooks`
 - `batches`
@@ -56,7 +56,7 @@ After the SQL Server and database are provisioned, run the schema script against
 ### Deploy the Function App Code
 
 ```bash
-cd scheduler/src/Scheduler.Functions
+cd src/automation/scheduler/src/Scheduler.Functions
 dotnet publish -c Release -o ./publish
 cd publish
 func azure functionapp publish func-scheduler-<environmentName>
@@ -65,7 +65,7 @@ func azure functionapp publish func-scheduler-<environmentName>
 Or use the Azure CLI:
 
 ```bash
-cd scheduler/src/Scheduler.Functions
+cd src/automation/scheduler/src/Scheduler.Functions
 dotnet publish -c Release -o ./publish
 az functionapp deployment source config-zip \
   --resource-group <your-resource-group> \
@@ -118,7 +118,7 @@ func --version     # Ensure 4.x
 
 ### 2. Configure local.settings.json
 
-The file is at `scheduler/src/Scheduler.Functions/local.settings.json`. Update connection strings for your local or dev SQL instance and Service Bus namespace:
+The file is at `src/automation/scheduler/src/Scheduler.Functions/local.settings.json` (relative to the repo root). Update connection strings for your local or dev SQL instance and Service Bus namespace:
 
 ```json
 {
@@ -145,7 +145,7 @@ Create the required SQL tables in your local database. If you are using SQL Serv
 ### 4. Start the Function
 
 ```bash
-cd scheduler/src/Scheduler.Functions
+cd src/automation/scheduler/src/Scheduler.Functions
 func start
 ```
 
@@ -172,7 +172,7 @@ curl -X POST http://localhost:7071/api/PublishRunbook \
 
 ### 5. Debugging
 
-Open the `scheduler/` folder (or the solution file `Scheduler.sln`) in Visual Studio or VS Code. The `.csproj` targets `net8.0` with the Azure Functions isolated worker model. Use the standard F5 debug experience.
+Open the `src/automation/scheduler/` folder (or the solution file `Scheduler.sln`) in Visual Studio or VS Code. The `.csproj` targets `net8.0` with the Azure Functions isolated worker model. Use the standard F5 debug experience.
 
 ## Post-Deployment Verification
 

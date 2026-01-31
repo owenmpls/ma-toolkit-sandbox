@@ -62,7 +62,7 @@ New-MgDirectoryRoleMember -DirectoryRoleId $role.Id -BodyParameter @{
 
 ## Step 2: Deploy Azure Infrastructure
 
-Edit `infrastructure/deploy.parameters.json` with your values:
+Edit `infrastructure/automation/ps-cloud-worker/deploy.parameters.json` (relative to the repo root) with your values:
 
 ```json
 {
@@ -85,8 +85,8 @@ az group create --name matoolkit-rg --location eastus
 
 az deployment group create \
   --resource-group matoolkit-rg \
-  --template-file infrastructure/deploy.bicep \
-  --parameters infrastructure/deploy.parameters.json
+  --template-file infrastructure/automation/ps-cloud-worker/deploy.bicep \
+  --parameters infrastructure/automation/ps-cloud-worker/deploy.parameters.json
 ```
 
 This creates:

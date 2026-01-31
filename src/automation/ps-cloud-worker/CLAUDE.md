@@ -34,9 +34,6 @@ ps-cloud-worker/
 │   ├── Submit-TestJob.ps1                 # CSV-driven test job submitter
 │   ├── sample-jobs.csv
 │   └── Test-WorkerLocal.ps1              # Parse + structure validation (18 tests)
-├── infrastructure/
-│   ├── deploy.bicep                       # Full infra: ACA, Service Bus, KV, ACR, App Insights, KEDA scaler
-│   └── deploy.parameters.json
 └── docs/
     ├── architecture.md
     ├── deployment-guide.md

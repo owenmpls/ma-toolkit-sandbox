@@ -1,0 +1,1 @@
+Use this folder to share examples, experiments, and other code that's not part of the core project. I'm going to work ahead in the rest of the repo and see how far I can get on a deployed prototype using AI tools.
