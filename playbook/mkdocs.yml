@@ -61,7 +61,8 @@ nav:
       - Sample page: secure-landing-zone/sample-page.md
   - User migration:
       - user-migration/index.md
-      - Sample page: user-migration/sample-page.md
+      - Setup checklist: user-migration/setup.md
+      - Test cases: user-migration/tests.md
   - Device migration:
       - device-migration/index.md
       - Sample page: device-migration/sample-page.md
