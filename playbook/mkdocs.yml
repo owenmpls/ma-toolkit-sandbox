@@ -1,5 +1,5 @@
 site_name: Microsoft M&A Playbook
-site_description: Microsoft 365 Tenant-to-Tenant Migration Playbook
+site_description: Microsoft tenant restructuring playbook, supporting mergers, acquisitions, divestitures, and related scenarios.
 site_url: https://owenmpls.github.io/ma-toolkit-sandbox/playbook/
 
 theme:
