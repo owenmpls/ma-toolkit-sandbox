@@ -2,9 +2,21 @@
 
 > **Created with AI. Pending verification by a human. Use with caution.**
 
-This document provides an overview of cross-tenant user migration using Microsoft's first-party tools and techniques. Users are migrated with identity, mailbox, OneDrive, Teams chat, and meetings in a single orchestrated overnight event. Users are scheduled in batches and migrated throughout the week, at a velocity determined by the customer based on operational constraints and tool limitations.
+This document provides an overview of cross-tenant user migration using Microsoft's first-party tools and techniques within a Multi-Tenant Organization (MTO) coexistence architecture. MTO enables seamless single sign-on access to applications and resources across tenants, improved collaboration in Microsoft Teams, and unified people search during the coexistence period. Users are migrated with identity, mailbox, OneDrive, Teams chat, and meetings in a single orchestrated overnight event. Users are scheduled in batches and migrated throughout the week, at a velocity determined by the customer based on operational constraints and tool limitations.
 
 ## Key Concepts
+
+### Multi-Tenant Organization (MTO)
+
+A Multi-Tenant Organization (MTO) is a group of Microsoft Entra tenants that have established mutual trust relationships. MTO provides significant benefits during the coexistence period when users exist in both tenants:
+
+**Single Sign-On Across Tenants:** Users can access applications and resources in the opposite tenant without additional authentication prompts. Automatic redemption of B2B invitations eliminates consent dialogs, and MFA claims are trusted across tenant boundaries.
+
+**Improved Teams Collaboration:** MTO enables enhanced Microsoft Teams experiences including real-time cross-tenant notifications, the ability to join meetings without waiting in the lobby, and seamless chat across organizational boundaries. Users appear as members rather than guests in Teams, providing full collaboration capabilities.
+
+**Unified People Search:** Users can search for and find people across all tenants in the MTO from Outlook, Teams, and other Microsoft 365 applications. People cards display complete profile information regardless of which tenant the user belongs to.
+
+MTO requires users to exist as external members (not external guests) in the opposite tenant. Cross-tenant synchronization provisions these external member accounts and keeps attributes synchronized during coexistence.
 
 ### Migration Orchestrator (Optional)
 
@@ -140,6 +152,25 @@ After linking, source of authority transitions to on-premises AD. Cross-tenant s
 
 ## Key Decisions
 
+### Migration Orchestrator Usage
+
+The Migration Orchestrator (currently in public preview) provides unified orchestration for mailbox, OneDrive, Teams chat, and Teams meeting migration. Organizations must decide whether to use the orchestrator or coordinate workloads manually using standalone migration features.
+
+**Advantages of Migration Orchestrator:**
+
+- Single interface for submitting and monitoring migrations across workloads
+- Intelligent sequencing accounts for dependencies between workloads
+- Reduced operational complexity for multi-workload coordination
+
+**Considerations:**
+
+- Public preview status may present stability or support limitations
+- Batch size limit of 2,000 users may constrain migration velocity
+- Pre-staging submission requirements may extend the overall migration window
+- Does not perform identity conversions; target account conversion and source B2B enablement must be coordinated separately
+
+Organizations with straightforward requirements and tolerance for preview features may benefit from the orchestrator's unified approach. Organizations requiring higher velocity or more granular control may prefer standalone migration features with manual coordination.
+
 ### First-Party vs. Third-Party Migration Tools
 
 First-party tools provide significant advantages:
@@ -257,6 +288,28 @@ For cloud-only source tenants using third-party mailbox migration, B2B reach bac
 
 - Private preview for holds enables first-party tools in most cases
 - The limitation only applies to divestiture scenarios or mailbox merging (rare)
+
+### Encrypted Content and Sensitivity Labels
+
+Encrypted content behaves differently depending on the workload:
+
+**Mailbox:** Encrypted data in the mailbox is migrated as-is. Content encrypted with Azure RMS remains encrypted, and users may be unable to decrypt it after migration if encryption keys remain tied to the source tenant. Super user access or Azure RMS configuration migration may be required.
+
+**OneDrive:** Files encrypted with sensitivity labels are migrated to the target as unencrypted by default. Encryption is only preserved if sensitivity labels are recreated in the target tenant with matching label IDs prior to migration. This creates significant data security risk if not addressed.
+
+A separate playbook section covers sensitivity label and Azure RMS migration in detail.
+
+### Microsoft Forms
+
+Microsoft Forms are not included in cross-tenant migration. Forms do not migrate to the target tenant, and B2B reach back does not provide access to forms in the source tenant after migration.
+
+Users who need to retain form data must take manual action before losing access to their source account:
+
+1. Log into the source tenant using a dual account or temporary access
+2. Copy each form as a template and recreate it in the target tenant
+3. Export response data to Excel from the source form
+
+There is no native way to import response data back into Forms. Exported responses must be retained as Excel files or stored in another system. Third-party tools can automate form migration but also export responses as Excel files rather than restoring them as live form responses.
 
 ## Sources
 
