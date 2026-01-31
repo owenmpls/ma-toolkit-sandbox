@@ -8,11 +8,11 @@ This document provides a sequential checklist of setup steps required for cross-
 
 Before beginning setup, confirm the following:
 
-- [ ] Microsoft 365 E3/E5 or equivalent licenses in both tenants
-- [ ] Cross-Tenant User Data Migration add-on licenses for each user being migrated
-- [ ] Global Administrator or appropriate delegated roles in both tenants
-- [ ] Decision on hold handling strategy (private preview enrollment if required)
-- [ ] Decision on Viva Engage coexistence approach
+1. Microsoft 365 E3/E5 or equivalent licenses in both tenants
+2. Cross-Tenant User Data Migration add-on licenses for each user being migrated
+3. Global Administrator or appropriate delegated roles in both tenants
+4. Decision on hold handling strategy (private preview enrollment if required)
+5. Decision on Viva Engage coexistence approach
 
 ## Phase 1: Tenant Configuration
 
@@ -20,10 +20,10 @@ Before beginning setup, confirm the following:
 
 Cross-tenant access settings establish trust between tenants for B2B collaboration, MFA, device compliance, and hybrid device join.
 
-- [ ] Configure organizational settings in both tenants
-- [ ] Enable automatic redemption of invitations
-- [ ] Configure MFA trust
-- [ ] Configure device compliance trust (if applicable)
+1. Configure organizational settings in both tenants
+2. Enable automatic redemption of invitations
+3. Configure MFA trust
+4. Configure device compliance trust (if applicable)
 
 **Reference:** [Configure cross-tenant access settings](https://learn.microsoft.com/en-us/entra/external-id/cross-tenant-access-settings-b2b-collaboration)
 
@@ -31,9 +31,9 @@ Cross-tenant access settings establish trust between tenants for B2B collaborati
 
 If MTO features are required for coexistence:
 
-- [ ] Create multi-tenant organization
-- [ ] Add member tenants
-- [ ] Configure MTO policies
+1. Create multi-tenant organization
+2. Add member tenants
+3. Configure MTO policies
 
 **Reference:** [Multi-tenant organization overview](https://learn.microsoft.com/en-us/entra/identity/multi-tenant-organizations/multi-tenant-organization-overview)
 
@@ -41,18 +41,18 @@ If MTO features are required for coexistence:
 
 Organization relationships enable calendar free/busy lookups between tenants.
 
-- [ ] Create organization relationship in source tenant pointing to target
-- [ ] Create organization relationship in target tenant pointing to source
-- [ ] Configure AvailabilityAddressSpace if required
+1. Create organization relationship in source tenant pointing to target
+2. Create organization relationship in target tenant pointing to source
+3. Configure AvailabilityAddressSpace if required
 
 **Reference:** [Organization relationships in Exchange Online](https://learn.microsoft.com/en-us/exchange/sharing/organization-relationships/organization-relationships)
 
 ### 1.4 Configure Migration Endpoints
 
-- [ ] Register application in source tenant for migration
-- [ ] Register application in target tenant for migration
-- [ ] Configure migration endpoints in both tenants
-- [ ] Configure organization relationships for mailbox move capability
+1. Register application in source tenant for migration
+2. Register application in target tenant for migration
+3. Configure migration endpoints in both tenants
+4. Configure organization relationships for mailbox move capability
 
 **Reference:** [Preparing target tenant for cross-tenant migration](https://learn.microsoft.com/en-us/microsoft-365/enterprise/cross-tenant-mailbox-migration?view=o365-worldwide#prepare-the-target-destination-tenant-by-creating-the-exchange-online-migration-endpoint-and-organization-relationship)
 
@@ -60,10 +60,10 @@ Organization relationships enable calendar free/busy lookups between tenants.
 
 Cross-tenant synchronization provisions external members in the target tenant.
 
-- [ ] Configure provisioning in source tenant
-- [ ] Define attribute mappings
-- [ ] Set user scope (OU or attribute filtering)
-- [ ] Enable provisioning
+1. Configure provisioning in source tenant
+2. Define attribute mappings
+3. Set user scope (OU or attribute filtering)
+4. Enable provisioning
 
 **Reference:** [Configure cross-tenant synchronization](https://learn.microsoft.com/en-us/entra/identity/multi-tenant-organizations/cross-tenant-synchronization-configure)
 
@@ -73,29 +73,29 @@ Cross-tenant synchronization provisions external members in the target tenant.
 
 External members (not guests) are required for MTO features and migration.
 
-- [ ] Confirm cross-tenant sync is provisioning users as external members
-- [ ] Verify userType is "Member" (not "Guest")
-- [ ] Confirm users are NOT licensed (licensing breaks identity mapping)
+1. Confirm cross-tenant sync is provisioning users as external members
+2. Verify userType is "Member" (not "Guest")
+3. Confirm users are NOT licensed (licensing breaks identity mapping)
 
 ### 2.2 Update Target UPNs
 
 Target external member UPNs should be changed to the desired target-state UPN before any users are migrated. This allows identity maps in all migration tools to reference final target UPNs consistently, avoiding the need for constant updates if UPNs were changed just-in-time during orchestrated migration.
 
-- [ ] Determine target UPN naming convention
-- [ ] Update UPNs on all target external members to desired target-state values
-- [ ] Update identity maps and migration tool configurations to reference target UPNs
-- [ ] Verify UPN changes have propagated to all workloads (allow time for async propagation)
+1. Determine target UPN naming convention
+2. Update UPNs on all target external members to desired target-state values
+3. Update identity maps and migration tool configurations to reference target UPNs
+4. Verify UPN changes have propagated to all workloads (allow time for async propagation)
 
 ### 2.3 Run Cross-Tenant Identity Mapping
 
 CTIM stamps required Exchange attributes on target MailUser objects.
 
-- [ ] Confirm target users exist as MailUsers (not mailboxes)
-- [ ] Run identity mapping
-- [ ] Verify ExchangeGUID is stamped
-- [ ] Verify ArchiveGUID is stamped (if applicable)
-- [ ] Verify LegacyExchangeDN is present as X500 proxy address
-- [ ] Verify all source X500 addresses are present
+1. Confirm target users exist as MailUsers (not mailboxes)
+2. Run identity mapping
+3. Verify ExchangeGUID is stamped
+4. Verify ArchiveGUID is stamped (if applicable)
+5. Verify LegacyExchangeDN is present as X500 proxy address
+6. Verify all source X500 addresses are present
 
 **Reference:** [Cross-Tenant Identity Mapping](https://learn.microsoft.com/en-us/microsoft-365/enterprise/cross-tenant-identity-mapping)
 
@@ -103,33 +103,33 @@ CTIM stamps required Exchange attributes on target MailUser objects.
 
 For organizations managing identities on-premises:
 
-- [ ] Provision accounts in target AD (excluded from Entra Connect scope)
-- [ ] Derive immutable ID for each account (see [Deriving Immutable ID](#deriving-immutable-id))
-- [ ] Assign immutable ID to corresponding cloud accounts
-- [ ] Move accounts into Entra Connect scope for hard match
+1. Provision accounts in target AD (excluded from Entra Connect scope)
+2. Derive immutable ID for each account (see [Deriving Immutable ID](#deriving-immutable-id))
+3. Assign immutable ID to corresponding cloud accounts
+4. Move accounts into Entra Connect scope for hard match
 
 ### 2.5 Prepare Source Accounts for B2B Enablement
 
 Source accounts must be prepared for conversion to external members after migration.
 
-- [ ] Identify EXO and EXO add-on service plans that trigger proxy scrubbing
-- [ ] Create license group with EXO/EXO add-on plans disabled (see [License Group Configuration](#license-group-configuration))
-- [ ] For synced users: Prepare on-prem attribute changes for mail user conversion (see [Remote Mailbox to Mail User Conversion](#remote-mailbox-to-mail-user-conversion))
+1. Identify EXO and EXO add-on service plans that trigger proxy scrubbing
+2. Create license group with EXO/EXO add-on plans disabled (see [License Group Configuration](#license-group-configuration))
+3. For synced users: Prepare on-prem attribute changes for mail user conversion (see [Remote Mailbox to Mail User Conversion](#remote-mailbox-to-mail-user-conversion))
 
 ### 2.6 Address Holds (If Applicable)
 
-- [ ] Identify mailboxes and OneDrive sites on hold
-- [ ] Enroll in private preview for mailbox hold migration (if required)
-- [ ] Plan third-party migration for OneDrive sites on hold
-- [ ] For holds that must be cleared: Set ElcProcessingDisabled, document holds, plan removal timing
+1. Identify mailboxes and OneDrive sites on hold
+2. Enroll in private preview for mailbox hold migration (if required)
+3. Plan third-party migration for OneDrive sites on hold
+4. For holds that must be cleared: Set ElcProcessingDisabled, document holds, plan removal timing
 
 ## Phase 3: Migration Batch Configuration
 
 ### 3.1 Create Migration Batches
 
-- [ ] Group users into batches (max 2,000 per batch for orchestrator)
-- [ ] Schedule batches across migration windows
-- [ ] Consider dependencies (Power Automate solutions, shared resources)
+1. Group users into batches (max 2,000 per batch for orchestrator)
+2. Schedule batches across migration windows
+3. Consider dependencies (Power Automate solutions, shared resources)
 
 **Reference:** [Preparing users for cross-tenant migration with orchestrator](https://learn.microsoft.com/en-us/microsoft-365/enterprise/migration-orchestrator-4-user-prep)
 
@@ -139,48 +139,48 @@ Unverified email addresses (addresses from domains not verified in the target te
 
 **Important:** Removing these addresses causes inbound attribution and sender authorization issues during the pre-staging period. Mail sent from the source mailbox to target recipients will not attribute to the target MailUser, breaking profile resolution and sender authorization for restricted recipients. Defer this step as late as possible to minimize the coexistence impact.
 
-- [ ] Identify unverified addresses on target MailUser objects (typically source domain addresses)
-- [ ] Validate timing requirement: Determine if removal is required before batch submission for pre-staging or only before cutover (see [Unverified Address Removal Timing](#unverified-address-removal-timing))
-- [ ] Remove unverified addresses from batch users at the latest possible time
-- [ ] Document the attribution gap period for affected users
+1. Identify unverified addresses on target MailUser objects (typically source domain addresses)
+2. Validate timing requirement: Determine if removal is required before batch submission for pre-staging or only before cutover (see [Unverified Address Removal Timing](#unverified-address-removal-timing))
+3. Remove unverified addresses from batch users at the latest possible time
+4. Document the attribution gap period for affected users
 
 ### 3.3 Configure Pre-Migration Testing
 
-- [ ] Identify pilot users for each batch
-- [ ] Configure test batches
-- [ ] Document expected results and validation steps
-- [ ] Test unverified address removal timing to validate when removal is required
+1. Identify pilot users for each batch
+2. Configure test batches
+3. Document expected results and validation steps
+4. Test unverified address removal timing to validate when removal is required
 
 ## Phase 4: Cutover Preparation
 
 ### 4.1 Prepare Target Identity Conversion
 
-- [ ] Document conversion sequence (immediately prior to data cutover)
-- [ ] Prepare PowerShell or Graph API scripts for bulk conversion
-- [ ] Test conversion with pilot users
+1. Document conversion sequence (immediately prior to data cutover)
+2. Prepare PowerShell or Graph API scripts for bulk conversion
+3. Test conversion with pilot users
 
 **Reference:** [Convert external users to internal users](https://learn.microsoft.com/en-us/entra/identity/users/convert-external-users-internal)
 
 ### 4.2 Prepare Source B2B Enablement
 
-- [ ] Document B2B enablement sequence (after target conversion)
-- [ ] Prepare scripts for email address change and B2B invitation
-- [ ] Configure invitation to suppress email notifications
-- [ ] Test B2B enablement with pilot users
+1. Document B2B enablement sequence (after target conversion)
+2. Prepare scripts for email address change and B2B invitation
+3. Configure invitation to suppress email notifications
+4. Test B2B enablement with pilot users
 
 **Reference:** [Invite internal users to B2B collaboration](https://learn.microsoft.com/en-us/entra/external-id/invite-internal-users)
 
 ### 4.3 Prepare Device Reconfiguration
 
-- [ ] Prepare automation for managed Windows/Mac devices
-- [ ] Create self-service guides for mobile and unmanaged devices
-- [ ] Staff service desk for migration windows
+1. Prepare automation for managed Windows/Mac devices
+2. Create self-service guides for mobile and unmanaged devices
+3. Staff service desk for migration windows
 
 ### 4.4 Prepare Communications
 
-- [ ] Draft user communications with reconfiguration instructions
-- [ ] Schedule communications relative to migration windows
-- [ ] Prepare service desk scripts and escalation procedures
+1. Draft user communications with reconfiguration instructions
+2. Schedule communications relative to migration windows
+3. Prepare service desk scripts and escalation procedures
 
 ---
 
