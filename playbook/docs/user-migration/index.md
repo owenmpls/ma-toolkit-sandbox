@@ -57,8 +57,10 @@ Users exist as external members in target and work from source during this phase
 - Convert target external members to internal members
 - Cutover mailbox and OneDrive (overnight)
 - Cutover Teams chat and meetings (if using orchestrator)
+- Transition source accounts to B2B license group (prevents proxy scrubbing)
+- Update source account primary SMTP address (required for B2B enablement)
+- Convert remote mailboxes to mail users (hybrid source tenants only)
 - Enable B2B collaboration on source accounts
-- Transition source accounts to B2B license group
 - Descope source accounts from XTS to all MTO tenants
 - Restore and rehome external members in other MTO tenants
 - Add target accounts to XTS scope for other MTO tenants
@@ -149,6 +151,16 @@ The GA version of this feature supports:
 #### Source Tenant: Internal Member to External Member
 
 After migration, source accounts are enabled for B2B collaboration using the "Invite Internal Users to B2B" feature. This converts the internal member to an external member, linking the source account with the target identity using an alternate security identifier. Users authenticate with their target credentials and access source resources with their original permissions, group memberships, and application profiles.
+
+**Prerequisites for B2B Enablement:**
+
+B2B enablement requires several preparatory steps executed in sequence:
+
+1. **Transition to B2B license group:** Move source MailUser to a license group without Exchange Online service plans. This prevents proxy scrubbing when the mailbox is converted to a MailUser.
+
+2. **Update primary SMTP address:** The source account's primary SMTP address must be updated to a domain verified in both tenants (typically the target tenant's domain) before B2B enablement can succeed. This is the primary reason for the license group change—it prevents proxy scrubbing that would remove the required address.
+
+3. **Convert remote mailbox to mail user (hybrid source tenants only):** For source tenants with hybrid AD integration, the remote mailbox object must be converted to a mail user in on-premises AD before B2B enablement. This conversion also defeats proxy scrubbing and satisfies the primary SMTP address requirement.
 
 For applications that do not work with B2B collaboration, users can fall back to their source credentials, which remain intact after B2B enablement.
 

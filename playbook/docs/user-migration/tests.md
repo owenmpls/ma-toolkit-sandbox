@@ -11,7 +11,7 @@ This document contains validation test cases for cross-tenant user migration imp
 - [Private Preview Hold Migration](#pp-01-private-preview-hold-migration)
 - [Reverse Migration Infrastructure](#reverse-migration-infrastructure-tests)
 - [Target Environment Preparation](#target-environment-preparation-tests)
-- [Source Environment Preparation](#se-01-source-b2b-preparation)
+- [Source Environment Preparation](#se-01-source-b2b-preparation) (includes SE-02 for hybrid)
 - [Automation Development](#automation-development-tests)
 - [Runbook Development](#runbook-development-tests)
 - [End-to-End Validation](#end-to-end-validation-tests)
@@ -450,9 +450,9 @@ This document contains validation test cases for cross-tenant user migration imp
 
 **Backlog Item:** [SE-01](backlog.md#se-01-configure-source-b2b-enablement-preparation)
 
-### SE-01-T01: Validate B2B License Group
+### SE-01-T01: Validate B2B License Group and Primary SMTP Update
 
-**Objective:** Verify B2B license group preserves proxy addresses.
+**Objective:** Verify B2B license group preserves proxy addresses and primary SMTP can be updated to target domain.
 
 **Steps:**
 
@@ -462,13 +462,76 @@ This document contains validation test cases for cross-tenant user migration imp
    ```powershell
    Get-EXOMailUser -Identity "testuser@source.com" | Select-Object EmailAddresses
    ```
-4. Send email to source address and verify delivery to target
+4. Update primary SMTP to target domain:
+   ```powershell
+   Set-MailUser -Identity "testuser@source.com" -PrimarySmtpAddress "testuser@target.com"
+   ```
+5. Verify primary SMTP updated:
+   ```powershell
+   Get-EXOMailUser -Identity "testuser@source.com" | Select-Object PrimarySmtpAddress
+   ```
+6. Send email to source address and verify delivery to target
 
 **Expected Results:**
 
 - All proxy addresses preserved (no scrubbing)
-- Target domain address still present
+- Primary SMTP successfully updated to target domain
 - Mail routes correctly to target mailbox
+
+---
+
+## SE-02: Hybrid Source Remote Mailbox Conversion
+
+**Backlog Item:** [SE-02](backlog.md#se-02-configure-hybrid-source-remote-mailbox-conversion)
+
+### SE-02-T01: Validate Remote Mailbox to Mail User Conversion
+
+**Objective:** Verify remote mailbox can be converted to mail user for hybrid source tenants.
+
+**Prerequisites:** Hybrid source tenant with on-premises Exchange; test user migrated with remote mailbox object in on-premises AD
+
+**Steps:**
+
+1. Verify test user is remote mailbox in on-premises Exchange:
+   ```powershell
+   # On-premises Exchange Management Shell
+   Get-RemoteMailbox -Identity "testuser@source.com"
+   ```
+
+2. Disable remote mailbox:
+   ```powershell
+   Disable-RemoteMailbox -Identity "testuser@source.com" -Confirm:$false
+   ```
+
+3. Enable as mail user with target external address:
+   ```powershell
+   Enable-MailUser -Identity "testuser@source.com" -ExternalEmailAddress "testuser@target.com"
+   ```
+
+4. Set primary SMTP to target domain:
+   ```powershell
+   Set-MailUser -Identity "testuser@source.com" -PrimarySmtpAddress "testuser@target.com"
+   ```
+
+5. Sync changes to Entra ID:
+   ```powershell
+   Start-ADSyncSyncCycle -PolicyType Delta
+   ```
+
+6. Verify cloud object is MailUser:
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
+   Get-EXOMailUser -Identity "testuser@source.com" | Select-Object RecipientType, RecipientTypeDetails, PrimarySmtpAddress
+   ```
+
+7. Proceed with B2B enablement and verify success
+
+**Expected Results:**
+
+- Remote mailbox successfully converted to mail user
+- Changes sync to Entra ID
+- Cloud object shows as MailUser with correct primary SMTP
+- B2B enablement succeeds after conversion
 
 ---
 
@@ -777,7 +840,8 @@ This document contains validation test cases for cross-tenant user migration imp
 | TE-05-T01 | Validate License Staging Strategy | TE-05 | | | | | |
 | TE-06-T01 | Validate OneDrive Blocking | TE-06 | | | | | |
 | TE-07-T01 | Validate CA Policy Compatibility | TE-07 | | | | | |
-| SE-01-T01 | Validate B2B License Group | SE-01 | | | | | |
+| SE-01-T01 | Validate B2B License Group and Primary SMTP | SE-01 | | | | | |
+| SE-02-T01 | Validate Remote Mailbox Conversion | SE-02 | | | | | |
 | AD-01-T01 | Validate Target Conversion Scripts | AD-01 | | | | | |
 | AD-02-T01 | Validate Source Conversion Scripts | AD-02 | | | | | |
 | AD-03-T01 | Validate Identity Rollback Scripts | AD-03 | | | | | |

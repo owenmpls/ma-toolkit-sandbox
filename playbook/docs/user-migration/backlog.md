@@ -733,7 +733,7 @@ Review Conditional Access policies in both source and target tenants to ensure m
 
 **Description**
 
-Create license groups in source tenant with EXO and EXO add-on service plans disabled to support post-migration B2B enablement without triggering proxy scrubbing.
+Configure source tenant for post-migration B2B enablement, including license groups without EXO service plans and primary SMTP address update procedures.
 
 **Conditions**: None
 
@@ -743,8 +743,17 @@ Create license groups in source tenant with EXO and EXO add-on service plans dis
 
 - Understanding of current source license configuration
 - Entra ID group management access
+- Target tenant domain verified in source tenant (for primary SMTP update)
 
 **Implementation Guidance**
+
+B2B enablement requires the following prerequisites executed in sequence:
+
+1. **Transition to B2B license group** (prevents proxy scrubbing)
+2. **Update primary SMTP address** to target domain (required for B2B enablement)
+3. **Convert remote mailbox to mail user** (hybrid source tenants only)
+
+**Step 1: Create B2B License Group**
 
 1. Document service plans that trigger proxy scrubbing:
    - Exchange Online (EXCHANGE_S_ENTERPRISE, etc.)
@@ -767,9 +776,87 @@ Create license groups in source tenant with EXO and EXO add-on service plans dis
    # Configure group-based license with EXO service plans toggled off
    ```
 
-4. Document license transition: Post-migration → Remove from standard group → Add to B2B group
+**Step 2: Primary SMTP Address Update Procedure**
+
+The source MailUser's primary SMTP address must be updated to a domain verified in both tenants before B2B enablement. This is typically the target tenant's primary domain.
+
+1. Verify target domain is added and verified in source tenant
+2. Document primary SMTP update procedure:
+   ```powershell
+   # After mailbox migration completes and user is MailUser
+   Set-MailUser -Identity "user@source.com" -PrimarySmtpAddress "user@target.com"
+   ```
+
+**Step 3: Remote Mailbox Conversion (Hybrid Source Tenants Only)**
+
+For hybrid source tenants, remote mailbox objects must be converted to mail users in on-premises AD. See SE-02 for hybrid-specific procedures.
 
 **Validation Tests**: [SE-01 Tests](tests.md#se-01-b2b-preparation)
+
+---
+
+### SE-02: Configure Hybrid Source Remote Mailbox Conversion
+
+**Description**
+
+For hybrid source tenants, configure procedures to convert remote mailbox objects to mail users in on-premises AD as a prerequisite for B2B enablement.
+
+**Conditions**: Only required for hybrid source tenants with on-premises AD integration
+
+**Effort**: Medium
+
+**Dependencies**
+
+- SE-01: Source B2B Enablement Preparation
+- On-premises Exchange management tools access
+- Understanding of source hybrid topology
+
+**Implementation Guidance**
+
+Remote mailbox objects in hybrid environments must be converted to mail users before B2B enablement can succeed. This conversion also defeats proxy scrubbing and satisfies the primary SMTP address requirement.
+
+**Background:**
+
+In a hybrid Exchange environment, migrated users are represented as remote mailbox objects in on-premises AD. These objects have `msExchRecipientTypeDetails` values that indicate a remote mailbox. For B2B enablement to work, these must be converted to mail user objects.
+
+**Conversion Procedure:**
+
+1. **Disable remote mailbox in on-premises Exchange:**
+   ```powershell
+   # On-premises Exchange Management Shell
+   Disable-RemoteMailbox -Identity "user@source.com" -Confirm:$false
+   ```
+
+2. **Re-enable as mail user with target address:**
+   ```powershell
+   # On-premises Exchange Management Shell
+   Enable-MailUser -Identity "user@source.com" -ExternalEmailAddress "user@target.com"
+   ```
+
+3. **Set primary SMTP to target domain:**
+   ```powershell
+   Set-MailUser -Identity "user@source.com" -PrimarySmtpAddress "user@target.com"
+   ```
+
+4. **Sync changes to Entra ID:**
+   ```powershell
+   Start-ADSyncSyncCycle -PolicyType Delta
+   ```
+
+5. **Verify cloud object is MailUser with correct attributes:**
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
+   Get-EXOMailUser -Identity "user@source.com" | Select-Object RecipientType, RecipientTypeDetails, PrimarySmtpAddress, ExternalEmailAddress
+   ```
+
+**Important Notes:**
+
+- This procedure changes the on-premises object type, which may affect other on-premises integrations
+- Coordinate with on-premises AD administrators
+- Test thoroughly with pilot users before production migration
+- Document rollback procedure (re-enable remote mailbox from mail user)
+
+**Validation Tests**: [SE-02 Tests](tests.md#se-02-hybrid-source-conversion)
 
 ---
 
@@ -840,7 +927,7 @@ Develop PowerShell scripts to convert target external member accounts to interna
 
 **Description**
 
-Develop PowerShell scripts to enable B2B collaboration on source internal member accounts after migration cutover.
+Develop PowerShell scripts to prepare source accounts and enable B2B collaboration after migration cutover. Scripts must execute the prerequisite steps in correct sequence.
 
 **Conditions**: None
 
@@ -849,52 +936,82 @@ Develop PowerShell scripts to enable B2B collaboration on source internal member
 **Dependencies**
 
 - SE-01: Source B2B Enablement Preparation
+- SE-02: Hybrid Source Remote Mailbox Conversion (for hybrid source tenants)
 - Understanding of Invite-InternalUserToB2B API/cmdlet
 - Test accounts for validation
 
 **Implementation Guidance**
 
-1. Review Microsoft B2B enablement feature capabilities
+B2B enablement requires prerequisites executed in sequence:
 
-2. Design script requirements:
-   - Accept list of users
-   - Specify target tenant identity for linking
-   - Perform B2B enablement
-   - Handle email address preservation
-   - Move user to B2B license group
-   - Support dry-run mode
+1. **Transition to B2B license group** (prevents proxy scrubbing)
+2. **Update primary SMTP address** to target domain (required for B2B enablement)
+3. **Convert remote mailbox to mail user** (hybrid source tenants only - see SE-02)
+4. **Enable B2B collaboration** linking to target identity
 
-3. Create B2B enablement script template (customize for environment):
-   ```powershell
-   param(
-       [Parameter(Mandatory=$true)]
-       [string]$UserListPath,
-       [Parameter(Mandatory=$true)]
-       [string]$B2BLicenseGroupId,
-       [switch]$DryRun
-   )
+**Script Design Requirements:**
 
-   Connect-MgGraph -Scopes "User.ReadWrite.All","GroupMember.ReadWrite.All"
-   $users = Import-Csv $UserListPath
+- Accept list of users (CSV with SourceUPN, TargetUPN)
+- Execute steps in correct sequence with validation between steps
+- Support hybrid and cloud-only source topologies
+- Handle errors gracefully with rollback capability
+- Log all actions
+- Support dry-run mode
 
-   foreach ($user in $users) {
-       try {
-           $sourceUser = Get-MgUser -UserId $user.SourceUPN -Property Id,UserType
-           if ($sourceUser.UserType -eq "Member") {
-               Write-Host "User $($user.SourceUPN) eligible for B2B enablement"
-               if (-not $DryRun) {
-                   # Perform B2B enablement
-                   # Move to B2B license group
-                   Write-Host "Enabled B2B for $($user.SourceUPN)"
-               }
-           }
-       } catch {
-           Write-Error "Failed: $($user.SourceUPN): $_"
-       }
-   }
-   ```
+**Script Template (Cloud-Only Source):**
 
-4. Handle email address complexities per environment
+```powershell
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$UserListPath,
+    [Parameter(Mandatory=$true)]
+    [string]$B2BLicenseGroupId,
+    [Parameter(Mandatory=$true)]
+    [string]$StandardLicenseGroupId,
+    [Parameter(Mandatory=$true)]
+    [string]$TargetDomain,
+    [switch]$DryRun
+)
+
+Connect-MgGraph -Scopes "User.ReadWrite.All","GroupMember.ReadWrite.All"
+Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
+
+$users = Import-Csv $UserListPath
+
+foreach ($user in $users) {
+    try {
+        Write-Host "Processing $($user.SourceUPN)..."
+
+        # Step 1: Move to B2B license group (prevents proxy scrubbing)
+        if (-not $DryRun) {
+            Remove-MgGroupMember -GroupId $StandardLicenseGroupId -DirectoryObjectId $user.ObjectId
+            New-MgGroupMember -GroupId $B2BLicenseGroupId -DirectoryObjectId $user.ObjectId
+        }
+        Write-Host "  Step 1: Moved to B2B license group"
+
+        # Step 2: Update primary SMTP to target domain
+        $targetPrimarySMTP = $user.SourceUPN -replace "@.*", "@$TargetDomain"
+        if (-not $DryRun) {
+            Set-MailUser -Identity $user.SourceUPN -PrimarySmtpAddress $targetPrimarySMTP
+        }
+        Write-Host "  Step 2: Updated primary SMTP to $targetPrimarySMTP"
+
+        # Step 3: Enable B2B collaboration
+        if (-not $DryRun) {
+            # Perform B2B enablement linking to target identity
+            # API call to Invite-InternalUserToB2B or equivalent
+        }
+        Write-Host "  Step 3: Enabled B2B collaboration"
+
+    } catch {
+        Write-Error "Failed: $($user.SourceUPN): $_"
+    }
+}
+```
+
+**For Hybrid Source Tenants:**
+
+Insert Step 2.5 between SMTP update and B2B enablement to execute remote mailbox conversion via on-premises Exchange (see SE-02 for details). This step must be coordinated with on-premises AD administrators.
 
 **Validation Tests**: [AD-02 Tests](tests.md#ad-02-source-conversion-scripts)
 
@@ -1257,6 +1374,7 @@ Execute complete end-to-end migration for test users in cloud-only target topolo
 **Dependencies**
 
 - TA-01, MI-01, MI-02, MI-03, TE-03, TE-04, TE-05, TE-06, SE-01, AD-01, AD-02, RD-01
+- SE-02 (if hybrid source tenant)
 - AD-04 (if larger MTO with other tenants)
 - AD-05 (mailbox permission reconfiguration)
 - AD-06 (if migrating resource mailboxes)
