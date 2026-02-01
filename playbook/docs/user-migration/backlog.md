@@ -9,7 +9,7 @@ This document contains the implementation backlog for cross-tenant user migratio
 | Playbook Section | Required Deliverables |
 |------------------|----------------------|
 | **Coexistence** | Multi-Tenant Organization (MTO) established; Cross-Tenant Synchronization (XTS) configured for external member provisioning; Organization relationships configured for free/busy federation |
-| **Sensitivity Labels** | Sensitivity labels created in target tenant with matching label IDs to preserve encryption on OneDrive documents during migration |
+| **Sensitivity Labels** | Sensitivity labels removed from OneDrive files with user-defined permissions prior to migration (encryption prevents migration); target sensitivity labels created for post-migration re-application |
 
 ## Backlog Categories
 
@@ -116,8 +116,8 @@ Configure infrastructure for cross-tenant mailbox migration from source to targe
 
 **Implementation Guidance**
 
-1. Create migration application in target tenant Azure AD:
-   - Navigate to Azure AD > App Registrations > New registration
+1. Create migration application in target tenant Entra ID:
+   - Navigate to Entra ID > App Registrations > New registration
    - Add API permission: Office 365 Exchange Online > Application Permissions > Mailbox.Migration
    - Create client secret and securely store
    - Document Application (client) ID
@@ -230,12 +230,28 @@ Configure CTIM to automate stamping of Exchange attributes (ExchangeGUID, Archiv
 
 2. Grant CTIM application permissions in source tenant:
    ```powershell
-   Connect-MgGraph -Scopes "Application.ReadWrite.All","AppRoleAssignment.ReadWrite.All"
-   # Grant CTIM service principal Exchange Administrator role
-   # Grant CTIM service principal Exchange.ManageAsApp API permission
+   # Connect to Microsoft Graph
+   Connect-MgGraph -Scopes "Application.ReadWrite.All","AppRoleAssignment.ReadWrite.All","RoleManagement.ReadWrite.Directory"
+
+   # Get the CTIM service principal
+   $ctimAppId = "b]5f[redacted]" # Obtain from Microsoft documentation
+   $ctimSp = Get-MgServicePrincipal -Filter "AppId eq '$ctimAppId'"
+
+   # Get Exchange Administrator role
+   $exchangeAdminRole = Get-MgDirectoryRole -Filter "DisplayName eq 'Exchange Administrator'"
+
+   # Assign Exchange Administrator role to CTIM service principal
+   New-MgDirectoryRoleMember -DirectoryRoleId $exchangeAdminRole.Id -DirectoryObject @{
+       "@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$($ctimSp.Id)"
+   }
+
+   # Grant Exchange.ManageAsApp API permission (requires app consent)
+   # This is typically done via the Entra ID portal: Enterprise Applications > CTIM > Permissions > Grant admin consent
    ```
 
-3. Grant CTIM application permissions in target tenant (repeat step 2)
+3. Grant CTIM application permissions in target tenant:
+   - Repeat step 2 in the target tenant
+   - Both tenants must have CTIM service principal with Exchange Administrator role
 
 4. Verify CTIM prerequisites:
    - Target users exist as MailUser objects (not mailboxes)
@@ -279,16 +295,36 @@ Configure the Migration Orchestrator for unified orchestration of mailbox, OneDr
    Connect-MgGraph -Scopes "User.Read.All","CrossTenantUserDataMigration.ReadWrite.All"
    ```
 
-4. Configure orchestrator tenant relationship in both tenants
+4. Configure orchestrator tenant relationship in both tenants:
+   ```powershell
+   # In source tenant - configure as source
+   # Refer to Microsoft documentation for current cmdlets as orchestrator is in preview
+
+   # In target tenant - configure as target
+   # Follow Microsoft Migration Orchestrator setup guide
+   ```
 
 5. Configure Teams migration prerequisites:
    ```powershell
    Connect-MicrosoftTeams
-   Get-CsTenantFederationConfiguration  # Verify federated users allowed
-   # Enable Exchange autoforwarding for meetings migration
+
+   # Verify federation is enabled
+   Get-CsTenantFederationConfiguration | Select-Object AllowFederatedUsers, AllowedDomains
+
+   # Ensure partner tenant is allowed for federation
+   # If using AllowedDomains list, add partner tenant domain
+
+   # Verify Exchange Online autoforwarding is enabled for meetings migration
+   Get-TransportConfig | Select-Object AutoForwardEnabled
    ```
 
-6. Run standalone validation for test users
+6. Run standalone validation for test users:
+   ```powershell
+   # Use orchestrator validation cmdlets to check prerequisites
+   # Refer to Microsoft documentation for current validation commands
+   ```
+
+**Note:** The Migration Orchestrator is in public preview. Cmdlets and procedures may change. Always refer to the latest Microsoft documentation.
 
 **Validation Tests**: [MI-04 Tests](tests.md#mi-04-migration-orchestrator)
 
@@ -357,7 +393,7 @@ Configure infrastructure to support mailbox migration from target back to source
 
 **Implementation Guidance**
 
-1. Create migration application in source tenant Azure AD (same process as MI-01 but reversed)
+1. Create migration application in source tenant Entra ID (same process as MI-01 but reversed)
 
 2. Grant admin consent in source tenant
 
@@ -646,6 +682,51 @@ Configure target tenant to prevent automatic OneDrive provisioning for licensed 
 
 ---
 
+### TE-07: Review and Adjust Conditional Access Policies
+
+**Description**
+
+Review Conditional Access policies in both source and target tenants to ensure migrated users can access required resources, particularly for B2B reach back and dual account fallback scenarios.
+
+**Conditions**: Required when device-based CA policies are in use
+
+**Effort**: Medium
+
+**Dependencies**
+
+- None
+
+**Implementation Guidance**
+
+1. **Inventory CA policies in both tenants:**
+   - Document all CA policies affecting user access
+   - Identify device-based policies (require managed device, block unmanaged devices)
+   - Identify policies that apply to B2B/guest users
+
+2. **Analyze B2B reach back impact:**
+   - After migration, users authenticate with target credentials to access source resources
+   - Source tenant device compliance policies may not recognize target-managed devices
+   - Determine if temporary exceptions are needed for B2B users
+
+3. **Analyze dual account fallback impact:**
+   - Some applications may require source credential fallback
+   - Users on target-enrolled devices may be blocked by source device-based policies
+   - Determine if temporary exceptions are needed
+
+4. **Implement adjustments:**
+   - Create migration-specific CA policies with appropriate conditions
+   - Consider time-limited exclusions for migrating user groups
+   - Document rollback plan for CA policy changes
+
+5. **Test with pilot users:**
+   - Validate B2B reach back access with device-based policies
+   - Validate dual account fallback if required
+   - Document any access issues for remediation
+
+**Validation Tests**: [TE-07 Tests](tests.md#te-07-ca-policies)
+
+---
+
 ## Category: Source Environment Preparation
 
 ### SE-01: Configure Source B2B Enablement Preparation
@@ -856,6 +937,232 @@ Develop PowerShell scripts to revert identity conversions for rollback scenarios
 
 ---
 
+### AD-04: Develop MTO External Member Rehoming Scripts
+
+**Description**
+
+Develop PowerShell scripts to rehome external member accounts in other MTO tenants when users migrate from source to target.
+
+**Conditions**: Required when source and target are part of a larger MTO with additional tenants
+
+**Effort**: Very High
+
+**Dependencies**
+
+- Understanding of Convert-ExternalToInternalMemberUser API/cmdlet
+- Understanding of Invite-InternalUserToB2B API/cmdlet
+- Access to other MTO tenants with appropriate permissions
+- XTS configuration visibility for all MTO tenants
+
+**Implementation Guidance**
+
+1. Understand the rehoming process:
+   - **Step 1:** Convert external member (linked to source) to internal member in other MTO tenant
+   - **Step 2:** Update internal member's email address to match target account UPN
+   - **Step 3:** Invite internal user to B2B collaboration, linking to target identity
+
+2. Design script requirements:
+   - Accept list of migrating users with source and target UPNs
+   - Accept list of other MTO tenant IDs to process
+   - For each tenant, identify external members corresponding to migrating users
+   - Execute convert-update-invite sequence
+   - Handle errors gracefully (user not found, permissions, etc.)
+   - Support dry-run mode
+   - Log all actions with timestamps
+
+3. Create rehoming script template (customize for environment):
+   ```powershell
+   param(
+       [Parameter(Mandatory=$true)]
+       [string]$UserListPath,
+       [Parameter(Mandatory=$true)]
+       [string[]]$OtherMTOTenantIds,
+       [switch]$DryRun
+   )
+
+   $users = Import-Csv $UserListPath  # Columns: SourceUPN, TargetUPN
+
+   foreach ($tenantId in $OtherMTOTenantIds) {
+       Connect-MgGraph -TenantId $tenantId -Scopes "User.ReadWrite.All"
+
+       foreach ($user in $users) {
+           try {
+               # Find external member by source identity
+               $extMember = Get-MgUser -Filter "mail eq '$($user.SourceUPN)'" -Property Id,UserType,Mail
+
+               if ($extMember -and $extMember.UserType -eq "Member") {
+                   Write-Host "[$tenantId] Found external member: $($extMember.Mail)"
+
+                   if (-not $DryRun) {
+                       # Step 1: Convert to internal
+                       # Step 2: Update email to target UPN
+                       # Step 3: Invite to B2B linked to target
+                       Write-Host "[$tenantId] Rehomed to target: $($user.TargetUPN)"
+                   }
+               }
+           } catch {
+               Write-Error "[$tenantId] Failed for $($user.SourceUPN): $_"
+           }
+       }
+   }
+   ```
+
+4. Coordinate with XTS scoping:
+   - Script should be executed after XTS descoping soft-deletes external members
+   - Restore soft-deleted users before rehoming
+   - After rehoming, target XTS will match based on alternateSecurityIdentifier
+
+5. Document timing requirements:
+   - Must complete within 30-day soft-delete retention window
+   - Should be orchestrated as part of migration batch cutover
+
+**Validation Tests**: [AD-04 Tests](tests.md#ad-04-mto-rehoming-scripts)
+
+---
+
+### AD-05: Develop Mailbox Permission Export and Reapplication Scripts
+
+**Description**
+
+Develop PowerShell scripts to export mailbox permissions from source tenant before migration and reapply them in target tenant after migration.
+
+**Conditions**: None
+
+**Effort**: Medium
+
+**Dependencies**
+
+- MI-01: Cross-Tenant Mailbox Migration Infrastructure
+- Exchange Administrator access in both tenants
+
+**Implementation Guidance**
+
+1. Create permission export script for source tenant:
+   ```powershell
+   # Export Full Access permissions
+   Get-EXOMailbox -ResultSize Unlimited | Get-EXOMailboxPermission |
+       Where-Object { $_.User -ne "NT AUTHORITY\SELF" } |
+       Export-Csv "FullAccessPermissions.csv"
+
+   # Export Send As permissions
+   Get-EXOMailbox -ResultSize Unlimited | Get-EXORecipientPermission |
+       Where-Object { $_.Trustee -ne "NT AUTHORITY\SELF" } |
+       Export-Csv "SendAsPermissions.csv"
+
+   # Export Send on Behalf permissions
+   Get-EXOMailbox -ResultSize Unlimited |
+       Select-Object PrimarySmtpAddress, @{N='SendOnBehalf';E={$_.GrantSendOnBehalfTo -join ";"}} |
+       Where-Object { $_.SendOnBehalf } |
+       Export-Csv "SendOnBehalfPermissions.csv"
+   ```
+
+2. Create identity mapping file linking source to target UPNs
+
+3. Create permission reapplication script for target tenant:
+   ```powershell
+   param(
+       [string]$PermissionFile,
+       [string]$IdentityMapFile
+   )
+
+   $identityMap = Import-Csv $IdentityMapFile | Group-Object -Property SourceUPN -AsHashTable
+   $permissions = Import-Csv $PermissionFile
+
+   foreach ($perm in $permissions) {
+       $targetMailbox = $identityMap[$perm.Identity].TargetUPN
+       $targetTrustee = $identityMap[$perm.User].TargetUPN
+
+       if ($targetMailbox -and $targetTrustee) {
+           # Reapply permission using target UPNs
+           Add-MailboxPermission -Identity $targetMailbox -User $targetTrustee -AccessRights FullAccess
+       }
+   }
+   ```
+
+4. Document handling for permissions involving non-migrating users
+
+**Validation Tests**: [AD-05 Tests](tests.md#ad-05-permission-scripts)
+
+---
+
+### AD-06: Develop Resource Mailbox Post-Migration Configuration Scripts (formerly AD-05)
+
+**Description**
+
+Develop PowerShell scripts to reconfigure resource mailbox settings (booking policies, delegates, room lists) after migration.
+
+**Conditions**: Required when migrating room or equipment mailboxes
+
+**Effort**: Medium
+
+**Dependencies**
+
+- Inventory of resource mailboxes with current settings
+- Exchange Administrator access in target tenant
+
+**Implementation Guidance**
+
+1. Export resource mailbox settings from source before migration:
+   ```powershell
+   Get-EXOMailbox -RecipientTypeDetails RoomMailbox,EquipmentMailbox | ForEach-Object {
+       $calSettings = Get-CalendarProcessing -Identity $_.Identity
+       [PSCustomObject]@{
+           Identity = $_.PrimarySmtpAddress
+           AutomateProcessing = $calSettings.AutomateProcessing
+           AllowConflicts = $calSettings.AllowConflicts
+           BookingWindowInDays = $calSettings.BookingWindowInDays
+           MaximumDurationInMinutes = $calSettings.MaximumDurationInMinutes
+           ResourceDelegates = ($calSettings.ResourceDelegates -join ";")
+       }
+   } | Export-Csv "ResourceMailboxSettings.csv"
+   ```
+
+2. Create post-migration configuration script:
+   ```powershell
+   param(
+       [Parameter(Mandatory=$true)]
+       [string]$SettingsPath
+   )
+
+   Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
+   $settings = Import-Csv $SettingsPath
+
+   foreach ($resource in $settings) {
+       try {
+           Set-CalendarProcessing -Identity $resource.Identity `
+               -AutomateProcessing $resource.AutomateProcessing `
+               -AllowConflicts ([bool]$resource.AllowConflicts) `
+               -BookingWindowInDays $resource.BookingWindowInDays `
+               -MaximumDurationInMinutes $resource.MaximumDurationInMinutes
+
+           # Reconfigure delegates (must use target UPNs)
+           if ($resource.ResourceDelegates) {
+               $delegates = $resource.ResourceDelegates -split ";"
+               # Map source delegates to target identities
+               Set-CalendarProcessing -Identity $resource.Identity -ResourceDelegates $mappedDelegates
+           }
+
+           Write-Host "Configured: $($resource.Identity)"
+       } catch {
+           Write-Error "Failed: $($resource.Identity): $_"
+       }
+   }
+   ```
+
+3. Document room list recreation process:
+   ```powershell
+   # Export room lists from source
+   Get-DistributionGroup -RecipientTypeDetails RoomList | Export-Csv "RoomLists.csv"
+
+   # Recreate in target
+   New-DistributionGroup -Name "Building A Rooms" -RoomList
+   Add-DistributionGroupMember -Identity "Building A Rooms" -Member "room1@target.com"
+   ```
+
+**Validation Tests**: [AD-06 Tests](tests.md#ad-06-resource-mailbox-scripts)
+
+---
+
 ## Category: Runbook Development
 
 ### RD-01: Develop Production Migration Runbook
@@ -950,20 +1257,35 @@ Execute complete end-to-end migration for test users in cloud-only target topolo
 **Dependencies**
 
 - TA-01, MI-01, MI-02, MI-03, TE-03, TE-04, TE-05, TE-06, SE-01, AD-01, AD-02, RD-01
+- AD-04 (if larger MTO with other tenants)
+- AD-05 (mailbox permission reconfiguration)
+- AD-06 (if migrating resource mailboxes)
 
 **Implementation Guidance**
 
-1. Select 2-3 test users with varied configurations
+1. Select 2-3 test users with varied configurations:
+   - Standard user mailbox
+   - Shared mailbox with delegates
+   - Resource mailbox (if applicable)
 
 2. Execute pre-migration steps per runbook
 
 3. Execute migration cutover per runbook
 
-4. Execute comprehensive post-migration validation
+4. If larger MTO: Execute MTO external member rehoming in other tenants
 
-5. Execute post-migration cleanup
+5. If resource mailboxes: Execute post-migration configuration
 
-6. Document issues and resolutions
+6. Execute comprehensive post-migration validation:
+   - Mail routing (both directions)
+   - Free/busy visibility
+   - Shared mailbox access
+   - Mailbox permissions (Full Access, Send As, Send on Behalf)
+   - Calendar delegate permissions
+
+7. Execute post-migration cleanup
+
+8. Document issues and resolutions
 
 **Validation Tests**: [E2E-01 Tests](tests.md#e2e-01-cloud-only-without-orchestrator)
 

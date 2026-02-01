@@ -6,320 +6,108 @@ This document contains validation test cases for cross-tenant user migration imp
 
 ## Test Categories
 
-- [Test Account Validation](#test-account-validation)
-- [MI-01: Mailbox Migration Infrastructure](#mi-01-mailbox-migration-infrastructure)
-- [MI-02: OneDrive Migration Infrastructure](#mi-02-onedrive-migration-infrastructure)
-- [MI-03: CTIM Configuration](#mi-03-ctim-configuration)
-- [MI-04: Migration Orchestrator](#mi-04-migration-orchestrator)
-- [PP-01: Private Preview Hold Migration](#pp-01-private-preview-hold-migration)
-- [RI-01: Reverse Mailbox Migration](#ri-01-reverse-mailbox-migration)
-- [RI-02: Reverse OneDrive Migration](#ri-02-reverse-onedrive-migration)
-- [TE-01: Entra Connect Hard Match](#te-01-entra-connect-hard-match)
-- [TE-02: IGA/JML Hybrid](#te-02-iga-jml-hybrid)
-- [TE-03: IGA/JML Cloud](#te-03-iga-jml-cloud)
-- [TE-04: XTS Descoping](#te-04-xts-descoping)
-- [TE-05: License Strategy](#te-05-license-strategy)
-- [TE-06: OneDrive Blocking](#te-06-onedrive-blocking)
-- [SE-01: B2B Preparation](#se-01-b2b-preparation)
-- [AD-01: Target Conversion Scripts](#ad-01-target-conversion-scripts)
-- [AD-02: Source Conversion Scripts](#ad-02-source-conversion-scripts)
-- [AD-03: Identity Rollback Scripts](#ad-03-identity-rollback-scripts)
-- [RD-01: Production Runbook](#rd-01-production-runbook)
-- [RD-02: Rollback Runbook](#rd-02-rollback-runbook)
-- [E2E-01: Cloud-Only without Orchestrator](#e2e-01-cloud-only-without-orchestrator)
-- [E2E-02: Cloud-Only with Orchestrator](#e2e-02-cloud-only-with-orchestrator)
-- [E2E-03: Hybrid without Orchestrator](#e2e-03-hybrid-without-orchestrator)
-- [E2E-04: Hybrid with Orchestrator](#e2e-04-hybrid-with-orchestrator)
+- [Test Account Setup](#ta-01-test-account-setup)
+- [Migration Infrastructure](#migration-infrastructure-tests)
+- [Private Preview Hold Migration](#pp-01-private-preview-hold-migration)
+- [Reverse Migration Infrastructure](#reverse-migration-infrastructure-tests)
+- [Target Environment Preparation](#target-environment-preparation-tests)
+- [Source Environment Preparation](#se-01-source-b2b-preparation)
+- [Automation Development](#automation-development-tests)
+- [Runbook Development](#runbook-development-tests)
+- [End-to-End Validation](#end-to-end-validation-tests)
 
 ---
 
-## Test Account Validation
+## TA-01: Test Account Setup
 
 **Backlog Item:** [TA-01](backlog.md#ta-01-provision-test-accounts-for-validation-testing)
 
-### TA-01-T01: Verify Source Test Accounts
+### TA-01-T01: Verify Test Account Readiness
 
-**Objective:** Confirm test accounts exist in source tenant with provisioned mailboxes.
+**Objective:** Confirm all test accounts are provisioned and ready for migration testing.
 
 **Steps:**
 
-1. Run the following command in source tenant:
+1. Verify source test accounts have mailboxes with content:
    ```powershell
    Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
    Get-EXOMailbox -Identity "testuser@source.com" | Select-Object DisplayName, PrimarySmtpAddress, ExchangeGuid, ArchiveStatus
    ```
 
-2. Verify each test account has a mailbox with content
-
-**Expected Results:**
-
-- All test accounts appear in Exchange Online
-- ExchangeGuid is populated
-- Mailboxes contain test data
-
----
-
-### TA-01-T02: Verify Source OneDrive Sites
-
-**Objective:** Confirm test accounts have OneDrive sites provisioned with test files.
-
-**Steps:**
-
-1. Access OneDrive admin center or use PowerShell:
+2. Verify source OneDrive sites exist with test files:
    ```powershell
    Connect-SPOService -Url https://[source-tenant]-admin.sharepoint.com
    Get-SPOSite -Filter "Url -like '-my.sharepoint.com/personal/'" | Where-Object { $_.Owner -like "*testuser*" }
    ```
 
-2. Verify each test account has OneDrive with files
-
-**Expected Results:**
-
-- OneDrive sites exist for all test accounts
-- Sites contain test files including shared files
-
----
-
-### TA-01-T03: Verify Target External Members (Cloud-Only)
-
-**Objective:** Confirm XTS has provisioned external member accounts in target tenant.
-
-**Steps:**
-
-1. Run the following in target tenant:
+3. For cloud-only topology, verify target external members exist:
    ```powershell
    Connect-MgGraph -Scopes "User.Read.All"
    Get-MgUser -UserId "testuser@target.com" -Property UserType, ExternalUserState, Id
    ```
 
-2. Verify user type and external state
+4. For hybrid topology, verify target AD accounts exist in staging OU and derive immutable IDs
+
+5. Document complete test account inventory
 
 **Expected Results:**
 
-- UserType is "Member" (external member, not guest)
-- ExternalUserState is "Accepted"
-- Object ID is documented for later verification
+- All source test accounts have mailboxes with content
+- OneDrive sites exist with test files
+- Target accounts provisioned appropriately for topology
+- Complete inventory documented with UPNs, GUIDs, and immutable IDs
 
 ---
 
-### TA-01-T04: Verify Target AD Accounts (Hybrid)
+## Migration Infrastructure Tests
 
-**Objective:** Confirm target AD accounts exist in staging OU and are excluded from sync.
-
-**Steps:**
-
-1. In target AD, verify accounts exist in staging OU
-2. Derive immutable ID:
-   ```powershell
-   $user = Get-ADUser -Identity "testuser" -Properties objectGUID, msDS-ConsistencyGuid
-   [System.Convert]::ToBase64String($user.objectGUID.ToByteArray())
-   ```
-3. Verify account does NOT appear in Entra ID (excluded from sync)
-
-**Expected Results:**
-
-- AD accounts exist in staging OU
-- Immutable ID is documented
-- Accounts are not synced to Entra ID
-
----
-
-### TA-01-T05: Document Test Account Inventory
-
-**Objective:** Complete test account inventory documentation.
-
-**Steps:**
-
-1. Create inventory table with:
-   - Source UPN
-   - Target UPN
-   - Source mailbox ExchangeGuid
-   - Immutable ID (hybrid only)
-   - Configuration type (standard, archive, hold, etc.)
-   - Assigned test scenarios
-
-**Expected Results:**
-
-- Complete inventory documented
-- All required data captured for each account
-
----
-
-## MI-01: Mailbox Migration Infrastructure
+### MI-01-T01: Validate Mailbox Migration
 
 **Backlog Item:** [MI-01](backlog.md#mi-01-configure-cross-tenant-mailbox-migration-infrastructure)
 
-### MI-01-T01: Verify Migration Application
-
-**Objective:** Confirm migration application exists with correct permissions.
-
-**Steps:**
-
-1. In target tenant Azure AD, navigate to App Registrations
-2. Locate migration application
-3. Verify API permissions include Mailbox.Migration
-
-**Expected Results:**
-
-- Application exists in App Registrations
-- Mailbox.Migration permission is granted
-- Admin consent is granted
-
----
-
-### MI-01-T02: Verify Source Tenant Consent
-
-**Objective:** Confirm migration application consent granted in source tenant.
-
-**Steps:**
-
-1. In source tenant, navigate to Enterprise Applications
-2. Locate migration application by client ID
-3. Verify consented permissions
-
-**Expected Results:**
-
-- Application appears in Enterprise Applications
-- Permissions show as consented
-
----
-
-### MI-01-T03: Verify Organization Relationship (Target)
-
-**Objective:** Confirm target organization relationship configured for inbound migration.
-
-**Steps:**
-
-```powershell
-Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
-Get-OrganizationRelationship | Where-Object { $_.DomainNames -like "*source*" } | Select-Object Name, MailboxMoveEnabled, MailboxMoveCapability
-```
-
-**Expected Results:**
-
-- MailboxMoveEnabled is True
-- MailboxMoveCapability includes "Inbound"
-
----
-
-### MI-01-T04: Verify Organization Relationship (Source)
-
-**Objective:** Confirm source organization relationship configured for outbound migration.
-
-**Steps:**
-
-```powershell
-Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
-Get-OrganizationRelationship | Where-Object { $_.DomainNames -like "*target*" } | Select-Object Name, MailboxMoveEnabled, MailboxMoveCapability, MailboxMovePublishedScopes
-```
-
-**Expected Results:**
-
-- MailboxMoveEnabled is True
-- MailboxMoveCapability includes "RemoteOutbound"
-- MailboxMovePublishedScopes contains security group
-
----
-
-### MI-01-T05: Verify Migration Endpoint
-
-**Objective:** Confirm migration endpoint connectivity.
-
-**Steps:**
-
-```powershell
-Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
-Test-MigrationServerAvailability -Endpoint "CrossTenantEndpoint"
-```
-
-**Expected Results:**
-
-- Test returns success
-- No connectivity errors
-
----
-
-### MI-01-T06: Execute Test Mailbox Migration
-
-**Objective:** Verify mailbox migration completes successfully for test user.
+**Objective:** Verify cross-tenant mailbox migration works end-to-end.
 
 **Steps:**
 
 1. Ensure test user is in source migration scope group
-2. Create migration batch:
+2. Create and start migration batch:
    ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
    New-MigrationBatch -Name "TestMigration" -SourceEndpoint "CrossTenantEndpoint" -CSVData ([System.IO.File]::ReadAllBytes("users.csv")) -TargetDeliveryDomain "target.onmicrosoft.com"
    Start-MigrationBatch -Identity "TestMigration"
    ```
-3. Monitor progress:
+3. Monitor until completion:
    ```powershell
    Get-MigrationUser -Identity "testuser@source.com" | Select-Object Status, StatusSummary
    ```
-4. After completion, verify target mailbox:
+4. Verify target mailbox exists and source converted to MailUser:
    ```powershell
+   # Target tenant
    Get-EXOMailbox -Identity "testuser@target.com"
-   ```
-5. Verify source MailUser:
-   ```powershell
+
+   # Source tenant
    Get-EXOMailUser -Identity "testuser@source.com" | Select-Object ExternalEmailAddress
    ```
 
 **Expected Results:**
 
-- Migration status shows Completed
+- Migration completes successfully
 - Target has full mailbox with migrated content
 - Source has MailUser with targetAddress pointing to target
 
 ---
 
-## MI-02: OneDrive Migration Infrastructure
+### MI-02-T01: Validate OneDrive Migration
 
 **Backlog Item:** [MI-02](backlog.md#mi-02-configure-cross-tenant-onedrive-migration-infrastructure)
 
-### MI-02-T01: Verify Cross-Tenant Trust (Target)
-
-**Objective:** Confirm target tenant trust relationship to source.
-
-**Steps:**
-
-```powershell
-Connect-SPOService -Url https://[target-tenant]-admin.sharepoint.com
-Get-SPOCrossTenantRelationship -Scenario MnA
-```
-
-**Expected Results:**
-
-- Relationship shows Source partner role
-- Partner host URL points to source tenant
-
----
-
-### MI-02-T02: Verify Cross-Tenant Trust (Source)
-
-**Objective:** Confirm source tenant trust relationship to target.
-
-**Steps:**
-
-```powershell
-Connect-SPOService -Url https://[source-tenant]-admin.sharepoint.com
-Get-SPOCrossTenantRelationship -Scenario MnA
-```
-
-**Expected Results:**
-
-- Relationship shows Target partner role
-- Partner host URL points to target tenant
-
----
-
-### MI-02-T03: Execute Test OneDrive Migration
-
-**Objective:** Verify OneDrive migration completes successfully.
+**Objective:** Verify cross-tenant OneDrive migration works end-to-end.
 
 **Steps:**
 
 1. Start OneDrive migration:
    ```powershell
+   Connect-SPOService -Url https://[target-tenant]-admin.sharepoint.com
    Start-SPOCrossTenantUserContentMove -SourceUserPrincipalName "testuser@source.com" -TargetUserPrincipalName "testuser@target.com" -TargetCrossTenantHostUrl "https://[target-tenant]-my.sharepoint.com"
    ```
 2. Monitor progress:
@@ -337,81 +125,38 @@ Get-SPOCrossTenantRelationship -Scenario MnA
 
 ---
 
-## MI-03: CTIM Configuration
+### MI-03-T01: Validate CTIM Attribute Stamping
 
 **Backlog Item:** [MI-03](backlog.md#mi-03-configure-cross-tenant-identity-mapping-ctim)
 
-### MI-03-T01: Verify CTIM Permissions (Source)
+**Objective:** Verify CTIM stamps Exchange attributes correctly on target MailUser.
 
-**Objective:** Confirm CTIM application has required permissions in source tenant.
-
-**Steps:**
-
-1. Verify CTIM service principal has Exchange Administrator role
-2. Verify Exchange.ManageAsApp API permission is granted
-
-**Expected Results:**
-
-- CTIM service principal has Exchange Administrator role
-- API permissions are consented
-
----
-
-### MI-03-T02: Verify CTIM Permissions (Target)
-
-**Objective:** Confirm CTIM application has required permissions in target tenant.
+**Prerequisites:** Target user must be MailUser (no Exchange license assigned)
 
 **Steps:**
 
-Same as MI-03-T01 but in target tenant
-
-**Expected Results:**
-
-- CTIM service principal has Exchange Administrator role
-- API permissions are consented
-
----
-
-### MI-03-T03: Verify Target User is MailUser
-
-**Objective:** Confirm target user is MailUser before CTIM execution.
-
-**Steps:**
-
-```powershell
-Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
-Get-EXORecipient -Identity "testuser@target.com" | Select-Object RecipientType, RecipientTypeDetails
-```
-
-**Expected Results:**
-
-- RecipientType is MailUser
-- RecipientTypeDetails is MailUser
-
----
-
-### MI-03-T04: Execute CTIM and Verify Attributes
-
-**Objective:** Verify CTIM stamps Exchange attributes correctly.
-
-**Steps:**
-
-1. Run CTIM for test user
-2. Verify target MailUser attributes:
+1. Verify target user is MailUser before CTIM:
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
+   Get-EXORecipient -Identity "testuser@target.com" | Select-Object RecipientType, RecipientTypeDetails
+   ```
+2. Run CTIM for test user (refer to Microsoft documentation for current cmdlets)
+3. Verify target MailUser attributes:
    ```powershell
    Get-EXOMailUser -Identity "testuser@target.com" | Select-Object ExchangeGuid, ArchiveGuid, LegacyExchangeDN, EmailAddresses
    ```
-3. Compare with source mailbox:
+4. Compare with source mailbox:
    ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
    Get-EXOMailbox -Identity "testuser@source.com" | Select-Object ExchangeGuid, ArchiveGuid, LegacyExchangeDN, EmailAddresses
    ```
 
 **Expected Results:**
 
+- Target user is MailUser (not mailbox)
 - ExchangeGuid matches between source and target
 - ArchiveGuid matches (if archive-enabled)
 - LegacyExchangeDN from source appears as X500 proxy address on target
-- All source X500 addresses present on target
 
 **Troubleshooting:**
 
@@ -420,110 +165,28 @@ Get-EXORecipient -Identity "testuser@target.com" | Select-Object RecipientType, 
 
 ---
 
-## MI-04: Migration Orchestrator
+### MI-04-T01: Validate Migration Orchestrator
 
 **Backlog Item:** [MI-04](backlog.md#mi-04-configure-migration-orchestrator)
 
-### MI-04-T01: Verify Orchestrator Module
-
-**Objective:** Confirm orchestrator module installed and connected.
+**Objective:** Verify orchestrator can migrate all workloads (mailbox, OneDrive, Teams chat, meetings).
 
 **Steps:**
 
-```powershell
-Import-Module MigrationOrchestrator
-Connect-MgGraph -Scopes "User.Read.All","CrossTenantUserDataMigration.ReadWrite.All"
-```
+1. Run orchestrator standalone validation for test user
+2. Submit orchestrator migration batch
+3. Monitor progress through all stages
+4. After completion, verify:
+   - Mailbox accessible in target
+   - OneDrive content in target
+   - Teams chat history visible in target
+   - Meetings rescheduled in target calendar
 
 **Expected Results:**
 
-- Module imports without error
-- Graph connection succeeds
-
----
-
-### MI-04-T02: Verify Teams Federation
-
-**Objective:** Confirm Teams federation enabled for cross-tenant collaboration.
-
-**Steps:**
-
-```powershell
-Connect-MicrosoftTeams
-Get-CsTenantFederationConfiguration | Select-Object AllowFederatedUsers, AllowedDomains
-```
-
-**Expected Results:**
-
-- AllowFederatedUsers is True
-- Federation policy allows partner tenant
-
----
-
-### MI-04-T03: Run Standalone Validation
-
-**Objective:** Verify orchestrator prerequisites pass for test user.
-
-**Steps:**
-
-Run orchestrator standalone validation command for test user
-
-**Expected Results:**
-
-- All tenant-level prerequisites pass
-- All user-level prerequisites pass
-
----
-
-### MI-04-T04: Submit Test Migration Batch
-
-**Objective:** Verify orchestrator can submit and process migration batch.
-
-**Steps:**
-
-1. Submit migration batch via orchestrator
-2. Monitor progress through stages
-3. Verify completion of all workloads
-
-**Expected Results:**
-
-- Batch submits successfully
-- Batch progresses through stages
-- Mailbox, OneDrive, Teams chat, meetings all complete
-
----
-
-### MI-04-T05: Verify Teams Chat Migration
-
-**Objective:** Confirm Teams chat history migrated.
-
-**Steps:**
-
-1. Sign in to target tenant Teams as migrated user
-2. Navigate to Chat
-3. Verify 1:1 and group chat history present
-
-**Expected Results:**
-
-- Chat history visible in target
-- Chat participants correctly mapped
-
----
-
-### MI-04-T06: Verify Teams Meetings Migration
-
-**Objective:** Confirm Teams meetings rescheduled in target.
-
-**Steps:**
-
-1. Check calendar in target tenant
-2. Verify meetings organized by user
-
-**Expected Results:**
-
-- Source meetings canceled
-- Equivalent meetings created in target
-- Meeting details preserved
+- Batch progresses through all stages without errors
+- All workloads complete successfully
+- Chat history and meetings visible in target tenant
 
 ---
 
@@ -531,1152 +194,567 @@ Run orchestrator standalone validation command for test user
 
 **Backlog Item:** [PP-01](backlog.md#pp-01-enable-private-preview-for-on-hold-mailbox-migration)
 
-### PP-01-T01: Verify Preview Enablement
+### PP-01-T01: Validate Held Mailbox Migration
 
-**Objective:** Confirm private preview enabled on both tenants.
+**Objective:** Verify mailbox on hold can be migrated with private preview enabled.
 
-**Steps:**
-
-Verify Microsoft has confirmed enablement via email
-
-**Expected Results:**
-
-- Confirmation received for source tenant
-- Confirmation received for target tenant
-
----
-
-### PP-01-T02: Verify Test Mailbox On Hold
-
-**Objective:** Confirm test mailbox has litigation hold enabled.
+**Prerequisites:** Private preview enabled on both tenants; test mailbox with litigation hold
 
 **Steps:**
 
-```powershell
-Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
-Get-EXOMailbox -Identity "testuser-hold@source.com" | Select-Object LitigationHoldEnabled, InPlaceHolds
-```
+1. Verify test mailbox has hold:
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
+   Get-EXOMailbox -Identity "testuser-hold@source.com" | Select-Object LitigationHoldEnabled, InPlaceHolds
+   ```
+2. Submit migration for held mailbox
+3. Monitor for completion (should not fail due to hold)
+4. Verify active content accessible in target
+5. Use eDiscovery to verify substrate content searchable in source
 
 **Expected Results:**
 
-- LitigationHoldEnabled is True or InPlaceHolds contains values
+- Migration completes successfully despite hold status
+- Active mailbox content accessible in target
+- Substrate folders (ComponentShared, SubstrateHolds) remain in source
+- eDiscovery can search substrate content via source MailUser
 
 ---
 
-### PP-01-T03: Execute Held Mailbox Migration
+## Reverse Migration Infrastructure Tests
 
-**Objective:** Verify held mailbox migrates successfully.
-
-**Steps:**
-
-1. Submit migration for held mailbox
-2. Monitor for completion (should not fail due to hold)
-3. Verify completion status
-
-**Expected Results:**
-
-- Migration does not fail due to hold status
-- Migration completes successfully
-
----
-
-### PP-01-T04: Verify Substrate Folders Remain
-
-**Objective:** Confirm substrate folders remain in source for eDiscovery.
-
-**Steps:**
-
-1. After migration, verify source MailUser exists
-2. Use eDiscovery to search substrate content by email address
-
-**Expected Results:**
-
-- Source MailUser exists
-- ComponentShared, SubstrateHolds folders present
-- eDiscovery can search substrate content
-
----
-
-### PP-01-T05: Verify Active Content Migrated
-
-**Objective:** Confirm active mailbox content migrated to target.
-
-**Steps:**
-
-1. Sign in to target mailbox
-2. Verify mail, calendar, contacts accessible
-3. Verify recoverable items present
-
-**Expected Results:**
-
-- All active content accessible in target
-- Recoverable items migrated
-
----
-
-## RI-01: Reverse Mailbox Migration
+### RI-01-T01: Validate Reverse Mailbox Migration
 
 **Backlog Item:** [RI-01](backlog.md#ri-01-configure-reverse-mailbox-migration-infrastructure)
-
-### RI-01-T01: Verify Bidirectional Organization Relationship
-
-**Objective:** Confirm organization relationships support both directions.
-
-**Steps:**
-
-```powershell
-# Source tenant
-Get-OrganizationRelationship | Select-Object Name, MailboxMoveCapability
-
-# Target tenant
-Get-OrganizationRelationship | Select-Object Name, MailboxMoveCapability
-```
-
-**Expected Results:**
-
-- Both tenants show Inbound and RemoteOutbound capabilities
-
----
-
-### RI-01-T02: Verify Reverse Migration Endpoint
-
-**Objective:** Confirm reverse migration endpoint connectivity.
-
-**Steps:**
-
-```powershell
-Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
-Test-MigrationServerAvailability -Endpoint "ReverseCrossTenantEndpoint"
-```
-
-**Expected Results:**
-
-- Test returns success
-
----
-
-### RI-01-T03: Execute Test Reverse Mailbox Migration
 
 **Objective:** Verify mailbox can be migrated from target back to source.
 
 **Steps:**
 
-1. Migrate test mailbox from target to source
-2. Monitor completion
-3. Verify mailbox accessible in source
+1. Verify bidirectional organization relationships:
+   ```powershell
+   # Source tenant
+   Get-OrganizationRelationship | Select-Object Name, MailboxMoveCapability
+
+   # Target tenant
+   Get-OrganizationRelationship | Select-Object Name, MailboxMoveCapability
+   ```
+2. Execute reverse migration for test user
+3. Verify mailbox accessible in source after migration
 
 **Expected Results:**
 
-- Migration completes successfully
+- Both tenants show Inbound and RemoteOutbound capabilities
+- Reverse migration completes successfully
 - Mailbox accessible in source
 
 ---
 
-## RI-02: Reverse OneDrive Migration
+### RI-02-T01: Validate Reverse OneDrive Migration
 
 **Backlog Item:** [RI-02](backlog.md#ri-02-configure-reverse-onedrive-migration-infrastructure)
-
-### RI-02-T01: Verify Bidirectional Trust
-
-**Objective:** Confirm OneDrive trust supports both directions.
-
-**Steps:**
-
-```powershell
-# Both tenants should show both Source and Target relationships
-Get-SPOCrossTenantRelationship -Scenario MnA
-```
-
-**Expected Results:**
-
-- Both tenants show Source and Target partner roles
-
----
-
-### RI-02-T02: Execute Test Reverse OneDrive Migration
 
 **Objective:** Verify OneDrive can be migrated from target back to source.
 
 **Steps:**
 
-1. Migrate test OneDrive from target to source
-2. Monitor completion
+1. Verify bidirectional trust:
+   ```powershell
+   Get-SPOCrossTenantRelationship -Scenario MnA
+   ```
+2. Execute reverse OneDrive migration for test user
 3. Verify content accessible in source
-4. Verify redirect in target
+4. Verify target URL redirects to source
 
 **Expected Results:**
 
-- Migration completes successfully
-- Content accessible in source
-- Target URL redirects to source
+- Both tenants show Source and Target partner roles
+- Reverse migration completes successfully
+- Content accessible in source; target URL redirects
 
 ---
 
-## TE-01: Entra Connect Hard Match
+## Target Environment Preparation Tests
+
+### TE-01-T01: Validate Hard Match Process
 
 **Backlog Item:** [TE-01](backlog.md#te-01-configure-target-entra-connect-for-hard-match)
 
-### TE-01-T01: Verify Staging Exclusion
-
-**Objective:** Confirm accounts in staging OU/with staging attribute do not sync.
+**Objective:** Verify hard match successfully links cloud account with AD account.
 
 **Steps:**
 
-1. Create test AD account in staging location
-2. Run Entra Connect sync cycle
-3. Verify account does NOT appear in Entra ID
-
-**Expected Results:**
-
-- Account not synced to Entra ID
-
----
-
-### TE-01-T02: Execute Hard Match
-
-**Objective:** Verify hard match process works correctly.
-
-**Steps:**
-
-1. Stamp immutable ID on cloud external member:
+1. Verify test AD account in staging OU does not sync to Entra ID
+2. Stamp immutable ID on cloud external member:
    ```powershell
    $immutableId = "[base64-encoded-id]"
    Update-MgUser -UserId "[cloud-user-object-id]" -OnPremisesImmutableId $immutableId
    ```
-2. Move AD account to production OU (or clear staging attribute)
-3. Run Entra Connect sync cycle
-4. Verify hard match occurred
+3. Move AD account to production OU (or clear staging attribute)
+4. Run Entra Connect sync cycle
+5. Verify hard match:
+   ```powershell
+   Get-MgUser -UserId "testuser@target.com" -Property OnPremisesSyncEnabled, OnPremisesImmutableId
+   ```
 
 **Expected Results:**
 
-- Cloud account linked with AD account
 - Object ID preserved (same as before hard match)
-- No duplicate objects created
-
----
-
-### TE-01-T03: Verify Attribute Flow
-
-**Objective:** Confirm attributes flow correctly after hard match.
-
-**Steps:**
-
-```powershell
-Get-MgUser -UserId "testuser@target.com" -Property UserPrincipalName, Mail, ProxyAddresses, OnPremisesSyncEnabled
-```
-
-**Expected Results:**
-
 - OnPremisesSyncEnabled is True
-- UPN, mail, proxyAddresses match AD values
+- No duplicate objects created
+- Attributes flow correctly from AD
 
 ---
 
-## TE-02: IGA/JML Hybrid
+### TE-02-T01: Validate IGA/JML Hybrid Integration
 
 **Backlog Item:** [TE-02](backlog.md#te-02-configure-target-igajml-integration-for-hybrid-topology)
 
-### TE-02-T01: Verify Modified Provisioning
-
-**Objective:** Confirm IGA provisions migration users without remote mailbox.
+**Objective:** Verify IGA provisions migration users without remote mailbox and can manage post-migration.
 
 **Steps:**
 
 1. Provision test user via modified IGA workflow
-2. Verify AD account created
-3. Verify no remote mailbox provisioned
+2. Verify AD account created without remote mailbox
+3. Verify user is MailUser after sync:
+   ```powershell
+   Get-EXORecipient -Identity "testuser@target.com" | Select-Object RecipientType
+   ```
+4. Run CTIM and verify compatibility
+5. Complete migration and verify IGA can manage user post-migration
 
 **Expected Results:**
 
-- AD account created without remote mailbox
+- IGA provisions users as MailUser (not mailbox)
+- CTIM can stamp attributes
+- IGA assumes management authority after migration
 
 ---
 
-### TE-02-T02: Verify MailUser State
-
-**Objective:** Confirm provisioned user is MailUser after sync.
-
-**Steps:**
-
-```powershell
-Get-EXORecipient -Identity "testuser@target.com" | Select-Object RecipientType, RecipientTypeDetails
-```
-
-**Expected Results:**
-
-- RecipientType is MailUser
-- Not UserMailbox
-
----
-
-### TE-02-T03: Verify CTIM Compatibility
-
-**Objective:** Confirm CTIM can stamp attributes on IGA-provisioned user.
-
-**Steps:**
-
-Run CTIM for IGA-provisioned user
-
-**Expected Results:**
-
-- CTIM execution succeeds
-- Exchange attributes stamped
-
----
-
-### TE-02-T04: Verify Post-Migration Handoff
-
-**Objective:** Confirm IGA can manage user after migration.
-
-**Steps:**
-
-1. Complete migration for test user
-2. Verify IGA can update user attributes
-3. Verify IGA lifecycle operations work
-
-**Expected Results:**
-
-- IGA can manage migrated user
-
----
-
-## TE-03: IGA/JML Cloud
+### TE-03-T01: Validate IGA/JML Cloud Integration
 
 **Backlog Item:** [TE-03](backlog.md#te-03-configure-target-igajml-integration-for-cloud-only-topology)
 
-### TE-03-T01: Verify IGA Discovery
-
-**Objective:** Confirm IGA can discover converted internal member.
+**Objective:** Verify IGA can discover and manage converted internal members.
 
 **Steps:**
 
 1. Convert test external member to internal
-2. Verify IGA identifies user for onboarding
+2. Verify IGA discovers migrated user
+3. Verify IGA can update user attributes without conflicts
 
 **Expected Results:**
 
-- IGA discovers migrated user
+- IGA discovers converted internal member
+- IGA can manage user without attribute conflicts
 
 ---
 
-### TE-03-T02: Verify IGA Management
-
-**Objective:** Confirm IGA can manage user without conflicts.
-
-**Steps:**
-
-1. IGA updates user attributes
-2. Verify updates apply successfully
-3. Verify no conflicts with other systems
-
-**Expected Results:**
-
-- IGA can manage user
-- No attribute conflicts
-
----
-
-## TE-04: XTS Descoping
+### TE-04-T01: Validate XTS Descoping and Restoration
 
 **Backlog Item:** [TE-04](backlog.md#te-04-configure-cross-tenant-sync-descoping-and-account-restoration)
 
-### TE-04-T01: Verify Soft-Delete on Descope
-
-**Objective:** Confirm XTS soft-deletes target user when removed from scope.
+**Objective:** Verify soft-deleted users can be restored after XTS descoping.
 
 **Steps:**
 
 1. Remove test user from XTS scope
 2. Wait for sync cycle
-3. Check Entra ID deleted items:
+3. Verify user soft-deleted:
    ```powershell
    Get-MgDirectoryDeletedItem -DirectoryObjectId "[user-object-id]"
    ```
+4. Restore user:
+   ```powershell
+   Restore-MgDirectoryDeletedItem -DirectoryObjectId "[user-object-id]"
+   ```
+5. Verify user restored with same object ID
 
 **Expected Results:**
 
-- User appears in deleted items
+- User appears in deleted items after descoping
+- User restores successfully with same object ID
+- For hybrid: hard match still works after restoration
 
 ---
 
-### TE-04-T02: Verify Restoration
-
-**Objective:** Confirm soft-deleted user can be restored.
-
-**Steps:**
-
-```powershell
-Restore-MgDirectoryDeletedItem -DirectoryObjectId "[user-object-id]"
-Get-MgUser -UserId "[user-object-id]"
-```
-
-**Expected Results:**
-
-- User restored successfully
-- Same object ID preserved
-- Attributes intact
-
----
-
-### TE-04-T03: Verify Hard Match After Restoration (Hybrid)
-
-**Objective:** Confirm Entra Connect hard match works after restoration.
-
-**Steps:**
-
-1. After restoration, move AD account into sync scope
-2. Run Entra Connect sync
-3. Verify hard match
-
-**Expected Results:**
-
-- Hard match succeeds with restored user
-
----
-
-## TE-05: License Strategy
+### TE-05-T01: Validate License Staging Strategy
 
 **Backlog Item:** [TE-05](backlog.md#te-05-configure-target-license-assignment-strategy)
 
-### TE-05-T01: Verify Staging Group Excludes Exchange
-
-**Objective:** Confirm staging license group does not include Exchange plans.
+**Objective:** Verify staging license group does not provision mailbox.
 
 **Steps:**
 
-1. Review group license assignment in Entra ID
-2. Verify Exchange service plans are toggled off
-
-**Expected Results:**
-
-- No Exchange service plans assigned via staging group
-
----
-
-### TE-05-T02: Verify No Mailbox Provisioned
-
-**Objective:** Confirm user in staging group remains MailUser.
-
-**Steps:**
-
-1. Add test user to staging license group
+1. Add test user to staging license group (no Exchange plans)
 2. Wait for license assignment
-3. Check recipient type:
+3. Verify user remains MailUser:
    ```powershell
    Get-EXORecipient -Identity "testuser@target.com" | Select-Object RecipientType
    ```
+4. Run CTIM and verify ExchangeGuid stamped
+5. Complete migration and move to full license group
 
 **Expected Results:**
 
-- RecipientType remains MailUser
-- No mailbox provisioned
+- User remains MailUser with staging license
+- CTIM succeeds with staging license
+- Migration works; full license activates mailbox
 
 ---
 
-### TE-05-T03: Verify CTIM After Staging License
-
-**Objective:** Confirm CTIM works for user with staging license.
-
-**Steps:**
-
-1. Run CTIM for user with staging license
-2. Verify ExchangeGuid stamped
-
-**Expected Results:**
-
-- CTIM succeeds
-- ExchangeGuid present on MailUser
-
----
-
-### TE-05-T04: Verify Full License After Migration
-
-**Objective:** Confirm migration works and user gets full license.
-
-**Steps:**
-
-1. Complete migration for test user
-2. Move user to full license group
-3. Verify mailbox accessible
-
-**Expected Results:**
-
-- Migrated mailbox accessible
-- Full license assigned
-
----
-
-## TE-06: OneDrive Blocking
+### TE-06-T01: Validate OneDrive Blocking
 
 **Backlog Item:** [TE-06](backlog.md#te-06-block-target-onedrive-provisioning-for-staged-users)
 
-### TE-06-T01: Verify Staging Group Configured
-
-**Objective:** Confirm staging group has OneDrive creation blocked.
+**Objective:** Verify staged users cannot create OneDrive before migration.
 
 **Steps:**
 
-1. Verify staging group exists
-2. Verify "Create Personal Site" permission removed
-
-**Expected Results:**
-
-- Group configured with OneDrive blocking
-
----
-
-### TE-06-T02: Verify OneDrive Blocked
-
-**Objective:** Confirm user cannot create OneDrive.
-
-**Steps:**
-
-1. Add test user to staging group
+1. Add test user to OneDrive blocking group
 2. Attempt to access OneDrive as test user
+3. Complete OneDrive migration
+4. Remove from blocking group
+5. Verify migrated OneDrive accessible
 
 **Expected Results:**
 
-- User cannot create OneDrive
-- Appropriate error displayed
+- User cannot create OneDrive while in blocking group
+- Migrated OneDrive accessible after group removal
 
 ---
 
-### TE-06-T03: Verify OneDrive After Migration
+### TE-07-T01: Validate Conditional Access Policy Compatibility
 
-**Objective:** Confirm OneDrive accessible after migration and staging removal.
+**Backlog Item:** [TE-07](backlog.md#te-07-review-and-adjust-conditional-access-policies)
+
+**Objective:** Verify migrated users can access resources with device-based CA policies in place.
 
 **Steps:**
 
-1. Complete OneDrive migration for test user
-2. Remove user from staging group
-3. Access OneDrive
+1. Configure test user as migrated (target internal member, source B2B enabled)
+2. From target-managed device, access target tenant resources
+3. From target-managed device, access source tenant resources via B2B reach back
+4. If dual account fallback required: attempt source credential login from target-managed device
+5. Document any access blocks or MFA prompts
 
 **Expected Results:**
 
-- Migrated OneDrive accessible
+- Target tenant access works from target-managed device
+- B2B reach back access to source tenant works (or documented exception in place)
+- Dual account fallback works if required (or documented exception in place)
 
 ---
 
-## SE-01: B2B Preparation
+## SE-01: Source B2B Preparation
 
 **Backlog Item:** [SE-01](backlog.md#se-01-configure-source-b2b-enablement-preparation)
 
-### SE-01-T01: Verify B2B License Group
+### SE-01-T01: Validate B2B License Group
 
-**Objective:** Confirm B2B license group excludes EXO plans.
-
-**Steps:**
-
-1. Review group license assignment in source Entra ID
-2. Verify EXO service plans toggled off
-
-**Expected Results:**
-
-- No EXO service plans in B2B group license
-
----
-
-### SE-01-T02: Verify Proxy Addresses Preserved
-
-**Objective:** Confirm proxy addresses not scrubbed after B2B license.
+**Objective:** Verify B2B license group preserves proxy addresses.
 
 **Steps:**
 
-1. After migration, move test MailUser to B2B license group
+1. After migration, move test MailUser to B2B license group (no EXO plans)
 2. Remove from standard license group
-3. Check proxy addresses:
+3. Verify proxy addresses preserved:
    ```powershell
    Get-EXOMailUser -Identity "testuser@source.com" | Select-Object EmailAddresses
    ```
+4. Send email to source address and verify delivery to target
 
 **Expected Results:**
 
-- All proxy addresses preserved
+- All proxy addresses preserved (no scrubbing)
 - Target domain address still present
+- Mail routes correctly to target mailbox
 
 ---
 
-### SE-01-T03: Verify Mail Routing
+## Automation Development Tests
 
-**Objective:** Confirm mail routing works after B2B license transition.
-
-**Steps:**
-
-1. Send email to source address
-2. Verify delivery to target mailbox via targetAddress
-
-**Expected Results:**
-
-- Mail routes correctly to target
-
----
-
-## AD-01: Target Conversion Scripts
+### AD-01-T01: Validate Target Conversion Scripts
 
 **Backlog Item:** [AD-01](backlog.md#ad-01-develop-target-account-conversion-scripts)
 
-### AD-01-T01: Verify Dry-Run Mode
-
-**Objective:** Confirm script dry-run reports eligible users without changes.
+**Objective:** Verify scripts convert external members to internal correctly.
 
 **Steps:**
 
-1. Run conversion script with -DryRun flag
-2. Review output
+1. Run conversion script with -DryRun flag; verify eligible users reported
+2. Execute conversion for test user
+3. Verify:
+   - UserType changed to internal Member
+   - Object ID preserved
+   - Group memberships preserved
 
 **Expected Results:**
 
-- Script reports users eligible for conversion
-- No actual changes made
+- Dry run reports eligible users without changes
+- Conversion succeeds
+- Object ID and group memberships preserved
 
 ---
 
-### AD-01-T02: Execute Conversion
-
-**Objective:** Verify script converts external member to internal.
-
-**Steps:**
-
-1. Run conversion script for test user
-2. Verify user type:
-   ```powershell
-   Get-MgUser -UserId "testuser@target.com" -Property UserType
-   ```
-
-**Expected Results:**
-
-- UserType changed to "Member" (internal)
-
----
-
-### AD-01-T03: Verify Object ID Preserved
-
-**Objective:** Confirm object ID unchanged after conversion.
-
-**Steps:**
-
-Compare object ID before and after conversion
-
-**Expected Results:**
-
-- Object ID is identical
-
----
-
-### AD-01-T04: Verify Group Memberships
-
-**Objective:** Confirm group memberships preserved after conversion.
-
-**Steps:**
-
-```powershell
-Get-MgUserMemberOf -UserId "testuser@target.com"
-```
-
-**Expected Results:**
-
-- All group memberships preserved
-
----
-
-### AD-01-T05: Verify Error Handling
-
-**Objective:** Confirm script handles errors gracefully.
-
-**Steps:**
-
-1. Run script with non-existent user
-2. Run script with already-converted user
-
-**Expected Results:**
-
-- Errors logged appropriately
-- Script continues with next user
-
----
-
-## AD-02: Source Conversion Scripts
+### AD-02-T01: Validate Source Conversion Scripts
 
 **Backlog Item:** [AD-02](backlog.md#ad-02-develop-source-account-conversion-scripts)
 
-### AD-02-T01: Verify Dry-Run Mode
-
-**Objective:** Confirm script dry-run reports eligible users.
+**Objective:** Verify scripts enable B2B collaboration correctly.
 
 **Steps:**
 
-Run B2B enablement script with -DryRun flag
-
-**Expected Results:**
-
-- Script reports eligible users
-- No changes made
-
----
-
-### AD-02-T02: Execute B2B Enablement
-
-**Objective:** Verify script enables B2B correctly.
-
-**Steps:**
-
-1. Run B2B enablement script for test user
-2. Verify user type changed to external member
+1. Run B2B enablement script with -DryRun flag
+2. Execute B2B enablement for test user
+3. Verify user converted to external member linked to target
+4. Verify B2B reach back: access source apps with target credentials
+5. Verify fallback: access source apps with source credentials
 
 **Expected Results:**
 
 - User converted to external member
-- Linked to target identity
+- B2B reach back works with target credentials
+- Fallback works with source credentials
 
 ---
 
-### AD-02-T03: Verify License Group Transition
-
-**Objective:** Confirm script moves user to B2B license group.
-
-**Steps:**
-
-Verify group membership after script execution
-
-**Expected Results:**
-
-- User removed from standard group
-- User added to B2B group
-
----
-
-### AD-02-T04: Verify B2B Reach Back
-
-**Objective:** Confirm user can access source with target credentials.
-
-**Steps:**
-
-1. Sign in with target credentials
-2. Access source tenant application
-
-**Expected Results:**
-
-- Access works with target credentials
-
----
-
-### AD-02-T05: Verify Dual Account Fallback
-
-**Objective:** Confirm user can still use source credentials.
-
-**Steps:**
-
-1. Sign in with source credentials
-2. Access source tenant application
-
-**Expected Results:**
-
-- Access works with source credentials (fallback)
-
----
-
-## AD-03: Identity Rollback Scripts
+### AD-03-T01: Validate Identity Rollback Scripts
 
 **Backlog Item:** [AD-03](backlog.md#ad-03-develop-identity-rollback-scripts)
 
-### AD-03-T01: Execute Target Rollback
-
-**Objective:** Verify target internal member can revert to external.
+**Objective:** Verify identity conversions can be reverted.
 
 **Steps:**
 
-1. Run target rollback script
-2. Verify user becomes external member linked to source
+1. Execute target rollback (internal → external linked to source)
+2. Execute source rollback (external → internal)
+3. Execute full rollback sequence per runbook
+4. Verify user restored to pre-migration state
 
 **Expected Results:**
 
-- User converted to external member
-- Linked to source identity
+- Target user reverts to external member
+- Source user reverts to internal member
+- Full rollback restores services to source
 
 ---
 
-### AD-03-T02: Execute Source Rollback
+### AD-04-T01: Validate MTO External Member Rehoming
 
-**Objective:** Verify source external member can revert to internal.
+**Backlog Item:** [AD-04](backlog.md#ad-04-develop-mto-external-member-rehoming-scripts)
+
+**Objective:** Verify external members in other MTO tenants can be rehomed to target identity.
+
+**Prerequisites:** Larger MTO with at least one additional tenant beyond source and target
 
 **Steps:**
 
-1. Run source rollback script
-2. Verify user becomes internal member
+1. Identify test user's external member in other MTO tenant
+2. Remove test user from source XTS scope to other tenant
+3. Wait for sync cycle; verify external member soft-deleted
+4. Restore soft-deleted external member
+5. Execute rehoming script (convert to internal, update email, invite to B2B)
+6. Add test user to target XTS scope to other tenant
+7. Verify XTS matches existing rehomed account (no duplicate)
+8. Verify user can access resources in other tenant with target credentials
 
 **Expected Results:**
 
-- User converted to internal member
+- External member rehomed with same object ID
+- User retains group memberships and app assignments in other tenant
+- User can access other tenant resources with target credentials
+- No duplicate accounts created
 
 ---
 
-### AD-03-T03: Verify Full Rollback Sequence
+### AD-05-T01: Validate Mailbox Permission Export and Reapplication
 
-**Objective:** Confirm complete rollback restores pre-migration state.
+**Backlog Item:** [AD-05](backlog.md#ad-05-develop-mailbox-permission-export-and-reapplication-scripts)
+
+**Objective:** Verify mailbox permissions can be exported from source and reapplied in target.
 
 **Steps:**
 
-1. Execute full rollback sequence per runbook
-2. Verify source mailbox accessible
-3. Verify source OneDrive accessible
+1. Export all permission types from source test mailbox:
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@source.onmicrosoft.com
+   Get-EXOMailboxPermission -Identity "testuser@source.com" | Where-Object { $_.User -ne "NT AUTHORITY\SELF" }
+   Get-EXORecipientPermission -Identity "testuser@source.com"
+   Get-EXOMailbox -Identity "testuser@source.com" | Select-Object GrantSendOnBehalfTo
+   ```
+2. Migrate test mailbox to target
+3. Run permission reapplication script with identity mapping
+4. Verify permissions in target:
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName admin@target.onmicrosoft.com
+   Get-EXOMailboxPermission -Identity "testuser@target.com"
+   Get-EXORecipientPermission -Identity "testuser@target.com"
+   ```
+5. Test delegate access in target tenant
 
 **Expected Results:**
 
-- User fully restored to pre-migration state
-- Services accessible in source
+- All permissions exported correctly from source
+- Permissions reapplied successfully in target using mapped identities
+- Delegates can access mailbox with appropriate permissions
 
 ---
 
-## RD-01: Production Runbook
+### AD-06-T01: Validate Resource Mailbox Post-Migration Configuration
+
+**Backlog Item:** [AD-06](backlog.md#ad-06-develop-resource-mailbox-post-migration-configuration-scripts-formerly-ad-05)
+
+**Objective:** Verify resource mailbox settings can be reconfigured after migration.
+
+**Steps:**
+
+1. Migrate test resource mailbox using standalone migration (not orchestrator)
+2. Export settings from source before migration
+3. Run post-migration configuration script
+4. Verify booking policies applied:
+   ```powershell
+   Get-CalendarProcessing -Identity "room@target.com" | Select-Object AutomateProcessing, AllowConflicts, BookingWindowInDays
+   ```
+5. Test booking the resource from target tenant
+
+**Expected Results:**
+
+- All booking policies applied correctly
+- Resource delegates configured
+- Room appears in room finder (if room list recreated)
+- Booking requests processed correctly
+
+---
+
+## Runbook Development Tests
+
+### RD-01-T01: Validate Production Runbook
 
 **Backlog Item:** [RD-01](backlog.md#rd-01-develop-production-migration-runbook)
-
-### RD-01-T01: Review Runbook Completeness
-
-**Objective:** Confirm runbook covers all required steps.
-
-**Steps:**
-
-Review runbook with operations team
-
-**Expected Results:**
-
-- All steps documented
-- Timing estimates included
-- Verification checkpoints defined
-
----
-
-### RD-01-T02: Execute Runbook for E2E Test
 
 **Objective:** Verify runbook can be executed without ambiguity.
 
 **Steps:**
 
-Execute runbook for end-to-end validation test
+1. Review runbook with operations team for completeness
+2. Execute runbook for E2E validation test
+3. Document any gaps or ambiguities
 
 **Expected Results:**
 
-- Runbook completes without ambiguity
-- All steps executable as documented
+- All steps documented with clear instructions
+- Timing estimates accurate
+- Verification checkpoints defined
+- Runbook executes without ambiguity
 
 ---
 
-## RD-02: Rollback Runbook
+### RD-02-T01: Validate Rollback Runbook
 
 **Backlog Item:** [RD-02](backlog.md#rd-02-develop-rollback-runbook)
 
-### RD-02-T01: Review Rollback Runbook
-
-**Objective:** Confirm rollback procedures are clear.
+**Objective:** Verify rollback runbook executes successfully.
 
 **Steps:**
 
-Review runbook with operations team
+1. Review rollback runbook with operations team
+2. Execute rollback for test user
+3. Verify timing matches estimates
 
 **Expected Results:**
 
-- Triggers defined
-- Decision criteria documented
-- Steps clear and executable
-
----
-
-### RD-02-T02: Execute Rollback for Test User
-
-**Objective:** Verify rollback completes successfully.
-
-**Steps:**
-
-Execute rollback runbook for test user
-
-**Expected Results:**
-
+- Triggers and decision criteria clear
 - Rollback completes successfully
-- Timing matches estimates
+- Timing estimates accurate
 
 ---
 
-## E2E-01: Cloud-Only without Orchestrator
+## End-to-End Validation Tests
+
+### E2E-01-T01: Cloud-Only Target without Orchestrator
 
 **Backlog Item:** [E2E-01](backlog.md#e2e-01-end-to-end-validation---cloud-only-target-without-orchestrator)
 
-### E2E-01-T01: Complete E2E Migration
-
-**Objective:** Execute complete migration for cloud-only topology without orchestrator.
+**Objective:** Execute complete migration for cloud-only topology using standalone tools.
 
 **Steps:**
 
-Execute full migration per runbook for 2-3 test users
+1. Execute full migration per runbook for 2-3 test users
+2. Verify all post-migration functionality:
+   - Mail routing (both directions)
+   - Free/busy visibility
+   - Inbound attribution (send to restricted DL)
+   - OneDrive access and redirect
+   - Application SSO
+   - B2B reach back to source
+   - Dual account fallback
 
 **Expected Results:**
 
 - All users migrated successfully
+- All coexistence scenarios work correctly
 
 ---
 
-### E2E-01-T02: Verify Mail Routing
-
-**Objective:** Confirm mail flows correctly in both directions.
-
-**Steps:**
-
-1. Send mail from source to target user
-2. Send mail from target to source user
-3. Send mail from external to source address
-
-**Expected Results:**
-
-- All mail delivered correctly
-
----
-
-### E2E-01-T03: Verify Free/Busy
-
-**Objective:** Confirm calendar availability visible.
-
-**Steps:**
-
-1. From source, view target user calendar
-2. From target, view source user calendar
-
-**Expected Results:**
-
-- Free/busy visible in both directions
-
----
-
-### E2E-01-T04: Verify Inbound Attribution
-
-**Objective:** Confirm sender attribution works.
-
-**Steps:**
-
-1. From target, send to source restricted DL
-2. Verify delivery
-
-**Expected Results:**
-
-- Mail accepted by restricted DL
-- Sender recognized via MailUser
-
----
-
-### E2E-01-T05: Verify OneDrive Access
-
-**Objective:** Confirm OneDrive content accessible and redirect works.
-
-**Steps:**
-
-1. Access migrated OneDrive in target
-2. Navigate to old source URL
-
-**Expected Results:**
-
-- Content accessible in target
-- Source URL redirects
-
----
-
-### E2E-01-T06: Verify Application Access
-
-**Objective:** Confirm SSO to target apps works.
-
-**Steps:**
-
-Sign in to target apps
-
-**Expected Results:**
-
-- SSO works
-- No additional prompts
-
----
-
-### E2E-01-T07: Verify B2B Reach Back
-
-**Objective:** Confirm reach back to source works.
-
-**Steps:**
-
-1. With target credentials, access source apps
-2. Verify permissions
-
-**Expected Results:**
-
-- Access works via B2B
-- Original permissions preserved
-
----
-
-### E2E-01-T08: Verify Dual Account Fallback
-
-**Objective:** Confirm source credentials still work.
-
-**Steps:**
-
-Sign in to source with source credentials
-
-**Expected Results:**
-
-- Fallback authentication works
-
----
-
-## E2E-02: Cloud-Only with Orchestrator
+### E2E-02-T01: Cloud-Only Target with Orchestrator
 
 **Backlog Item:** [E2E-02](backlog.md#e2e-02-end-to-end-validation---cloud-only-target-with-orchestrator)
 
-### E2E-02-T01: Complete E2E Orchestrated Migration
-
-**Objective:** Execute complete orchestrated migration.
+**Objective:** Execute complete orchestrated migration for cloud-only topology.
 
 **Steps:**
 
-Execute orchestrator migration for test users including Teams data
+1. Execute orchestrator migration for test users including Teams data
+2. Verify all E2E-01 functionality plus:
+   - Teams chat history visible
+   - Meetings rescheduled correctly
 
 **Expected Results:**
 
 - All workloads migrate successfully
+- Teams chat and meetings accessible in target
 
 ---
 
-### E2E-02-T02: Verify Teams Chat
-
-**Objective:** Confirm Teams chat history migrated.
-
-**Steps:**
-
-Access Teams chat in target
-
-**Expected Results:**
-
-- Chat history visible
-
----
-
-### E2E-02-T03: Verify Teams Meetings
-
-**Objective:** Confirm meetings rescheduled.
-
-**Steps:**
-
-Check calendar for meetings
-
-**Expected Results:**
-
-- Meetings present in target
-
----
-
-### E2E-02-T04: All E2E-01 Tests
-
-**Objective:** Complete all cloud-only validation tests.
-
-**Steps:**
-
-Execute tests E2E-01-T02 through E2E-01-T08
-
-**Expected Results:**
-
-- All tests pass
-
----
-
-## E2E-03: Hybrid without Orchestrator
+### E2E-03-T01: Hybrid Target without Orchestrator
 
 **Backlog Item:** [E2E-03](backlog.md#e2e-03-end-to-end-validation---hybrid-target-without-orchestrator)
 
-### E2E-03-T01: Execute Hard Match Sequence
-
-**Objective:** Complete hard match for hybrid migration.
+**Objective:** Execute complete migration for hybrid topology using standalone tools.
 
 **Steps:**
 
-Execute hard match sequence per runbook
+1. Execute hard match sequence per runbook
+2. Execute full migration including hybrid identity
+3. Verify all E2E-01 functionality plus:
+   - OnPremisesSyncEnabled is True
+   - Attributes syncing from AD
 
 **Expected Results:**
 
-- Hard match successful
-- Object ID preserved
+- Hard match successful; object ID preserved
+- Hybrid identity syncing correctly
+- All coexistence scenarios work
 
 ---
 
-### E2E-03-T02: Complete E2E Hybrid Migration
-
-**Objective:** Execute complete hybrid migration.
-
-**Steps:**
-
-Execute full migration including hybrid identity
-
-**Expected Results:**
-
-- All steps complete
-- Hybrid identity syncing
-
----
-
-### E2E-03-T03: Verify Hybrid Attributes
-
-**Objective:** Confirm hybrid identity attributes correct.
-
-**Steps:**
-
-```powershell
-Get-MgUser -UserId "testuser@target.com" -Property OnPremisesSyncEnabled, OnPremisesImmutableId
-```
-
-**Expected Results:**
-
-- OnPremisesSyncEnabled is True
-- Attributes syncing from AD
-
----
-
-### E2E-03-T04: All E2E-01 Tests
-
-**Objective:** Complete all baseline validation tests.
-
-**Steps:**
-
-Execute tests E2E-01-T02 through E2E-01-T08
-
-**Expected Results:**
-
-- All tests pass
-
----
-
-## E2E-04: Hybrid with Orchestrator
+### E2E-04-T01: Hybrid Target with Orchestrator
 
 **Backlog Item:** [E2E-04](backlog.md#e2e-04-end-to-end-validation---hybrid-target-with-orchestrator)
 
-### E2E-04-T01: Execute Combined Procedure
-
-**Objective:** Complete hybrid orchestrated migration.
+**Objective:** Execute complete orchestrated migration for hybrid topology.
 
 **Steps:**
 
-Execute combined hybrid + orchestrator procedure
+1. Execute combined hybrid + orchestrator procedure
+2. Pay attention to hard match timing relative to orchestrator pre-staging
+3. Verify all E2E-02 and E2E-03 functionality
 
 **Expected Results:**
 
-- All steps complete without conflicts
-
----
-
-### E2E-04-T02: All E2E-02 and E2E-03 Tests
-
-**Objective:** Complete all validation tests.
-
-**Steps:**
-
-Execute all tests from E2E-02 and E2E-03
-
-**Expected Results:**
-
-- All tests pass
+- Combined procedure completes without conflicts
+- All workloads and hybrid identity work correctly
 
 ---
 
@@ -1684,97 +762,34 @@ Execute all tests from E2E-02 and E2E-03
 
 | Test ID | Description | Backlog ID | Test Account(s) | Status | Date | Tester | Notes |
 |---------|-------------|------------|-----------------|--------|------|--------|-------|
-| TA-01-T01 | Verify Source Test Accounts | TA-01 | | | | | |
-| TA-01-T02 | Verify Source OneDrive Sites | TA-01 | | | | | |
-| TA-01-T03 | Verify Target External Members | TA-01 | | | | | |
-| TA-01-T04 | Verify Target AD Accounts | TA-01 | | | | | |
-| TA-01-T05 | Document Test Account Inventory | TA-01 | | | | | |
-| MI-01-T01 | Verify Migration Application | MI-01 | | | | | |
-| MI-01-T02 | Verify Source Tenant Consent | MI-01 | | | | | |
-| MI-01-T03 | Verify Org Relationship (Target) | MI-01 | | | | | |
-| MI-01-T04 | Verify Org Relationship (Source) | MI-01 | | | | | |
-| MI-01-T05 | Verify Migration Endpoint | MI-01 | | | | | |
-| MI-01-T06 | Execute Test Mailbox Migration | MI-01 | | | | | |
-| MI-02-T01 | Verify Cross-Tenant Trust (Target) | MI-02 | | | | | |
-| MI-02-T02 | Verify Cross-Tenant Trust (Source) | MI-02 | | | | | |
-| MI-02-T03 | Execute Test OneDrive Migration | MI-02 | | | | | |
-| MI-03-T01 | Verify CTIM Permissions (Source) | MI-03 | | | | | |
-| MI-03-T02 | Verify CTIM Permissions (Target) | MI-03 | | | | | |
-| MI-03-T03 | Verify Target User is MailUser | MI-03 | | | | | |
-| MI-03-T04 | Execute CTIM and Verify Attributes | MI-03 | | | | | |
-| MI-04-T01 | Verify Orchestrator Module | MI-04 | | | | | |
-| MI-04-T02 | Verify Teams Federation | MI-04 | | | | | |
-| MI-04-T03 | Run Standalone Validation | MI-04 | | | | | |
-| MI-04-T04 | Submit Test Migration Batch | MI-04 | | | | | |
-| MI-04-T05 | Verify Teams Chat Migration | MI-04 | | | | | |
-| MI-04-T06 | Verify Teams Meetings Migration | MI-04 | | | | | |
-| PP-01-T01 | Verify Preview Enablement | PP-01 | | | | | |
-| PP-01-T02 | Verify Test Mailbox On Hold | PP-01 | | | | | |
-| PP-01-T03 | Execute Held Mailbox Migration | PP-01 | | | | | |
-| PP-01-T04 | Verify Substrate Folders Remain | PP-01 | | | | | |
-| PP-01-T05 | Verify Active Content Migrated | PP-01 | | | | | |
-| RI-01-T01 | Verify Bidirectional Org Relationship | RI-01 | | | | | |
-| RI-01-T02 | Verify Reverse Migration Endpoint | RI-01 | | | | | |
-| RI-01-T03 | Execute Test Reverse Mailbox Migration | RI-01 | | | | | |
-| RI-02-T01 | Verify Bidirectional Trust | RI-02 | | | | | |
-| RI-02-T02 | Execute Test Reverse OneDrive Migration | RI-02 | | | | | |
-| TE-01-T01 | Verify Staging Exclusion | TE-01 | | | | | |
-| TE-01-T02 | Execute Hard Match | TE-01 | | | | | |
-| TE-01-T03 | Verify Attribute Flow | TE-01 | | | | | |
-| TE-02-T01 | Verify Modified Provisioning | TE-02 | | | | | |
-| TE-02-T02 | Verify MailUser State | TE-02 | | | | | |
-| TE-02-T03 | Verify CTIM Compatibility | TE-02 | | | | | |
-| TE-02-T04 | Verify Post-Migration Handoff | TE-02 | | | | | |
-| TE-03-T01 | Verify IGA Discovery | TE-03 | | | | | |
-| TE-03-T02 | Verify IGA Management | TE-03 | | | | | |
-| TE-04-T01 | Verify Soft-Delete on Descope | TE-04 | | | | | |
-| TE-04-T02 | Verify Restoration | TE-04 | | | | | |
-| TE-04-T03 | Verify Hard Match After Restoration | TE-04 | | | | | |
-| TE-05-T01 | Verify Staging Group Excludes Exchange | TE-05 | | | | | |
-| TE-05-T02 | Verify No Mailbox Provisioned | TE-05 | | | | | |
-| TE-05-T03 | Verify CTIM After Staging License | TE-05 | | | | | |
-| TE-05-T04 | Verify Full License After Migration | TE-05 | | | | | |
-| TE-06-T01 | Verify Staging Group Configured | TE-06 | | | | | |
-| TE-06-T02 | Verify OneDrive Blocked | TE-06 | | | | | |
-| TE-06-T03 | Verify OneDrive After Migration | TE-06 | | | | | |
-| SE-01-T01 | Verify B2B License Group | SE-01 | | | | | |
-| SE-01-T02 | Verify Proxy Addresses Preserved | SE-01 | | | | | |
-| SE-01-T03 | Verify Mail Routing | SE-01 | | | | | |
-| AD-01-T01 | Verify Dry-Run Mode | AD-01 | | | | | |
-| AD-01-T02 | Execute Conversion | AD-01 | | | | | |
-| AD-01-T03 | Verify Object ID Preserved | AD-01 | | | | | |
-| AD-01-T04 | Verify Group Memberships | AD-01 | | | | | |
-| AD-01-T05 | Verify Error Handling | AD-01 | | | | | |
-| AD-02-T01 | Verify Dry-Run Mode | AD-02 | | | | | |
-| AD-02-T02 | Execute B2B Enablement | AD-02 | | | | | |
-| AD-02-T03 | Verify License Group Transition | AD-02 | | | | | |
-| AD-02-T04 | Verify B2B Reach Back | AD-02 | | | | | |
-| AD-02-T05 | Verify Dual Account Fallback | AD-02 | | | | | |
-| AD-03-T01 | Execute Target Rollback | AD-03 | | | | | |
-| AD-03-T02 | Execute Source Rollback | AD-03 | | | | | |
-| AD-03-T03 | Verify Full Rollback Sequence | AD-03 | | | | | |
-| RD-01-T01 | Review Runbook Completeness | RD-01 | | | | | |
-| RD-01-T02 | Execute Runbook for E2E Test | RD-01 | | | | | |
-| RD-02-T01 | Review Rollback Runbook | RD-02 | | | | | |
-| RD-02-T02 | Execute Rollback for Test User | RD-02 | | | | | |
-| E2E-01-T01 | Complete E2E Migration | E2E-01 | | | | | |
-| E2E-01-T02 | Verify Mail Routing | E2E-01 | | | | | |
-| E2E-01-T03 | Verify Free/Busy | E2E-01 | | | | | |
-| E2E-01-T04 | Verify Inbound Attribution | E2E-01 | | | | | |
-| E2E-01-T05 | Verify OneDrive Access | E2E-01 | | | | | |
-| E2E-01-T06 | Verify Application Access | E2E-01 | | | | | |
-| E2E-01-T07 | Verify B2B Reach Back | E2E-01 | | | | | |
-| E2E-01-T08 | Verify Dual Account Fallback | E2E-01 | | | | | |
-| E2E-02-T01 | Complete E2E Orchestrated Migration | E2E-02 | | | | | |
-| E2E-02-T02 | Verify Teams Chat | E2E-02 | | | | | |
-| E2E-02-T03 | Verify Teams Meetings | E2E-02 | | | | | |
-| E2E-02-T04 | All E2E-01 Tests | E2E-02 | | | | | |
-| E2E-03-T01 | Execute Hard Match Sequence | E2E-03 | | | | | |
-| E2E-03-T02 | Complete E2E Hybrid Migration | E2E-03 | | | | | |
-| E2E-03-T03 | Verify Hybrid Attributes | E2E-03 | | | | | |
-| E2E-03-T04 | All E2E-01 Tests | E2E-03 | | | | | |
-| E2E-04-T01 | Execute Combined Procedure | E2E-04 | | | | | |
-| E2E-04-T02 | All E2E-02 and E2E-03 Tests | E2E-04 | | | | | |
+| TA-01-T01 | Verify Test Account Readiness | TA-01 | | | | | |
+| MI-01-T01 | Validate Mailbox Migration | MI-01 | | | | | |
+| MI-02-T01 | Validate OneDrive Migration | MI-02 | | | | | |
+| MI-03-T01 | Validate CTIM Attribute Stamping | MI-03 | | | | | |
+| MI-04-T01 | Validate Migration Orchestrator | MI-04 | | | | | |
+| PP-01-T01 | Validate Held Mailbox Migration | PP-01 | | | | | |
+| RI-01-T01 | Validate Reverse Mailbox Migration | RI-01 | | | | | |
+| RI-02-T01 | Validate Reverse OneDrive Migration | RI-02 | | | | | |
+| TE-01-T01 | Validate Hard Match Process | TE-01 | | | | | |
+| TE-02-T01 | Validate IGA/JML Hybrid Integration | TE-02 | | | | | |
+| TE-03-T01 | Validate IGA/JML Cloud Integration | TE-03 | | | | | |
+| TE-04-T01 | Validate XTS Descoping and Restoration | TE-04 | | | | | |
+| TE-05-T01 | Validate License Staging Strategy | TE-05 | | | | | |
+| TE-06-T01 | Validate OneDrive Blocking | TE-06 | | | | | |
+| TE-07-T01 | Validate CA Policy Compatibility | TE-07 | | | | | |
+| SE-01-T01 | Validate B2B License Group | SE-01 | | | | | |
+| AD-01-T01 | Validate Target Conversion Scripts | AD-01 | | | | | |
+| AD-02-T01 | Validate Source Conversion Scripts | AD-02 | | | | | |
+| AD-03-T01 | Validate Identity Rollback Scripts | AD-03 | | | | | |
+| AD-04-T01 | Validate MTO External Member Rehoming | AD-04 | | | | | |
+| AD-05-T01 | Validate Mailbox Permission Scripts | AD-05 | | | | | |
+| AD-06-T01 | Validate Resource Mailbox Post-Migration | AD-06 | | | | | |
+| RD-01-T01 | Validate Production Runbook | RD-01 | | | | | |
+| RD-02-T01 | Validate Rollback Runbook | RD-02 | | | | | |
+| E2E-01-T01 | Cloud-Only without Orchestrator | E2E-01 | | | | | |
+| E2E-02-T01 | Cloud-Only with Orchestrator | E2E-02 | | | | | |
+| E2E-03-T01 | Hybrid without Orchestrator | E2E-03 | | | | | |
+| E2E-04-T01 | Hybrid with Orchestrator | E2E-04 | | | | | |
 
 ---
 
