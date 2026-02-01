@@ -52,7 +52,7 @@ Users exist as external members in target and work from source during this phase
 ### Phase 2: Pre-Staging (T-14 to T-1)
 
 - Run CTIM to stamp Exchange attributes on target MailUsers
-- Submit migration batch for pre-staging (orchestrator requires 2 weeks lead time)
+- Submit migration batch for pre-staging (orchestrator docs recommend 2 weeks lead time)
 - Remove unverified addresses from target accounts
 - Pre-staging synchronization runs (no user impact)
 
@@ -118,7 +118,7 @@ Use of the orchestrator is optional. Organizations may choose to use standalone 
 
 #### Batch Size and Velocity Considerations
 
-The orchestrator supports individual batch submissions of up to 100 users, with a recommended planning limit of 2,000 total users per cutover window. Batches must be submitted at least two weeks before the cutover date to allow for pre-staging synchronization. These constraints may limit average migration velocity compared to standalone migration features that support larger batch sizes and shorter lead times. Organizations should verify orchestrator behavior at scale to determine velocity impacts and operational fit.
+The orchestrator supports individual batch submissions of up to 100 users, with a recommended planning limit of 2,000 total users per cutover window. Batches should be submitted at least two weeks before the cutover date to allow for pre-staging synchronization. These constraints may limit average migration velocity compared to standalone migration features that support larger batch sizes and shorter lead times. Organizations should verify orchestrator behavior at scale to determine velocity impacts and operational fit.
 
 #### Reverse Migration Limitations
 
@@ -138,7 +138,7 @@ Cross-tenant user migration involves identity transformations in both tenants to
 
 Before any users are migrated, target external member accounts should be prepared with the desired target-state UPN. Changing UPNs in advance allows identity maps in all migration tools to reference the final target UPNs consistently. If UPNs are changed just-in-time as part of orchestrated migration, identity maps would need constant updates across all tools, creating operational complexity and risk.
 
-Additionally, unverified email addresses (addresses from domains not verified in the target tenant) must be removed from target accounts before mailbox migration. If unverified addresses remain, the migration will fail. However, removing these addresses causes the same inbound attribution and sender authorization issues in the target that occur in the source post-migration. During the period between address removal and mailbox cutover, mail sent from the user's source mailbox to target recipients will not attribute to the target MailUser, breaking profile resolution and sender authorization for restricted recipients.
+Additionally, unverified email addresses (addresses from domains not verified in the target tenant) must be removed from target accounts before mailbox migration. If unverified addresses remain, the migration will fail. However, removing these addresses causes inbound attribution and sender authorization issues in the target. During the period between address removal and mailbox cutover, mail sent from the user's source mailbox to target recipients will not attribute to the target MailUser, breaking profile resolution and sender authorization for restricted recipients.
 
 This address removal should be deferred as late as possible to minimize the coexistence impact. The exact timing requirement needs validation: it is likely required before the migration batch is submitted for pre-staging (at least two weeks before cutover when using the orchestrator), but it may be possible to retain the address during pre-staging and remove it only before cutover.
 
@@ -162,9 +162,9 @@ B2B enablement requires several preparatory steps executed in sequence:
 
 1. **Transition to B2B license group:** Move source MailUser to a license group without Exchange Online service plans. This prevents proxy scrubbing when the mailbox is converted to a MailUser.
 
-2. **Update primary SMTP address:** The source account's primary SMTP address must be updated to a domain verified in both tenants (typically the target tenant's domain) before B2B enablement can succeed. This is the primary reason for the license group change—it prevents proxy scrubbing that would remove the required address.
+2. **Update primary SMTP address:** The source account's primary SMTP address must be updated to a domain verified in the target tenant before B2B enablement can succeed. This is the primary reason for the license group change—it prevents proxy scrubbing that would remove the required address.
 
-3. **Convert remote mailbox to mail user (hybrid source tenants only):** For source tenants with hybrid AD integration, the remote mailbox object must be converted to a mail user in on-premises AD before B2B enablement. This conversion also defeats proxy scrubbing and satisfies the primary SMTP address requirement.
+3. **Convert remote mailbox to mail user (hybrid source tenants only):** For source tenants with hybrid AD integration, the remote mailbox object must be converted to a mail user in on-premises AD before B2B enablement. This conversion is also required to bypass proxy scrubbing and satisfy the primary SMTP address requirement.
 
 For applications that do not work with B2B collaboration, users can fall back to their source credentials, which remain intact after B2B enablement.
 
