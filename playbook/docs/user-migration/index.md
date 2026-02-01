@@ -179,6 +179,41 @@ Identity conversions must be coordinated with data migration timing and executed
 
 The migration toolkit provides sample scripts as a starting point. Organizations should customize these scripts for their environment, integrate with existing automation frameworks, and thoroughly test before production use. Identity rollback scripts should also be developed to support reverting conversions if migration rollback is required.
 
+#### External Member and Guest Rehoming in Other MTO Tenants
+
+When source and target tenants are part of a larger Multi-Tenant Organization with additional tenants, migrating users may have external member accounts or guest accounts in those other tenants that must be rehomed. This ensures users retain access to resources in other MTO tenants from their new target identity.
+
+**The Problem:** When a user migrates from source to target, their external member or guest accounts in other MTO tenants still point to their source identity. After migration, users authenticate with their target credentials, but their accounts in other tenants are linked to the wrong identity.
+
+**The Solution:** A custom scripted process rehomes external members and guests in other MTO tenants using the same identity conversion features used for source and target account management:
+
+1. **Convert External to Internal:** Use "Convert to Internal User" to convert the external member or guest (linked to source) to an internal member in the other tenant
+2. **Update Email Address:** Update the internal member's email address to match the target account UPN
+3. **Invite Internal to B2B:** Use "Invite Internal Users to B2B" to convert the internal member back to an external member or guest linked to the target identity
+
+This process preserves the object ID, group memberships, and application assignments in the other tenant while relinking the account to the user's new target identity.
+
+**Coordination with XTS (External Members Only):**
+
+For external members provisioned via Cross-Tenant Synchronization, rehoming must be coordinated with XTS scoping changes:
+
+1. **Source XTS Descoping:** When the user is migrated, remove them from source tenant's XTS scope to other tenants. This triggers soft-delete of the external member in other tenants.
+2. **Restore and Rehome:** Restore the soft-deleted external member and execute the rehoming script (convert to internal, update email, invite to B2B).
+3. **Target XTS Scoping:** Add the user to target tenant's XTS scope to other tenants. XTS will match the rehomed account based on alternateSecurityIdentifier, avoiding duplicate provisioning.
+
+**Critical Timing:** The entire sequence must complete within 30 days (soft-delete retention period). Rehoming should be orchestrated as part of the migration batch process to avoid access disruption in other MTO tenants.
+
+**Guest Accounts:** Guest accounts not provisioned via XTS do not require XTS coordination but still require the convert-update-invite rehoming sequence. Identify all guest accounts in other MTO tenants that correspond to migrating users and include them in rehoming automation.
+
+**Automation Requirements:**
+
+At scale, manual rehoming is impractical. Organizations should develop PowerShell scripts to:
+
+- Identify external members and guests in other MTO tenants that correspond to migrating users
+- Execute the convert-update-invite sequence for each affected account
+- Handle batch processing with error handling and logging
+- Coordinate with XTS scoping changes (for external members)
+
 ### Mailbox Migration
 
 Cross-tenant mailbox migration uses move mechanics via the Mailbox Replication Service (MRS). The source mailbox is converted to a MailUser object upon completion.
@@ -350,39 +385,6 @@ When a migrated user sends mail from the target tenant to recipients in the sour
 - Sender authorization: The user can send to restricted distribution lists and other recipients with sender restrictions
 
 Attribution requires the target email address to be present in the source MailUser's proxy addresses. If EXO licenses are restored on the source MailUser, proxy addresses are scrubbed to remove unverified domains, breaking attribution and sender authorization.
-
-### MTO External Member Rehoming
-
-When source and target tenants are part of a larger Multi-Tenant Organization with additional tenants, migrating users have external member accounts in those other tenants that must be rehomed. This ensures users retain access to resources in other MTO tenants from their new target account.
-
-**The Problem:** When a user migrates from source to target, their external member accounts in other MTO tenants still point to their source identity. After migration, users authenticate with their target credentials, but their external member accounts in other tenants are linked to the wrong identity.
-
-**The Solution:** A custom scripted process rehomes external members in other MTO tenants using the same identity conversion features used for source and target account management:
-
-1. **Convert External to Internal:** Use "Convert to Internal User" to convert the external member (linked to source) to an internal member in the other tenant
-2. **Update Email Address:** Update the internal member's email address to match the target account UPN
-3. **Invite Internal to B2B:** Use "Invite Internal Users to B2B" to convert the internal member back to an external member linked to the target identity
-
-This process preserves the object ID, group memberships, and application assignments in the other tenant while relinking the account to the user's new target identity.
-
-#### Coordination with XTS
-
-Rehoming must be coordinated with Cross-Tenant Synchronization scoping changes:
-
-1. **Source XTS Descoping:** When the user is migrated, remove them from source tenant's XTS scope to other tenants. This triggers soft-delete of the external member in other tenants.
-2. **Restore and Rehome:** Restore the soft-deleted external member and execute the rehoming script (convert to internal, update email, invite to B2B).
-3. **Target XTS Scoping:** Add the user to target tenant's XTS scope to other tenants. XTS will match the rehomed account based on alternateSecurityIdentifier, avoiding duplicate provisioning.
-
-**Critical Timing:** The entire sequence must complete within 30 days (soft-delete retention period). Rehoming should be orchestrated as part of the migration batch process to avoid access disruption in other MTO tenants.
-
-#### Automation Requirements
-
-At scale, manual rehoming is impractical. Organizations should develop PowerShell scripts to:
-
-- Identify external members in other MTO tenants that correspond to migrating users
-- Execute the convert-update-invite sequence for each affected account
-- Handle batch processing with error handling and logging
-- Coordinate with XTS scoping changes
 
 ### Hybrid Identity Integration
 
