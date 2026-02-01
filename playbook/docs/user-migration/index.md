@@ -39,6 +39,16 @@ Use of the orchestrator is optional. Organizations may choose to use standalone 
 
 The orchestrator supports batching of up to 2,000 users per batch. This limit, combined with the need to submit batches for pre-staging several days before cutover, may constrain average migration velocity. Organizations should verify orchestrator behavior at scale to determine impacts to velocity and whether techniques are available to work around the batching limit. Use of the orchestrator may result in slower average migration velocity compared to standalone migration features with larger batch sizes.
 
+#### Reverse Migration Limitations
+
+The Migration Orchestrator does not support reverse migration (target to source). If rollback is required after migration:
+
+- Mailbox and OneDrive rollback must use standalone cross-tenant migration tools
+- Teams chat and meetings cannot be reversed; original content remains on source tenant in modified form, but there is no path to restore the target state to source
+- Reverse migration infrastructure must be configured separately using standalone tools regardless of forward migration approach
+
+Organizations requiring robust rollback capabilities should configure bidirectional migration infrastructure using standalone tools even when using the orchestrator for forward migration.
+
 ### Identity Migration
 
 Cross-tenant user migration involves identity transformations in both tenants to enable seamless access and coexistence. These identity conversions are performed separately from user data migration and must be coordinated with the migration schedule.
@@ -66,6 +76,17 @@ The GA version of this feature supports:
 After migration, source accounts are enabled for B2B collaboration using the "Invite Internal Users to B2B" feature. This converts the internal member to an external member, linking the source account with the target identity using an alternate security identifier. Users authenticate with their target credentials and access source resources with their original permissions, group memberships, and application profiles.
 
 For applications that do not work with B2B collaboration, users can fall back to their source credentials, which remain intact after B2B enablement.
+
+#### Identity Conversion Automation
+
+Identity conversions must be coordinated with data migration timing and executed for each user in the migration batch. At scale, manual conversion through the Entra ID portal is impractical. Organizations should develop PowerShell scripts or automation to:
+
+- Convert target external members to internal members immediately before data migration cutover
+- Enable B2B collaboration on source accounts immediately after data migration completes
+- Handle batch processing with error handling and logging
+- Support dry-run validation before execution
+
+The migration toolkit provides sample scripts as a starting point. Organizations should customize these scripts for their environment, integrate with existing automation frameworks, and thoroughly test before production use. Identity rollback scripts should also be developed to support reverting conversions if migration rollback is required.
 
 ### Mailbox Migration
 
@@ -325,5 +346,5 @@ There is no native way to import response data back into Forms. Exported respons
 
 ### Related Topics
 
-- [Setup Checklist](setup.md)
+- [Implementation Backlog](backlog.md)
 - [Test Cases](tests.md)

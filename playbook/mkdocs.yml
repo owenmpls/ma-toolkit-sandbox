@@ -58,7 +58,7 @@ nav:
       - secure-landing-zone/index.md
   - User migration:
       - user-migration/index.md
-      - Setup: user-migration/setup.md
+      - Implementation backlog: user-migration/backlog.md
       - Tests: user-migration/tests.md
   - Device migration:
       - device-migration/index.md
@@ -70,7 +70,7 @@ nav:
       - data-retention/index.md
   - Data encryption:
       - data-encryption/index.md
-  - Teams Phone & Rooms migration:
+  - Teams Phone and Rooms migration:
       - teams-phone-and-rooms-migration/index.md
   - Power Platform migration:
       - power-platform-migration/index.md
