@@ -60,8 +60,8 @@ nav:
       - user-migration/index.md
       - Implementation backlog: user-migration/backlog.md
       - Tests: user-migration/tests.md
-  - Domain branding migration:
-      - domain-branding-migration/index.md
+  - Domain migration:
+      - domain-migration/index.md
   - Device migration:
       - device-migration/index.md
   - Shared data migration:
@@ -70,12 +70,12 @@ nav:
       - data-retention/index.md
   - Data encryption:
       - data-encryption/index.md
-  - Teams Phone and Rooms migration:
-      - teams-phone-and-rooms-migration/index.md
-  - Power Platform and Dynamics migration:
-      - power-platform-and-dynamics-migration/index.md
-  - Power BI and Fabric migration:
-      - power-bi-and-fabric-migration/index.md
+  - Teams Phone, Rooms migration:
+      - teams-phone-rooms-migration/index.md
+  - Power Platform, Dynamics migration:
+      - power-platform-dynamics-migration/index.md
+  - Power BI, Fabric migration:
+      - power-bi-fabric-migration/index.md
   - Azure migration:
       - azure-migration/index.md
   - App migration:
