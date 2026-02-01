@@ -472,9 +472,9 @@ Accounts can be linked with on-premises AD at different points:
 
 Public folder mailboxes are not covered by cross-tenant user migration and are not supported by first-party migration tools. Organizations requiring public folder migration must use third-party tools.
 
-### M365 Group Mailboxes
+### Microsoft 365 Group Mailboxes
 
-M365 Group mailboxes (including Teams-connected groups) are not migrated by first-party cross-tenant migration tools. These are shared resources that require third-party tools for migration. M365 Group migration is covered in the shared data migration section of this playbook.
+Microsoft 365 Group mailboxes (including Teams-connected groups) are not migrated by first-party cross-tenant migration tools. These are shared resources that require third-party tools for migration. M365 Group migration is covered in the shared data migration section of this playbook.
 
 ### Microsoft Bookings
 
