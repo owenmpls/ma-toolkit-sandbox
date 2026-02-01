@@ -8,7 +8,7 @@ This document provides an overview of cross-tenant user migration using Microsof
 
 Before beginning cross-tenant user migration, the following must be in place:
 
-**Coexistence Infrastructure (Separate Playbook)**
+**Coexistence Infrastructure (Separate Section)**
 - Multi-Tenant Organization (MTO) established between source and target tenants
 - Cross-Tenant Synchronization (XTS) configured to provision external member accounts in the target tenant
 - Organization relationships configured for free/busy federation between tenants
@@ -20,14 +20,14 @@ Before beginning cross-tenant user migration, the following must be in place:
 - Microsoft 365 E3/E5 or equivalent licenses in both tenants (required for Migration Orchestrator)
 
 **Administrative Access**
-- Global Administrator access in both tenants
-- Exchange Administrator role in both tenants
-- SharePoint Administrator access in both tenants
+- Global Administrator access in both tenants (required for cross-tenant trust configuration, application registrations, and organization-wide settings)
+- Exchange Administrator role in both tenants (required for mailbox migration, organization relationships, and mail flow configuration)
+- SharePoint Administrator access in both tenants (required for OneDrive migration and cross-tenant trust configuration)
 
 **Target Environment Readiness**
 - Target accounts provisioned as external members via XTS
 - UPN strategy determined for target accounts
-- License assignment strategy defined to prevent premature mailbox provisioning
+- License assignment strategy defined to prevent premature mailbox provisioning: Target accounts must remain as MailUsers (not mailboxes) until migration cutover. If Exchange Online licenses are assigned before CTIM stamps the ExchangeGUID, a new mailbox is provisioned instead of preserving the MailUser, which breaks migration. Use license groups with Exchange Online service plans disabled for pre-migration staging, then transition to full licenses after migration completes.
 
 ## Migration Process Overview
 
@@ -248,7 +248,7 @@ Resource mailboxes migrate using standalone cross-tenant mailbox migration. Key 
 3. Recreate room lists and add resource mailboxes
 4. Update room finder configurations
 
-**Microsoft Teams Rooms:** Room mailboxes connected to Microsoft Teams Rooms devices require additional device-side configuration after migration. Teams Room migration is covered in a separate playbook section.
+**Microsoft Teams Rooms:** Room mailboxes connected to Microsoft Teams Rooms devices require additional device-side configuration after migration. Teams Rooms migration is covered in a separate section of this playbook.
 
 #### Archive Mailboxes
 
@@ -456,7 +456,7 @@ Users should be grouped into migration batches to minimize cross-tenant access d
 
 **Shared Mailbox Coordination:** Since shared mailboxes use standalone migration (not orchestrator), schedule them alongside or after their primary delegates. This ensures permissions can be reapplied with target identities.
 
-A separate playbook section covers detailed scheduling methodology, batch sizing strategies, and scheduling templates.
+A separate section of this playbook covers detailed scheduling methodology, batch sizing strategies, and scheduling templates.
 
 ### Hybrid Identity Timing
 
@@ -568,7 +568,7 @@ Encrypted content behaves differently depending on the workload:
 
 Additionally, tenants with Service encryption using Microsoft Purview Customer Key enabled cannot use cross-tenant OneDrive migration. The migration will fail if Customer Key is enabled on the source tenant.
 
-A separate playbook section covers sensitivity label and Microsoft Purview Information Protection migration in detail.
+A separate section of this playbook covers sensitivity label and Microsoft Purview Information Protection migration in detail.
 
 ### Conditional Access Policy Considerations
 
