@@ -9,6 +9,7 @@ This document provides an overview of cross-tenant user migration using Microsof
 Before beginning cross-tenant user migration, the following must be in place:
 
 **Coexistence Infrastructure (Separate Section)**
+
 - Multi-Tenant Organization (MTO) established between source and target tenants
 - Cross-Tenant Synchronization (XTS) configured to provision external member accounts in the target tenant
 - Organization relationships configured for free/busy federation between tenants
@@ -16,18 +17,21 @@ Before beginning cross-tenant user migration, the following must be in place:
 - External guest accounts recreated in target tenant if OneDrive/SharePoint sharing permissions must be preserved
 
 **Licensing**
+
 - Cross-Tenant User Data Migration licenses procured (one-time per-user fee)
 - Microsoft 365 E3/E5 or equivalent licenses in both tenants (required for Migration Orchestrator)
 
 **Administrative Access**
+
 - Global Administrator access in both tenants (required for cross-tenant trust configuration, application registrations, and organization-wide settings)
 - Exchange Administrator role in both tenants (required for mailbox migration, organization relationships, and mail flow configuration)
 - SharePoint Administrator access in both tenants (required for OneDrive migration and cross-tenant trust configuration)
 
 **Target Environment Readiness**
+
 - Target accounts provisioned as external members via XTS
 - UPN strategy determined for target accounts
-- License assignment strategy defined to prevent premature mailbox provisioning: Target accounts must remain as MailUsers (not mailboxes) until migration cutover. If Exchange Online licenses are assigned before CTIM stamps the ExchangeGUID, a new mailbox is provisioned instead of preserving the MailUser, which breaks migration. Use license groups with Exchange Online service plans disabled for pre-migration staging, then transition to full licenses after migration completes.
+- License assignment strategy defined to prevent premature mailbox provisioning. Target accounts must remain as MailUsers (not mailboxes) until migration cutover. If Exchange Online licenses are assigned before CTIM stamps the ExchangeGUID, a new mailbox is provisioned instead of preserving the MailUser, which breaks migration. Use license groups with Exchange Online service plans disabled for pre-migration staging, then transition to full licenses after migration completes.
 
 ## Migration Process Overview
 
