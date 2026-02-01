@@ -33,57 +33,46 @@ Before beginning cross-tenant user migration, the following must be in place:
 
 Cross-tenant user migration follows this high-level sequence:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     COEXISTENCE PERIOD                               │
-│  (Users exist as external members in target, work from source)       │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Configure migration infrastructure (mailbox, OneDrive, CTIM)     │
-│  2. Configure reverse migration infrastructure (for rollback)        │
-│  3. Prepare target environment (licensing, IGA integration)          │
-│  4. Prepare source environment (B2B license groups)                  │
-│  5. Develop and test automation scripts                              │
-│  6. Develop and test runbooks                                        │
-│  7. Execute end-to-end validation with test accounts                 │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PRE-STAGING (T-14 to T-1)                        │
-├─────────────────────────────────────────────────────────────────────┤
-│  8. Run CTIM to stamp Exchange attributes on target MailUsers        │
-│  9. Submit migration batch for pre-staging (orchestrator: 2 weeks)   │
-│ 10. Remove unverified addresses from target accounts                 │
-│ 11. Pre-staging synchronization runs (no user impact)                │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     CUTOVER WINDOW (T-0)                             │
-├─────────────────────────────────────────────────────────────────────┤
-│ 12. Convert target external members to internal members              │
-│ 13. Cutover mailbox and OneDrive (overnight)                         │
-│ 14. Cutover Teams chat and meetings (if using orchestrator)          │
-│ 15. Enable B2B collaboration on source accounts                      │
-│ 16. Transition source accounts to B2B license group                  │
-│ 17. Descope source accounts from XTS to all MTO tenants              │
-│ 18. Restore and rehome external members in other MTO tenants         │
-│ 19. Add target accounts to XTS scope for other MTO tenants           │
-│ 20. Restore and finalize target accounts                             │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     POST-MIGRATION                                   │
-│  (Users work from target, access source via B2B reach back)          │
-├─────────────────────────────────────────────────────────────────────┤
-│ 21. Reapply mailbox permissions in target tenant                     │
-│ 22. Users reconfigure devices for target tenant                      │
-│ 23. Users complete MFA registration in target (if not pre-registered)│
-│ 24. IGA/JML assumes lifecycle management authority                   │
-│ 25. Monitor for issues, execute rollback if needed                   │
-└─────────────────────────────────────────────────────────────────────┘
-```
+### Phase 1: Coexistence Period
+
+Users exist as external members in target and work from source during this phase.
+
+- Configure migration infrastructure (mailbox, OneDrive, CTIM)
+- Configure reverse migration infrastructure (for rollback)
+- Prepare target environment (licensing, IGA integration)
+- Prepare source environment (B2B license groups)
+- Develop and test automation scripts
+- Develop and test runbooks
+- Execute end-to-end validation with test accounts
+
+### Phase 2: Pre-Staging (T-14 to T-1)
+
+- Run CTIM to stamp Exchange attributes on target MailUsers
+- Submit migration batch for pre-staging (orchestrator requires 2 weeks lead time)
+- Remove unverified addresses from target accounts
+- Pre-staging synchronization runs (no user impact)
+
+### Phase 3: Cutover Window (T-0)
+
+- Convert target external members to internal members
+- Cutover mailbox and OneDrive (overnight)
+- Cutover Teams chat and meetings (if using orchestrator)
+- Enable B2B collaboration on source accounts
+- Transition source accounts to B2B license group
+- Descope source accounts from XTS to all MTO tenants
+- Restore and rehome external members in other MTO tenants
+- Add target accounts to XTS scope for other MTO tenants
+- Restore and finalize target accounts
+
+### Phase 4: Post-Migration
+
+Users work from target and access source via B2B reach back.
+
+- Reapply mailbox permissions in target tenant
+- Users reconfigure devices for target tenant
+- Users complete MFA registration in target (if not pre-registered)
+- IGA/JML assumes lifecycle management authority
+- Monitor for issues, execute rollback if needed
 
 **Key Timing Constraints:**
 - Migration Orchestrator requires batch submission at least two weeks before cutover
