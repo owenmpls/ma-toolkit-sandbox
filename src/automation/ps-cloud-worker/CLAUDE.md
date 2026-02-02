@@ -71,7 +71,7 @@ ps-cloud-worker/
 
 ## Service Bus Message Format
 
-**Job message** (jobs topic, filtered by `WorkerId` application property):
+**Job message** (worker-jobs topic, filtered by `WorkerId` application property):
 ```json
 {
     "JobId": "guid",
@@ -82,7 +82,7 @@ ps-cloud-worker/
 }
 ```
 
-**Result message** (results topic):
+**Result message** (worker-results topic):
 ```json
 {
     "JobId": "guid", "BatchId": "...", "WorkerId": "worker-01",

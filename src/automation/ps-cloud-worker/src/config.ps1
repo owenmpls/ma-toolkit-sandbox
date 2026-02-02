@@ -13,8 +13,8 @@ function Get-WorkerConfiguration {
         WorkerId                   = $env:WORKER_ID
         MaxParallelism             = [int]($env:MAX_PARALLELISM ?? '2')
         ServiceBusNamespace        = $env:SERVICE_BUS_NAMESPACE
-        JobsTopicName              = $env:JOBS_TOPIC_NAME ?? 'jobs'
-        ResultsTopicName           = $env:RESULTS_TOPIC_NAME ?? 'results'
+        JobsTopicName              = $env:JOBS_TOPIC_NAME ?? 'worker-jobs'
+        ResultsTopicName           = $env:RESULTS_TOPIC_NAME ?? 'worker-results'
         KeyVaultName               = $env:KEY_VAULT_NAME
         TargetTenantId             = $env:TARGET_TENANT_ID
         AppId                      = $env:APP_ID

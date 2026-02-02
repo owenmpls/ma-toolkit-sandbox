@@ -12,12 +12,12 @@ The PowerShell Cloud Worker is a component of the Migration Automation Toolkit's
                                            │        │
                                     enqueue jobs  results
                                            │        │
-                                    ┌──────▼────────┴──────┐
-                                    │    Azure Service Bus  │
-                                    │  ┌──────┐ ┌────────┐ │
-                                    │  │ jobs │ │results │ │
-                                    │  └──┬───┘ └───▲────┘ │
-                                    └─────┼─────────┼──────┘
+                              ┌────────────▼────────┴────────────┐
+                              │        Azure Service Bus          │
+                              │  ┌───────────┐ ┌──────────────┐  │
+                              │  │worker-jobs│ │worker-results│  │
+                              │  └────────┬──┘ └────▲─────────┘  │
+                              └───────────┼─────────┼────────────┘
                                           │         │
                               ┌───────────▼─────────┴───────────┐
                               │     PowerShell Cloud Worker      │
@@ -57,7 +57,7 @@ The PowerShell Cloud Worker is a component of the Migration Automation Toolkit's
 
 The worker tracks idle time — the elapsed duration since the last message was received or last job completed. When no jobs are in flight and the idle timeout is reached (`IDLE_TIMEOUT_SECONDS`, default 300s), the worker initiates a graceful shutdown and the process exits.
 
-The Container App is configured with **min replicas = 0** and **max replicas = 1**. A KEDA `azure-servicebus` scaler monitors the worker's subscription on the `jobs` topic. When one or more messages are pending, KEDA scales the container from 0 → 1, triggering the full boot sequence. After the worker finishes processing and the idle timeout elapses, the process exits and ACA scales back to 0.
+The Container App is configured with **min replicas = 0** and **max replicas = 1**. A KEDA `azure-servicebus` scaler monitors the worker's subscription on the `worker-jobs` topic. When one or more messages are pending, KEDA scales the container from 0 → 1, triggering the full boot sequence. After the worker finishes processing and the idle timeout elapses, the process exits and ACA scales back to 0.
 
 ```
 Messages arrive on subscription
@@ -119,14 +119,14 @@ The `MaxParallelism` configuration controls the runspace pool size. The job disp
 
 ### Topics and Subscriptions
 
-- **Jobs Topic** (`jobs`): The orchestrator publishes job messages. Each worker has a subscription with a SQL filter: `WorkerId = 'worker-XX'`.
-- **Results Topic** (`results`): Workers publish result messages. The orchestrator has a subscription receiving all results.
+- **Jobs Topic** (`worker-jobs`): The orchestrator publishes job messages. Each worker has a subscription with a SQL filter: `WorkerId = 'worker-XX'`.
+- **Results Topic** (`worker-results`): Workers publish result messages. The orchestrator has a subscription receiving all results.
 
 ### Message Flow
 
 ```
-Orchestrator → jobs topic → worker-XX subscription → Worker
-Worker → results topic → orchestrator subscription → Orchestrator
+Orchestrator → worker-jobs topic → worker-XX subscription → Worker
+Worker → worker-results topic → orchestrator subscription → Orchestrator
 ```
 
 ### Message Handling

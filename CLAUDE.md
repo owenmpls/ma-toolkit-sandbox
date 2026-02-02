@@ -61,7 +61,7 @@ az deployment group create \
 
 The worker follows a **queue-based, scale-to-zero pattern**:
 
-1. **Azure Service Bus** topics (`jobs` / `results`) connect the orchestrator to the worker
+1. **Azure Service Bus** topics (`worker-jobs` / `worker-results`) connect the orchestrator to the worker
 2. **KEDA scaler** on the worker's subscription triggers ACA to scale 0→1 when messages arrive
 3. **Worker boot** (8 phases): config → logging → Azure auth → Key Vault secret → Service Bus client → RunspacePool with per-runspace Graph+EXO sessions → shutdown handler → job dispatch loop
 4. **Job dispatch loop**: receive (PeekLock) → validate → dispatch to available runspace → collect result → send result message → complete/abandon original message

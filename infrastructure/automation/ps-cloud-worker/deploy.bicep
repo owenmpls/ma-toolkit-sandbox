@@ -70,7 +70,7 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
 // --- Service Bus Topics ---
 resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
-  name: 'jobs'
+  name: 'worker-jobs'
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P1D'
@@ -79,7 +79,7 @@ resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' =
 
 resource resultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
-  name: 'results'
+  name: 'worker-results'
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P1D'
@@ -164,7 +164,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
 
 // --- Service Bus connection string secret (used by KEDA scaler for auth) ---
 // The scaler needs a connection string to check subscription message count.
-// We use a shared access policy with Manage rights on the jobs topic.
+// We use a shared access policy with Manage rights on the worker-jobs topic.
 resource jobsTopicAuthRule 'Microsoft.ServiceBus/namespaces/topics/authorizationRules@2022-10-01-preview' = {
   parent: jobsTopic
   name: 'keda-monitor'
@@ -219,8 +219,8 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'WORKER_ID', value: workerId }
             { name: 'MAX_PARALLELISM', value: string(maxParallelism) }
             { name: 'SERVICE_BUS_NAMESPACE', value: '${serviceBus.name}.servicebus.windows.net' }
-            { name: 'JOBS_TOPIC_NAME', value: 'jobs' }
-            { name: 'RESULTS_TOPIC_NAME', value: 'results' }
+            { name: 'JOBS_TOPIC_NAME', value: 'worker-jobs' }
+            { name: 'RESULTS_TOPIC_NAME', value: 'worker-results' }
             { name: 'KEY_VAULT_NAME', value: keyVault.name }
             { name: 'TARGET_TENANT_ID', value: targetTenantId }
             { name: 'APP_ID', value: appId }
@@ -239,7 +239,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
             custom: {
               type: 'azure-servicebus'
               metadata: {
-                topicName: 'jobs'
+                topicName: 'worker-jobs'
                 subscriptionName: 'worker-${workerId}'
                 messageCount: '1'
               }
@@ -270,7 +270,7 @@ resource kvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-// Worker managed identity -> Service Bus Data Receiver (jobs topic)
+// Worker managed identity -> Service Bus Data Receiver (worker-jobs topic)
 resource sbDataReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: serviceBus
   name: guid(serviceBus.id, workerApp.id, '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0')
@@ -281,7 +281,7 @@ resource sbDataReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01'
   }
 }
 
-// Worker managed identity -> Service Bus Data Sender (results topic)
+// Worker managed identity -> Service Bus Data Sender (worker-results topic)
 resource sbDataSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: serviceBus
   name: guid(serviceBus.id, workerApp.id, '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39')

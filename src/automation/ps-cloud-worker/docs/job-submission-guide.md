@@ -2,7 +2,7 @@
 
 ## Message Format
 
-### Job Message (Jobs Topic)
+### Job Message (Worker-Jobs Topic)
 
 ```json
 {
@@ -36,7 +36,7 @@ When sending a job message, set these application properties on the `ServiceBusM
 | `WorkerId` | e.g., `worker-01` | Subscription SQL filter matches on this |
 | `BatchId` | e.g., `batch-001` | Optional, for orchestrator correlation |
 
-### Result Message (Results Topic)
+### Result Message (Worker-Results Topic)
 
 The worker sends results in this format:
 
@@ -336,7 +336,7 @@ Add-Type -Path '/opt/dotnet-libs/Azure.Messaging.ServiceBus.dll'
 $credential = [Azure.Identity.DefaultAzureCredential]::new()
 $client = [Azure.Messaging.ServiceBus.ServiceBusClient]::new(
     'matoolkit-sb.servicebus.windows.net', $credential)
-$sender = $client.CreateSender('jobs')
+$sender = $client.CreateSender('worker-jobs')
 
 # Build message
 $job = @{

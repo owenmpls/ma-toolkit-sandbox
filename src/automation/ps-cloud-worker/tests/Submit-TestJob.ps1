@@ -11,7 +11,7 @@
 .PARAMETER ServiceBusNamespace
     The Service Bus namespace (e.g., 'your-namespace.servicebus.windows.net').
 .PARAMETER TopicName
-    The name of the jobs topic. Defaults to 'jobs'.
+    The name of the jobs topic. Defaults to 'worker-jobs'.
 .PARAMETER WorkerId
     The target worker ID. Messages are tagged with this ID for subscription filtering.
 .PARAMETER FunctionName
@@ -34,7 +34,7 @@ param(
     [Parameter(Mandatory)]
     [string]$ServiceBusNamespace,
 
-    [string]$TopicName = 'jobs',
+    [string]$TopicName = 'worker-jobs',
 
     [Parameter(Mandatory)]
     [string]$WorkerId,

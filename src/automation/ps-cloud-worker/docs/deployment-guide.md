@@ -92,10 +92,10 @@ az deployment group create \
 This creates:
 - Container App Environment + Container App (min 0, max 1 replicas — scales to zero when idle)
 - KEDA Service Bus scaler that starts the container when messages arrive for the worker
-- Service Bus namespace with `jobs` and `results` topics
-- Worker subscription with SQL filter on `jobs` topic
-- Shared access policy on `jobs` topic for KEDA monitoring
-- Orchestrator subscription on `results` topic
+- Service Bus namespace with `worker-jobs` and `worker-results` topics
+- Worker subscription with SQL filter on `worker-jobs` topic
+- Shared access policy on `worker-jobs` topic for KEDA monitoring
+- Orchestrator subscription on `worker-results` topic
 - Key Vault with RBAC
 - Application Insights + Log Analytics workspace
 - Container Registry
@@ -146,10 +146,10 @@ You should see the startup banner and "Worker 'worker-01' is READY and listening
 
 ### Scale-to-Zero Behavior
 
-The Container App is configured with **min replicas = 0** and **max replicas = 1**. A KEDA `azure-servicebus` scaler monitors the worker's subscription on the `jobs` topic. When one or more messages are pending, KEDA scales the container from 0 to 1. The worker starts, authenticates, processes all available jobs, and then monitors the subscription for new messages. Once the idle timeout is reached (`IDLE_TIMEOUT_SECONDS`, default 300s), the worker shuts down gracefully and the process exits, allowing ACA to scale the container back to zero.
+The Container App is configured with **min replicas = 0** and **max replicas = 1**. A KEDA `azure-servicebus` scaler monitors the worker's subscription on the `worker-jobs` topic. When one or more messages are pending, KEDA scales the container from 0 to 1. The worker starts, authenticates, processes all available jobs, and then monitors the subscription for new messages. Once the idle timeout is reached (`IDLE_TIMEOUT_SECONDS`, default 300s), the worker shuts down gracefully and the process exits, allowing ACA to scale the container back to zero.
 
 **Lifecycle:**
-1. Orchestrator enqueues job(s) on the `jobs` topic with `WorkerId` property
+1. Orchestrator enqueues job(s) on the `worker-jobs` topic with `WorkerId` property
 2. KEDA detects messages on the worker's subscription and scales the Container App from 0 → 1
 3. Worker starts, authenticates to MgGraph and Exchange Online, begins processing
 4. Worker processes all available messages, polling for new ones
@@ -172,7 +172,7 @@ To disable idle timeout and keep the worker running indefinitely, set `IDLE_TIME
 
 To add additional workers for different environments (e.g., source vs target):
 
-1. Deploy another subscription on the `jobs` topic with a new worker ID filter
+1. Deploy another subscription on the `worker-jobs` topic with a new worker ID filter
 2. Deploy another Container App with a different `WORKER_ID` environment variable
 
 You can do this by running the Bicep template again with a different `workerId` parameter, or by manually creating the resources.
@@ -211,8 +211,8 @@ Add custom modules to the `modules/CustomFunctions/` directory and rebuild the c
 | `WORKER_ID` | Yes | - | Unique identifier for this worker instance |
 | `MAX_PARALLELISM` | No | `2` | Max concurrent runspaces (1-20) |
 | `SERVICE_BUS_NAMESPACE` | Yes | - | Service Bus FQDN |
-| `JOBS_TOPIC_NAME` | No | `jobs` | Jobs topic name |
-| `RESULTS_TOPIC_NAME` | No | `results` | Results topic name |
+| `JOBS_TOPIC_NAME` | No | `worker-jobs` | Jobs topic name |
+| `RESULTS_TOPIC_NAME` | No | `worker-results` | Results topic name |
 | `KEY_VAULT_NAME` | Yes | - | Key Vault name |
 | `TARGET_TENANT_ID` | Yes | - | Target M365 tenant ID |
 | `APP_ID` | Yes | - | App registration client ID |

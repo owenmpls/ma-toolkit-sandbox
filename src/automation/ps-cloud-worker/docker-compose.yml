@@ -9,8 +9,8 @@ services:
       - WORKER_ID=worker-dev-01
       - MAX_PARALLELISM=2
       - SERVICE_BUS_NAMESPACE=your-namespace.servicebus.windows.net
-      - JOBS_TOPIC_NAME=jobs
-      - RESULTS_TOPIC_NAME=results
+      - JOBS_TOPIC_NAME=worker-jobs
+      - RESULTS_TOPIC_NAME=worker-results
       - KEY_VAULT_NAME=your-keyvault-name
       - TARGET_TENANT_ID=your-target-tenant-id
       - APP_ID=your-app-registration-id
