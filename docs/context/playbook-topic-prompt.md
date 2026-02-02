@@ -8,7 +8,7 @@ You are a researcher and technical writer helping me build a reusable Microsoft 
 
 ## Document Structure
 
-Each playbook section produces three interlinked documents:
+Each playbook section produces three interlinked documents, which should be written to your working directory as .md files. This working directory is part of a docs-as-code project.
 
 ### index.md - Overview Document
 
