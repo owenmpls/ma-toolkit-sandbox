@@ -815,8 +815,30 @@ foreach ($user in $staleUsers) {
 | IR-01 | B2B account conversion | | | |
 | IR-02 | Stale account cleanup | | | |
 
-## Related Topics
+---
 
-- [Coexistence Overview](index.md)
-- [Coexistence Test Cases](tests.md)
+## Sources
+
+### Microsoft Documentation
+
+- [Multitenant organization overview - Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity/multi-tenant-organizations/multi-tenant-organization-overview)
+- [Cross-tenant synchronization overview - Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity/multi-tenant-organizations/cross-tenant-synchronization-overview)
+- [Configure cross-tenant synchronization - Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity/multi-tenant-organizations/cross-tenant-synchronization-configure)
+- [Cross-tenant access overview - Microsoft Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/cross-tenant-access-overview)
+- [B2B collaboration overview - Microsoft Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/what-is-b2b)
+- [B2B direct connect overview - Microsoft Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/b2b-direct-connect-overview)
+- [Organization relationships in Exchange Online](https://learn.microsoft.com/en-us/exchange/sharing/organization-relationships/organization-relationships)
+- [Set up connectors for secure mail flow with a partner organization](https://learn.microsoft.com/en-us/exchange/mail-flow-best-practices/use-connectors-to-configure-mail-flow/set-up-connectors-for-secure-mail-flow-with-a-partner)
+- [Remote domains in Exchange Online](https://learn.microsoft.com/en-us/exchange/mail-flow-best-practices/remote-domains/remote-domains)
+- [Manage external meetings and chat in Teams](https://learn.microsoft.com/en-us/microsoftteams/trusted-organizations-external-meetings-chat)
+- [Shared channels in Microsoft Teams](https://learn.microsoft.com/en-us/microsoftteams/shared-channels)
+- [Plan for multitenant organizations in Microsoft 365](https://learn.microsoft.com/en-us/microsoft-365/enterprise/plan-multi-tenant-org-overview)
+- [Set up a multitenant org in Microsoft 365](https://learn.microsoft.com/en-us/microsoft-365/enterprise/set-up-multi-tenant-org)
+- [Entra Application Proxy](https://learn.microsoft.com/en-us/entra/identity/app-proxy/overview-what-is-app-proxy)
+- [Kerberos Constrained Delegation for App Proxy](https://learn.microsoft.com/en-us/entra/identity/app-proxy/how-to-configure-kcd)
+
+### Related Documents
+
+- [Overview](index.md)
+- [Test Cases](tests.md)
 - [Cross-Tenant User Migration](../user-migration/index.md)

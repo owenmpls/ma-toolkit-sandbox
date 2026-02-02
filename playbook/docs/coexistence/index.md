@@ -313,15 +313,90 @@ B2B external member accounts can be joined to on-premises AD user accounts, crea
 
 ## Key Decisions
 
-| Decision | Considerations |
-|----------|----------------|
-| **Migration path** | B2B account conversion (GA, preserves permissions/metadata/chat but has known Viva Engage issues) vs. B2B account replacement (more supportable but loses permissions/metadata/chat). |
-| **Trust level progression** | Start with low-trust and advance to high-trust only after security assessment and policy alignment, or proceed directly to high-trust if organizational trust is established. |
-| **MTO ownership** | Which tenant will be the MTO owner. Typically the primary or corporate tenant, but may be complicated by specific scenarios. |
-| **Viva Engage hub tenant** | Which tenant hosts storyline announcements and MTO communities. Can differ from MTO owner. |
-| **Synchronization topology** | One-way vs. two-way cross-tenant synchronization based on collaboration requirements and tenant sizes. |
-| **Unified domain branding** | Whether address rewriting is required, and if so, the rewriting approach (domain vs. address-based substitution). |
-| **Hybrid integration scope** | Whether on-premises application access is required for cross-tenant users, driving the need for hybrid external members. |
+The following decisions must be made before implementing coexistence infrastructure. These decisions have downstream implications for implementation complexity, user experience, and migration approach.
+
+### Migration Path
+
+**Decision:** B2B account conversion vs. B2B account replacement
+
+**Considerations:**
+
+- **B2B account conversion** (generally available) converts existing external members to internal members at migration cutover. This approach preserves object IDs, group memberships, permissions, and Teams chat history. However, there are known issues with Viva Engage that may persist (last verified 2024; check current status before deciding).
+
+- **B2B account replacement** provisions new internal accounts and deletes the B2B accounts. This approach is more supportable and avoids Viva Engage issues, but loses group memberships, permissions, and Teams chat history that were accumulated on the B2B account.
+
+**Recommendation:** B2B account conversion is generally preferred when preserving permissions and chat history is important. Validate current Viva Engage behavior before finalizing.
+
+### Trust Level Progression
+
+**Decision:** Start with low-trust and progress to high-trust, or proceed directly to high-trust
+
+**Considerations:**
+
+- **Progressive approach** (low-trust first) maintains effective segmentation during initial integration. External members are blocked via conditional access, limiting B2B users to guest access. This approach is appropriate when organizational trust is not yet established or when security policies are not aligned.
+
+- **Direct high-trust** proceeds immediately to external member provisioning with full member access. This approach is appropriate when organizational trust is established, security policies are aligned, and enhanced collaboration experience is a priority.
+
+**Recommendation:** Start with low-trust unless there is strong organizational alignment and security policy compatibility. The conditional access mitigation can be removed later without rework.
+
+### MTO Ownership
+
+**Decision:** Which tenant will be the MTO owner
+
+**Considerations:**
+
+- The MTO owner tenant initiates the MTO and invites member tenants. Multiple tenants can be designated as owners.
+- Typically, the primary or corporate tenant should be the owner.
+- In acquisition scenarios, the acquiring company's tenant is usually the owner.
+- Consider future consolidation plans: if one tenant will eventually be decommissioned, the surviving tenant should be the owner.
+
+### Viva Engage Hub Tenant
+
+**Decision:** Which tenant hosts storyline announcements and MTO communities
+
+**Considerations:**
+
+- The hub tenant can differ from the MTO owner tenant.
+- Only the hub tenant can create MTO communities and post storyline announcements visible across the MTO.
+- Choose the tenant where leadership communication originates.
+- All Engage networks must be in the same geographic region for MTO features to work.
+
+### Synchronization Topology
+
+**Decision:** One-way vs. two-way cross-tenant synchronization
+
+**Considerations:**
+
+- **One-way synchronization** provisions B2B accounts from one tenant to another but not in reverse. This is appropriate when collaboration is primarily unidirectional or when one tenant is significantly smaller.
+
+- **Two-way synchronization** provisions B2B accounts in both directions. This is appropriate when users in both tenants need to access resources in the other tenant and appear in each other's GAL.
+
+**Recommendation:** Two-way synchronization is typically required for merger scenarios. One-way may be sufficient for acquisition scenarios where the acquired company's users need access to the acquiring company's resources but not vice versa.
+
+### Unified Domain Branding
+
+**Decision:** Whether address rewriting is required, and if so, the rewriting approach
+
+**Considerations:**
+
+- Address rewriting is required when users in one tenant need to send email appearing to be from a domain verified in another tenant.
+- **Domain substitution** requires globally unique prefixes across all environments sharing the domain. Simpler to implement but may require user email address changes.
+- **Address-based substitution** maintains an address map for translation. More complex but allows users to keep their existing addresses.
+- Both approaches have limitations: meeting response tracking fails, B2B invitations to rewritten addresses fail, and GAL resolution fails for rewritten addresses in forwarded mail scenarios.
+
+**Recommendation:** Avoid address rewriting if possible. Consider verifying a subdomain (e.g., `fabrikam.contoso.com`) as a simpler alternative.
+
+### Hybrid Integration Scope
+
+**Decision:** Whether on-premises application access is required for cross-tenant users
+
+**Considerations:**
+
+- Hybrid external members are required for Kerberos SSO via Entra App Proxy, Exchange hybrid mail flow with unified domain branding, and on-premises group membership.
+- Hybrid external members are incompatible with cross-tenant synchronization. An alternative identity synchronization solution (MIM, third-party tools) is required.
+- This adds significant complexity to the coexistence infrastructure.
+
+**Recommendation:** Avoid hybrid external members if possible. Evaluate whether on-premises applications can be modernized or accessed through alternative means.
 
 ## Limitations and Considerations
 
