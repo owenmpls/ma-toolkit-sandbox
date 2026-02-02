@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "WebSearch",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:mikhail.io)",
+      "Bash(dotnet build:*)",
+      "Bash(xargs:*)",
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(git mv:*)",
+      "Bash(pwsh -File tests/Test-WorkerLocal.ps1)",
+      "Bash(git status:*)"
+    ]
+  }
+}

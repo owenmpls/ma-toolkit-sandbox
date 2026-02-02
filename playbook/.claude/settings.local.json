@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth:*)",
+      "Bash(gh repo view:*)",
+      "Bash(mkdocs build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(gh run list:*)",
+      "Bash(gh run watch:*)",
+      "WebFetch(domain:owenmpls.github.io)",
+      "Bash(cat:*)",
+      "Bash(printf:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 show:*)",
+      "Bash(git rm:*)",
+      "Bash(gh run view:*)"
+    ]
+  }
+}
