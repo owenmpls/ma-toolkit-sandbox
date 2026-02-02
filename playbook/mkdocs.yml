@@ -54,8 +54,6 @@ nav:
       - reference-architectures/index.md
   - Coexistence:
       - coexistence/index.md
-      - Implementation backlog: coexistence/backlog.md
-      - Tests: coexistence/tests.md
   - Secure landing zone:
       - secure-landing-zone/index.md
   - User migration:
