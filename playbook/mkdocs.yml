@@ -50,6 +50,7 @@ extra_css:
 nav:
   - Home: index.md
   - About: about.md
+  - Style Sample: style-sample.md
   - Reference architectures:
       - reference-architectures/index.md
   - Coexistence:
