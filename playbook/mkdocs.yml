@@ -59,8 +59,6 @@ nav:
       - secure-landing-zone/index.md
   - User migration:
       - user-migration/index.md
-      - Implementation backlog: user-migration/backlog.md
-      - Tests: user-migration/tests.md
   - Domain migration:
       - domain-migration/index.md
   - Device migration:
