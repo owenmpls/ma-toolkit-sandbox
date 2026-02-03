@@ -1,8 +1,6 @@
 # Style Sample
 
-**Version:** 1.0 | **Last Updated:** 2026-02-03
-
-This page demonstrates the callout box styles used throughout the playbook.
+This page demonstrates the formatting conventions used throughout the playbook.
 
 ## Callout Box Types
 
@@ -48,11 +46,9 @@ Use for uncertainty requiring verification before taking dependency.
 !!! question "Requires Verification"
     Microsoft documentation does not specify whether this setting persists after tenant-to-tenant migration. Test in a non-production environment before relying on this behavior.
 
-## Backlog Item Format
+## Implementation Backlog
 
-This is how implementation backlog items are structured:
-
-### Backlog Item: Configure Organization Relationship
+### Configure Organization Relationship
 
 **Objective:** Establish trust between source and target tenants to enable cross-tenant mailbox migration.
 
@@ -76,6 +72,24 @@ This is how implementation backlog items are structured:
 
 - [Configure cross-tenant mailbox migration](https://learn.microsoft.com/en-us/microsoft-365/enterprise/cross-tenant-mailbox-migration)
 - [Organization relationships in Exchange Online](https://learn.microsoft.com/en-us/exchange/sharing/organization-relationships/organization-relationships)
+
+## Tests
+
+### Verify Organization Relationship
+
+**Objective:** Confirm that the organization relationship is correctly configured and functional.
+
+**Prerequisites:**
+
+- Organization relationship configured in both tenants
+
+**Steps:**
+
+1. Open Exchange Online PowerShell connected to the target tenant.
+2. Run `Get-OrganizationRelationship | Format-List` and confirm MailboxMoveEnabled is True.
+3. Repeat in the source tenant.
+
+**Expected Result:** Both tenants show the organization relationship with MailboxMoveEnabled set to True and MailboxMoveCapability set appropriately (Inbound for target, Outbound for source).
 
 ## Code Block Format
 
