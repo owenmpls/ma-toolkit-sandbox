@@ -58,7 +58,7 @@ nav:
       - secure-landing-zone/index.md
   - User migration:
       - user-migration/index.md
-      - B2B Reach-Back Access: user-migration/b2b-reach-back.md
+      - B2B reach-back access: user-migration/b2b-reach-back.md
   - Domain migration:
       - domain-migration/index.md
   - Device migration:
