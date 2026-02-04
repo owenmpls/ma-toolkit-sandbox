@@ -50,18 +50,18 @@ When editing an existing topic:
 Hybrid documents combining conceptual and procedural content:
 
 ```
-# Topic Title
+# Topic title
 
 Brief summary of the topic (no "this document contains..." language)
 
-## [Conceptual Sections]
+## [Conceptual sections]
 - Establish understanding
 - Document key decisions
 - Capture limitations and issues
 
-## Implementation Backlog
+## Implementation backlog
 
-### [Backlog Item Name]
+### [Backlog item name]
 (format detailed below)
 
 ## Tests
@@ -73,11 +73,11 @@ Brief summary of the topic (no "this document contains..." language)
 
 - [Title](URL) — Source, accessed YYYY-MM-DD
 
-## Related Topics
+## Related topics
 
 - [Topic Name](relative-path.md)
 
-## Version History
+## Version history
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
@@ -88,8 +88,8 @@ Brief summary of the topic (no "this document contains..." language)
 
 Category overview docs (e.g., `user-migration/index.md`):
 
-- Include only: conceptual sections, Sources, Version History
-- Exclude: Implementation Backlog, Tests, Related Topics
+- Include only: conceptual sections, Sources, Version history
+- Exclude: Implementation backlog, Tests, Related topics
 
 ### Site-Level Pages
 
@@ -122,6 +122,7 @@ Category overview docs (e.g., `user-migration/index.md`):
 - H2: Major sections
 - H3: Subsections
 - H4: Use sparingly
+- Headings in sentence case
 
 ### Procedures
 
@@ -193,7 +194,7 @@ Level of effort estimates:
 - **Low** — Less than 1 day
 - **Medium** — 1-2 days
 - **High** — 3-5 days
-- **Very High** — More than 5 days
+- **Very high** — More than 5 days
 
 ## Test Format
 
@@ -213,7 +214,7 @@ Under "## Tests", each test uses H3 heading with just the name:
 1. First step.
 2. Second step.
 
-**Expected Result:** What success looks like.
+**Expected result:** What success looks like.
 ```
 
 ## Version History

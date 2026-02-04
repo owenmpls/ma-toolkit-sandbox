@@ -1,4 +1,4 @@
-# B2B Reach-Back Access
+# B2B reach-back access
 
 B2B reach-back access enables migrated users to continue accessing source tenant resources via SSO, retaining their original permissions, group memberships, and application profiles. This procedure is performed after mailbox migration is complete. The primary technical challenge is satisfying the requirement for a valid target email address on the source user, which requires disabling proxy scrubbing behavior in Entra ID.
 
@@ -7,7 +7,7 @@ B2B reach-back access enables migrated users to continue accessing source tenant
 
 ## Overview
 
-### Hybrid External Member
+### Hybrid external member
 
 When a source account is enabled for B2B reach-back access, it is converted to what this playbook refers to as a *hybrid external member*. This is an external member that is synced from on-premises AD and retains a standard-format UPN, rather than the typical `#EXT#` UPN format used for standard external guests and members in Entra ID. The account is linked to the target identity using an alternate security identifier, allowing users to authenticate with their target credentials and be presented to source tenant applications as the original source identity.
 
@@ -33,11 +33,11 @@ Before enabling B2B reach-back access for a user, the following conditions must 
 
 - **Target user is converted from external member to internal member (if applicable).** If B2B collaboration was used to provide access to the target tenant prior to migration, the target user must be converted from an external member to an internal member before enabling B2B reach-back access in the source. If this order of operations is reversed, automatic redemption will not work and the user will need to manually accept the B2B invitation before they can use reach-back access to the source.
 
-## Proxy Scrubbing
+## Proxy scrubbing
 
 To enable B2B reach-back access, the source user must have a valid target email address assigned as their primary SMTP address. This is typically the primary SMTP address from the target tenant (e.g., `user@target.com`). Because this domain cannot be verified in the source tenant, Entra ID will normally remove it through a process commonly referred to as proxy scrubbing, proxy calc, or email address sanitization.
 
-### Conditions That Trigger Proxy Scrubbing
+### Conditions that trigger proxy scrubbing
 
 Entra ID removes unverified domain addresses from users under any of the following conditions:
 
@@ -47,7 +47,7 @@ Entra ID removes unverified domain addresses from users under any of the followi
 
 - **User is licensed with an Exchange Online or Exchange Online add-on service plan.** This triggers proxy scrubbing regardless of Exchange object status.
 
-### Service Plans That Trigger Proxy Scrubbing
+### Service plans that trigger proxy scrubbing
 
 The following service plans trigger proxy scrubbing when assigned to a user. This list reflects Microsoft 365 E5 licensing as of June 5, 2024. Microsoft may add service plans to existing SKUs that trigger proxy scrubbing, and this should always be validated during testing.
 
@@ -73,11 +73,11 @@ The following service plans trigger proxy scrubbing when assigned to a user. Thi
 - RETIRED – Microsoft Communications Compliance
 - RETIRED – Microsoft Insider Risk Management
 
-## Preparing the Source User
+## Preparing the source user
 
 Before B2B reach-back access can be enabled, the source user must be prepared by disabling service plans that trigger proxy scrubbing and converting the remote mailbox to a mail user.
 
-### Disabling EXO Service Plans
+### Disabling EXO service plans
 
 All Exchange Online and Exchange Online add-on service plans must be disabled for the source user to prevent proxy scrubbing. The procedure varies based on the means of license assignment in the source tenant.
 
@@ -88,7 +88,7 @@ All Exchange Online and Exchange Online add-on service plans must be disabled fo
 
 **Direct assignment:** Disable service plans directly on the source user's license assignment.
 
-### Converting Remote Mailbox to Mail User
+### Converting remote mailbox to mail user
 
 After XT mailbox migration completes, the source user remains configured as a remote mailbox. This must be converted to a mail user to prevent proxy scrubbing.
 
@@ -107,11 +107,11 @@ Make the following attribute changes on-premises:
 !!! note
     This conversion can also be performed in on-premises Exchange PowerShell by running `Disable-RemoteMailbox` followed by `Enable-MailUser`. However, `Disable-RemoteMailbox` removes all Exchange attributes from the account, including email addresses and extension attributes. These values must be captured before running this command and restored to the mail user to avoid disruption to mail flow, application access, and other systems or processes that rely on these attributes.
 
-## Enabling B2B Collaboration
+## Enabling B2B collaboration
 
 After the source user has been prepared, B2B reach-back access can be enabled by assigning the target email address and inviting the user for B2B collaboration.
 
-### Assigning the Target Email Address
+### Assigning the target email address
 
 The source user must have a valid target email address assigned as their primary SMTP address. This is required for the B2B invitation to succeed.
 
@@ -119,40 +119,40 @@ For synced users, this change must be made on-premises using Exchange PowerShell
 
 Allow changes to sync to Entra ID via Entra Connect before proceeding with B2B enablement.
 
-### Inviting the Internal User
+### Inviting the internal user
 
 Invite the source user for B2B collaboration using the [Invite internal users to B2B collaboration](https://learn.microsoft.com/en-us/entra/external-id/invite-internal-users) feature in Entra ID.
 
 !!! note
     Suppress email notifications when inviting users. System notifications are likely to confuse users, and reach-back access should be communicated as part of the broader communications package for the migration.
 
-### Reverting the Primary SMTP Address
+### Reverting the primary SMTP address
 
 !!! warning
     Revert the primary SMTP address to the original value immediately after B2B enablement. Entra ID-integrated apps and other processes may have dependency on the original email address. Permanently changing this value to the target email address may break authentication to applications that use an email claim to map the user to the corresponding application profile, and there is high risk of other impacts in the environment.
 
 After reverting, the target email address is typically left as a secondary SMTP address to facilitate inbound mail flow attribution for email sent by the user to the source tenant. This supports profile resolution for that email and sender authorization, allowing the user to email protected recipients in the source.
 
-### Automatic Redemption and Order of Operations
+### Automatic redemption and order of operations
 
 Cross-tenant access settings should be configured to automatically redeem invitations. This allows migrated users to begin using B2B reach-back access without completing any additional steps.
 
 If B2B collaboration was used to provide access to the target tenant prior to migration, B2B enablement in the source must be performed after the target user is converted from an external member to an internal member. If this order of operations is reversed, automatic redemption will not work and the user will need to manually accept the B2B invitation before they can use reach-back access to the source.
 
-## Third-Party Mailbox Migration
+## Third-party mailbox migration
 
 When mailboxes are migrated using third-party tools rather than XT mailbox migration, the source mailbox must be deleted before B2B reach-back access can be enabled. This section describes the additional considerations and procedure differences for this scenario.
 
 !!! warning
     This procedure can only be performed for users synced from on-premises AD. Cloud mailboxes cannot be converted to mail users because Exchange Online does not support mail-enablement for an existing cloud user. For cloud-only source environments, B2B reach-back access can only be enabled when using XT mailbox migration.
 
-### Data Retention Considerations
+### Data retention considerations
 
 Removing the source mailbox must be coupled with a strategy for data retention. Not all retention data can be moved to the target, and holds must be removed from the source mailbox before it can be removed. This prevents conversion to an inactive mailbox and subjects it to standard soft deletion, which results in destruction of the data after 30 days.
 
 This may be a blocking issue for use of this technique with third-party mailbox migration for organizations with strict compliance requirements or a substantial number of users on hold.
 
-### Hold Removal
+### Hold removal
 
 Holds must be removed before the source mailbox can be disabled:
 
@@ -177,11 +177,11 @@ After holds are removed and the four-hour delay has passed:
 6. Disable EXO service plans as described in [Preparing the Source User](#preparing-the-source-user).
 7. Assign the target email address and enable B2B collaboration as described in [Enabling B2B Collaboration](#enabling-b2b-collaboration).
 
-## Implementation Backlog
+## Implementation backlog
 
 A *reach-back license group* is a license group with the same SKU assignments as an existing license group, but with all Exchange Online and Exchange Online add-on service plans disabled to prevent proxy scrubbing during B2B enablement. The setup of these groups is described in [Identify Service Plans and Create License Groups for B2B Reach-Back](#identify-service-plans-and-create-license-groups-for-b2b-reach-back).
 
-### Identify Service Plans and Create License Groups for B2B Reach-Back
+### Identify service plans and create license groups for B2B reach-back
 
 **Objective:** Identify service plans in the source tenant that trigger proxy scrubbing and create license groups with those service plans disabled to support B2B reach-back enablement.
 
@@ -214,7 +214,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ---
 
-### Provision Access for B2B Reach-Back Automation
+### Provision access for B2B reach-back automation
 
 **Objective:** Provision the necessary permissions and access to execute B2B reach-back automation scripts in the source environment.
 
@@ -260,7 +260,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ---
 
-### Develop B2B Reach-Back Automation
+### Develop B2B reach-back automation
 
 **Objective:** Develop script or M&A toolkit configuration to automate the B2B reach-back enablement process.
 
@@ -306,7 +306,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ## Tests
 
-### Verify License Groups Do Not Trigger Proxy Scrubbing
+### Verify license groups do not trigger proxy scrubbing
 
 **Objective:** Confirm that reach-back license groups have the correct service plans disabled and do not trigger proxy scrubbing.
 
@@ -327,7 +327,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ---
 
-### Verify Automation Access
+### Verify automation access
 
 **Objective:** Confirm that the service principal and on-premises service account can authenticate and execute required operations.
 
@@ -348,7 +348,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ---
 
-### Verify B2B Reach-Back Automation
+### Verify B2B reach-back automation
 
 **Objective:** Confirm that the automation successfully processes a test user through all steps.
 
@@ -374,7 +374,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ---
 
-### Verify B2B Reach-Back Access
+### Verify B2B reach-back access
 
 **Objective:** Confirm that a user processed by automation can access source tenant resources via SSO using target credentials.
 
@@ -396,7 +396,7 @@ A *reach-back license group* is a license group with the same SKU assignments as
 
 ---
 
-### Verify Teams Chat Experience with MTO
+### Verify Teams chat experience with MTO
 
 **Objective:** If MTO is enabled, confirm that Teams chat from people search routes to the user's home account without requiring tenant switching.
 
@@ -424,11 +424,11 @@ A *reach-back license group* is a license group with the same SKU assignments as
 - [Assign licenses to a group](https://learn.microsoft.com/en-us/entra/identity/users/licensing-groups-assign) — Microsoft Learn, accessed 2026-02-04
 - [Microsoft Graph permissions reference](https://learn.microsoft.com/en-us/graph/permissions-reference) — Microsoft Learn, accessed 2026-02-04
 
-## Related Topics
+## Related topics
 
 *None at this time.*
 
-## Version History
+## Version history
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
