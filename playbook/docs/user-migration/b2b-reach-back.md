@@ -43,13 +43,13 @@ Entra ID removes unverified domain addresses from users under any of the followi
 
 - **User has a mailbox in Exchange Online.** This is the case when the mailbox has been copied to the target using third-party tools, which leave an active mailbox in the source configured to forward email to the target.
 
-- **User is configured as a remote mailbox in on-premises AD and synced to Entra ID.** This is typically the case when the mailbox has been moved to the target using XT mailbox migration.
+- **User is configured as a remote mailbox in on-premises AD and synced to Entra ID.** This is the default state after the mailbox has been moved to the target using XT mailbox migration, and it must be converted to a mail user before B2B enablement.
 
 - **User is licensed with an Exchange Online or Exchange Online add-on service plan.** This triggers proxy scrubbing regardless of Exchange object status.
 
 ### Service Plans That Trigger Proxy Scrubbing
 
-The following service plans trigger proxy scrubbing when assigned to a user. This list reflects Microsoft 365 E5 licensing as of June 5, 2024. Microsoft may add service plans to existing SKUs that trigger proxy scrubbing, and this should always be validated during user migration testing.
+The following service plans trigger proxy scrubbing when assigned to a user. This list reflects Microsoft 365 E5 licensing as of June 5, 2024. Microsoft may add service plans to existing SKUs that trigger proxy scrubbing, and this should always be validated during testing.
 
 - Customer Lockbox
 - Exchange Online
@@ -98,14 +98,14 @@ Make the following attribute changes on-premises:
 |-----------|-------|
 | `msExchRecipientDisplayType` | `6` |
 | `msExchRecipientTypeDetails` | `128` |
-| `msExchRemoteRecipientType` | `NULL` |
+| `msExchRemoteRecipientType` | `$null` |
 | `targetAddress` | Coex routing address in the target (e.g., `user@target.mail.onmicrosoft.com`) |
 
 !!! warning
     XT mailbox migration assigns the coex routing address in Exchange Online upon cutover. This target address is not overridden so long as the on-premises user is a remote mailbox. If the `targetAddress` is not updated on-premises before converting to a mail user, the conversion will override the target address in Exchange Online with the value assigned on-premises (e.g., `user@source.mail.onmicrosoft.com`), which will break mail flow.
 
 !!! note
-    This conversion can also be performed in Exchange PowerShell by running `Disable-RemoteMailbox` followed by `Enable-MailUser`. However, `Disable-RemoteMailbox` removes all Exchange attributes from the account, including email addresses and extension attributes. These values must be captured before running this command and restored to the mail user to avoid disruption to mail flow, application access, and other systems or processes that rely on these attributes.
+    This conversion can also be performed in on-premises Exchange PowerShell by running `Disable-RemoteMailbox` followed by `Enable-MailUser`. However, `Disable-RemoteMailbox` removes all Exchange attributes from the account, including email addresses and extension attributes. These values must be captured before running this command and restored to the mail user to avoid disruption to mail flow, application access, and other systems or processes that rely on these attributes.
 
 ## Enabling B2B Collaboration
 
@@ -178,6 +178,8 @@ After holds are removed and the four-hour delay has passed:
 7. Assign the target email address and enable B2B collaboration as described in [Enabling B2B Collaboration](#enabling-b2b-collaboration).
 
 ## Implementation Backlog
+
+A *reach-back license group* is a license group with the same SKU assignments as an existing license group, but with all Exchange Online and Exchange Online add-on service plans disabled to prevent proxy scrubbing during B2B enablement. The setup of these groups is described in [Identify Service Plans and Create License Groups for B2B Reach-Back](#identify-service-plans-and-create-license-groups-for-b2b-reach-back).
 
 ### Identify Service Plans and Create License Groups for B2B Reach-Back
 
