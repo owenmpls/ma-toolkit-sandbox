@@ -180,7 +180,7 @@ Under "## Implementation Backlog", each item uses H3 heading with just the name:
 1. First step.
 2. Second step.
 
-**Validation:** How to confirm success.
+**Validation:** Link to corresponding test in Tests section
 
 **References:**
 
