@@ -1,1 +1,1 @@
-# Fabric & Power BI Migration
+# Fabric and Power BI migration

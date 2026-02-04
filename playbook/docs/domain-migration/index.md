@@ -1,1 +1,1 @@
-# Domain Branding Migration
+# Domain migration
