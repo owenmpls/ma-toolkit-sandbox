@@ -1,1 +1,1 @@
-# Teams Phone and Rooms migration
+# Teams Phone and Teams Rooms migration
