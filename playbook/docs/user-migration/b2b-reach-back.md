@@ -203,7 +203,7 @@ After holds are removed and the four-hour delay has passed:
     - Document the mapping between the existing license group and the new reach-back license group.
 7. Compile the complete 1:1 mapping between existing license groups and new reach-back license groups. Automation will use this mapping to replace old group membership with new group membership.
 
-**Validation:** [Verify License Groups Do Not Trigger Proxy Scrubbing](#verify-license-groups-do-not-trigger-proxy-scrubbing)
+**Test:** [Verify License Groups Do Not Trigger Proxy Scrubbing](#verify-license-groups-do-not-trigger-proxy-scrubbing)
 
 **References:**
 
@@ -250,7 +250,7 @@ After holds are removed and the four-hour delay has passed:
 4. Configure secure credential storage for the service account (e.g., Windows Credential Manager, Azure Key Vault, or equivalent).
 5. Document the access provisioned and any constraints on its use.
 
-**Validation:** [Verify Automation Access](#verify-automation-access)
+**Test:** [Verify Automation Access](#verify-automation-access)
 
 **References:**
 
@@ -296,7 +296,7 @@ After holds are removed and the four-hour delay has passed:
 2. Implement error handling and logging for each step.
 3. Implement support for batch processing and retry logic.
 
-**Validation:** [Verify B2B Reach-Back Automation](#verify-b2b-reach-back-automation)
+**Test:** [Verify B2B Reach-Back Automation](#verify-b2b-reach-back-automation)
 
 **References:**
 
