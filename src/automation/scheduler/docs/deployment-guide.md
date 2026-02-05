@@ -12,7 +12,7 @@
 
 ## Infrastructure Deployment
 
-The Bicep template at `infrastructure/automation/scheduler/deploy.bicep` (relative to the repo root) provisions:
+The Bicep template at `infra/automation/scheduler/deploy.bicep` (relative to the repo root) provisions:
 
 - Azure Functions App (Flex Consumption plan, .NET 8 isolated, Linux, system-assigned managed identity)
 - Storage Account (for Functions runtime)
@@ -28,8 +28,8 @@ The Bicep template at `infrastructure/automation/scheduler/deploy.bicep` (relati
 ```bash
 az deployment group create \
   --resource-group <your-resource-group> \
-  --template-file infrastructure/automation/scheduler/deploy.bicep \
-  --parameters infrastructure/automation/scheduler/deploy.parameters.json \
+  --template-file infra/automation/scheduler/deploy.bicep \
+  --parameters infra/automation/scheduler/deploy.parameters.json \
   --parameters \
     environmentName='dev' \
     serviceBusNamespaceName='matoolkit-sb' \

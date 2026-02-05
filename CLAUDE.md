@@ -43,8 +43,8 @@ docker-compose up
 ```bash
 az deployment group create \
   --resource-group your-rg \
-  --template-file ../../../infrastructure/automation/ps-cloud-worker/deploy.bicep \
-  --parameters ../../../infrastructure/automation/ps-cloud-worker/deploy.parameters.json
+  --template-file ../../../infra/automation/ps-cloud-worker/deploy.bicep \
+  --parameters ../../../infra/automation/ps-cloud-worker/deploy.parameters.json
 ```
 
 ### Submit test jobs (requires Azure credentials + running worker)

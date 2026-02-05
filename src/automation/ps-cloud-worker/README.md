@@ -28,8 +28,8 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 ```bash
 az deployment group create \
   --resource-group your-rg \
-  --template-file infrastructure/deploy.bicep \
-  --parameters infrastructure/deploy.parameters.json
+  --template-file infra/deploy.bicep \
+  --parameters infra/deploy.parameters.json
 ```
 
 ### Build and Push Container
@@ -78,7 +78,7 @@ ps-cloud-worker/
 │   ├── StandardFunctions/        # Built-in migration functions
 │   └── CustomFunctions/          # Customer extension modules
 ├── tests/                        # Test scripts and sample data
-├── infrastructure/               # Bicep templates
+├── infra/                        # Bicep templates
 └── docs/                         # Documentation
 ```
 

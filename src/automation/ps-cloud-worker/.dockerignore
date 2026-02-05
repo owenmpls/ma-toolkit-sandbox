@@ -1,7 +1,7 @@
 *.md
 docs/
 tests/
-infrastructure/
+infra/
 docker-compose.yml
 .git/
 .gitignore
