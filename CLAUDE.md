@@ -8,15 +8,15 @@ This is the **Migration Automation (M&A) Toolkit sandbox** — a collection of e
 
 ## Projects
 
-### ps-cloud-worker (`src/automation/ps-cloud-worker/`)
+### cloud-worker (`src/automation/cloud-worker/`)
 
 The primary component: a containerized PowerShell 7.4+ worker that runs in Azure Container Apps. It processes migration jobs (Entra ID + Exchange Online operations) via Azure Service Bus using a RunspacePool for parallel execution with per-runspace authenticated sessions.
 
-See `src/automation/ps-cloud-worker/CLAUDE.md` for detailed project context, architecture decisions, and implementation notes.
+See `src/automation/cloud-worker/CLAUDE.md` for detailed project context, architecture decisions, and implementation notes.
 
 ## Common Commands
 
-All commands should be run from the `src/automation/ps-cloud-worker/` directory.
+All commands should be run from the `src/automation/cloud-worker/` directory.
 
 ### Run local validation tests (no Azure credentials required)
 
@@ -29,7 +29,7 @@ This validates parse correctness for all .ps1 files, module manifest, function e
 ### Build the container image
 
 ```bash
-docker build -t matoolkitacr.azurecr.io/ps-cloud-worker:latest .
+docker build -t matoolkitacr.azurecr.io/cloud-worker:latest .
 ```
 
 ### Run locally with Docker Compose
@@ -43,8 +43,8 @@ docker-compose up
 ```bash
 az deployment group create \
   --resource-group your-rg \
-  --template-file ../../../infra/automation/ps-cloud-worker/deploy.bicep \
-  --parameters ../../../infra/automation/ps-cloud-worker/deploy.parameters.json
+  --template-file ../../../infra/automation/cloud-worker/deploy.bicep \
+  --parameters ../../../infra/automation/cloud-worker/deploy.parameters.json
 ```
 
 ### Submit test jobs (requires Azure credentials + running worker)

@@ -62,7 +62,7 @@ New-MgDirectoryRoleMember -DirectoryRoleId $role.Id -BodyParameter @{
 
 ## Step 2: Deploy Azure Infrastructure
 
-Edit `infra/automation/ps-cloud-worker/deploy.parameters.json` (relative to the repo root) with your values:
+Edit `infra/automation/cloud-worker/deploy.parameters.json` (relative to the repo root) with your values:
 
 ```json
 {
@@ -85,8 +85,8 @@ az group create --name matoolkit-rg --location eastus
 
 az deployment group create \
   --resource-group matoolkit-rg \
-  --template-file infra/automation/ps-cloud-worker/deploy.bicep \
-  --parameters infra/automation/ps-cloud-worker/deploy.parameters.json
+  --template-file infra/automation/cloud-worker/deploy.bicep \
+  --parameters infra/automation/cloud-worker/deploy.parameters.json
 ```
 
 This creates:
@@ -117,10 +117,10 @@ az keyvault secret set \
 az acr login --name matoolkitacr
 
 # Build the image
-docker build -t matoolkitacr.azurecr.io/ps-cloud-worker:latest .
+docker build -t matoolkitacr.azurecr.io/cloud-worker:latest .
 
 # Push to ACR
-docker push matoolkitacr.azurecr.io/ps-cloud-worker:latest
+docker push matoolkitacr.azurecr.io/cloud-worker:latest
 ```
 
 After pushing, restart the container app to pick up the new image:

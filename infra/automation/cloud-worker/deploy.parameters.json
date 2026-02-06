@@ -21,7 +21,7 @@
       "value": 4
     },
     "containerImage": {
-      "value": "matoolkitacr.azurecr.io/ps-cloud-worker:latest"
+      "value": "matoolkitacr.azurecr.io/cloud-worker:latest"
     },
     "containerCpu": {
       "value": "1.0"

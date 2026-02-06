@@ -1,4 +1,4 @@
-// PowerShell Cloud Worker - Azure Infrastructure
+// Cloud Worker - Azure Infrastructure
 // Deploys: Container App Environment, Container App, Service Bus, Key Vault, Application Insights, Container Registry
 
 @description('Base name for all resources')
@@ -22,7 +22,7 @@ param workerId string = 'worker-01'
 param maxParallelism int = 4
 
 @description('Container image name (must be pushed to ACR before deployment)')
-param containerImage string = '${baseName}acr.azurecr.io/ps-cloud-worker:latest'
+param containerImage string = '${baseName}acr.azurecr.io/cloud-worker:latest'
 
 @description('Container CPU cores')
 param containerCpu string = '1.0'
@@ -209,7 +209,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
     template: {
       containers: [
         {
-          name: 'ps-cloud-worker'
+          name: 'cloud-worker'
           image: containerImage
           resources: {
             cpu: json(containerCpu)

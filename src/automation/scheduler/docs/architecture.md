@@ -11,7 +11,7 @@ The scheduler is a C# Azure Functions application (isolated worker model, .NET 8
 - Pre-creating step execution records with resolved template parameters
 - Dispatching event messages to the orchestrator via Azure Service Bus
 
-The scheduler does not execute migration work itself. It publishes events to a Service Bus topic (`orchestrator-events`), and the orchestrator (a separate component, not yet built) consumes those events, dispatches jobs to the ps-cloud-worker, and manages execution state.
+The scheduler does not execute migration work itself. It publishes events to a Service Bus topic (`orchestrator-events`), and the orchestrator (a separate component, not yet built) consumes those events, dispatches jobs to the cloud-worker, and manages execution state.
 
 ```
                           +-------------------+
@@ -35,7 +35,7 @@ The scheduler does not execute migration work itself. It publishes events to a S
                                                                        |
                                                                        v
                                                                +----------------+
-                                                               | ps-cloud-worker|
+                                                               | cloud-worker|
                                                                | (ACA container)|
                                                                +----------------+
 ```

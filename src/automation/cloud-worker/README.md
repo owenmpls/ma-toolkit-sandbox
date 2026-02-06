@@ -1,4 +1,4 @@
-# PowerShell Cloud Worker
+# Cloud Worker
 
 Containerized PowerShell worker for Azure Container Apps that processes migration automation jobs via Azure Service Bus. Part of the Migration Automation Toolkit's automation subsystem.
 
@@ -36,8 +36,8 @@ az deployment group create \
 
 ```bash
 az acr login --name matoolkitacr
-docker build -t matoolkitacr.azurecr.io/ps-cloud-worker:latest .
-docker push matoolkitacr.azurecr.io/ps-cloud-worker:latest
+docker build -t matoolkitacr.azurecr.io/cloud-worker:latest .
+docker push matoolkitacr.azurecr.io/cloud-worker:latest
 ```
 
 ### Store the App Secret
@@ -64,7 +64,7 @@ See [docs/deployment-guide.md](docs/deployment-guide.md) for full deployment ins
 ## Project Structure
 
 ```
-ps-cloud-worker/
+cloud-worker/
 ├── src/                          # Worker runtime code
 │   ├── worker.ps1                # Main entry point
 │   ├── config.ps1                # Configuration loader

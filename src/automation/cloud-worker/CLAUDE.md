@@ -1,4 +1,4 @@
-# Claude Context — PowerShell Cloud Worker
+# Claude Context — Cloud Worker
 
 ## What This Project Is
 
@@ -9,7 +9,7 @@ Refer to the architecture sketch titled "Automation subsystem architecture" for 
 ## Project Structure
 
 ```
-ps-cloud-worker/
+cloud-worker/
 ├── Dockerfile, .dockerignore, docker-compose.yml
 ├── README.md
 ├── CLAUDE.md                              ← this file

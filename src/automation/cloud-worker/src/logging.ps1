@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Application Insights logging for the PowerShell Cloud Worker.
+    Application Insights logging for the Cloud Worker.
 .DESCRIPTION
     Provides structured logging via the Application Insights TelemetryClient.
     Falls back to console logging when App Insights is not configured.
@@ -27,7 +27,7 @@ function Initialize-WorkerLogging {
                 $telemetryConfig.ConnectionString = $Config.AppInsightsConnectionString
 
                 $script:TelemetryClient = [Microsoft.ApplicationInsights.TelemetryClient]::new($telemetryConfig)
-                $script:TelemetryClient.Context.Cloud.RoleName = 'ps-cloud-worker'
+                $script:TelemetryClient.Context.Cloud.RoleName = 'cloud-worker'
                 $script:TelemetryClient.Context.Cloud.RoleInstance = $Config.WorkerId
                 $script:LoggingInitialized = $true
 

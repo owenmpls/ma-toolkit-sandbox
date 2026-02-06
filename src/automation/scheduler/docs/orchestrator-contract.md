@@ -1,6 +1,6 @@
 # Orchestrator Contract
 
-This document specifies everything needed to build the orchestrator component. The orchestrator consumes events from the scheduler via Service Bus and coordinates step execution with the ps-cloud-worker.
+This document specifies everything needed to build the orchestrator component. The orchestrator consumes events from the scheduler via Service Bus and coordinates step execution with the cloud-worker.
 
 ## Service Bus Configuration
 
