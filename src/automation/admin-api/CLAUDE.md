@@ -17,6 +17,22 @@ cd src/automation/admin-api/src/AdminApi.Functions && func start
 dotnet publish src/automation/admin-api/src/AdminApi.Functions/ -c Release -o src/automation/admin-api/src/AdminApi.Functions/publish
 ```
 
+## Tests
+
+```bash
+# Run tests
+dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/
+
+# Run with verbose output
+dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ --verbosity normal
+```
+
+**Test coverage (58 tests):**
+- `CsvUploadServiceTests` (20 tests) – CSV parsing, primary key validation, duplicate detection, quoted values
+- `CsvTemplateServiceTests` (19 tests) – Template generation, column extraction, multi-valued formats
+- `QueryPreviewServiceTests` (11 tests) – Query execution, sample rows, batch grouping
+- `ManualBatchServiceTests` (8 tests) – Init dispatch, phase advancement, error handling
+
 ## Directory Structure
 
 ```
@@ -67,6 +83,14 @@ admin-api/
           PhaseExecutionRepository.cs     # CRUD for phase_executions table
           StepExecutionRepository.cs      # CRUD for step_executions table
           InitExecutionRepository.cs      # CRUD for init_executions table
+  tests/
+    AdminApi.Functions.Tests/
+      AdminApi.Functions.Tests.csproj
+      Services/
+        CsvUploadServiceTests.cs         # CSV parsing tests
+        CsvTemplateServiceTests.cs       # Template generation tests
+        QueryPreviewServiceTests.cs      # Query preview tests
+        ManualBatchServiceTests.cs       # Batch management tests
 ```
 
 ## API Endpoints

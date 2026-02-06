@@ -75,6 +75,17 @@ dotnet build src/automation/orchestrator/
 cd src/automation/admin-api/src/AdminApi.Functions && func start
 ```
 
+### Run tests
+
+```bash
+# Run all tests
+dotnet test src/automation/shared/MaToolkit.Automation.Shared.Tests/
+dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/
+
+# Run with verbose output
+dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ --verbosity normal
+```
+
 ### cloud-worker commands
 
 Run from `src/automation/cloud-worker/`:
