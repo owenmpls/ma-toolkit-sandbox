@@ -46,6 +46,31 @@ View current configuration:
 matoolkit config show
 ```
 
+## Authentication
+
+The CLI uses Entra ID device code flow for authentication. Configure and sign in:
+
+```bash
+# Set auth parameters
+matoolkit config set tenant-id YOUR_ENTRA_TENANT_ID
+matoolkit config set client-id YOUR_APP_CLIENT_ID
+matoolkit config set api-scope api://YOUR_CLIENT_ID/.default  # optional
+
+# Sign in (opens browser for device code flow)
+matoolkit auth login
+
+# Check auth status
+matoolkit auth status
+```
+
+Tokens are cached persistently — you only need to sign in once. For CI/CD, use environment variables:
+
+```bash
+export MATOOLKIT_TENANT_ID=your-tenant-id
+export MATOOLKIT_CLIENT_ID=your-client-id
+export MATOOLKIT_API_SCOPE=api://your-client-id/.default
+```
+
 ## Commands
 
 ### Runbook Management
@@ -202,6 +227,9 @@ matoolkit batch list --runbook my-runbook
 | Variable | Description |
 |----------|-------------|
 | `MATOOLKIT_API_URL` | Admin API base URL |
+| `MATOOLKIT_TENANT_ID` | Entra ID tenant ID |
+| `MATOOLKIT_CLIENT_ID` | App registration client ID |
+| `MATOOLKIT_API_SCOPE` | API scope (optional, defaults to `api://{client-id}/.default`) |
 | `MATOOLKIT_DEBUG` | Set to `1` for debug output |
 
 ## Exit Codes
