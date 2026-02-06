@@ -10,9 +10,9 @@ public interface ITemplateResolver
         Dictionary<string, string> paramTemplates,
         DataRow memberData,
         int batchId,
-        DateTime batchStartTime);
+        DateTime? batchStartTime);
 
-    string ResolveString(string template, DataRow memberData, int batchId, DateTime batchStartTime);
+    string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime);
 
     /// <summary>
     /// Resolve parameters for init steps (no member data available).
@@ -20,7 +20,7 @@ public interface ITemplateResolver
     Dictionary<string, string> ResolveInitParams(
         Dictionary<string, string> paramTemplates,
         int batchId,
-        DateTime batchStartTime);
+        DateTime? batchStartTime);
 }
 
 public class TemplateResolver : ITemplateResolver
@@ -37,7 +37,7 @@ public class TemplateResolver : ITemplateResolver
         Dictionary<string, string> paramTemplates,
         DataRow memberData,
         int batchId,
-        DateTime batchStartTime)
+        DateTime? batchStartTime)
     {
         var resolved = new Dictionary<string, string>();
 
@@ -49,7 +49,7 @@ public class TemplateResolver : ITemplateResolver
         return resolved;
     }
 
-    public string ResolveString(string template, DataRow memberData, int batchId, DateTime batchStartTime)
+    public string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime)
     {
         return TemplatePattern.Replace(template, match =>
         {
@@ -59,7 +59,7 @@ public class TemplateResolver : ITemplateResolver
             if (variableName == "_batch_id")
                 return batchId.ToString();
             if (variableName == "_batch_start_time")
-                return batchStartTime.ToString("o");
+                return (batchStartTime ?? DateTime.UtcNow).ToString("o");
 
             // Column lookup
             if (memberData.Table.Columns.Contains(variableName))
@@ -88,7 +88,7 @@ public class TemplateResolver : ITemplateResolver
     public Dictionary<string, string> ResolveInitParams(
         Dictionary<string, string> paramTemplates,
         int batchId,
-        DateTime batchStartTime)
+        DateTime? batchStartTime)
     {
         var resolved = new Dictionary<string, string>();
 
@@ -101,7 +101,7 @@ public class TemplateResolver : ITemplateResolver
                 if (variableName == "_batch_id")
                     return batchId.ToString();
                 if (variableName == "_batch_start_time")
-                    return batchStartTime.ToString("o");
+                    return (batchStartTime ?? DateTime.UtcNow).ToString("o");
 
                 _logger.LogWarning("Unresolved init template variable: {Variable}", variableName);
                 return match.Value;

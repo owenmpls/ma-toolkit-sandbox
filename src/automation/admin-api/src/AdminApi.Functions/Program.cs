@@ -5,22 +5,27 @@ using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Scheduler.Functions.Services;
-using Scheduler.Functions.Settings;
+using AdminApi.Functions.Services;
+using AdminApi.Functions.Services.Repositories;
+using AdminApi.Functions.Settings;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-builder.Services.Configure<SchedulerSettings>(
-    builder.Configuration.GetSection(SchedulerSettings.SectionName));
+builder.Services.Configure<AdminApiSettings>(
+    builder.Configuration.GetSection(AdminApiSettings.SectionName));
 
-builder.Services.AddSingleton<IDbConnectionFactory, SchedulerDbConnectionFactory>();
+builder.Services.AddSingleton<IDbConnectionFactory, AdminApiDbConnectionFactory>();
 
+// Service Bus (optional - for dispatching phase events to orchestrator)
+// When not configured, ManualBatchService will skip event publishing
 builder.Services.AddSingleton(sp =>
 {
-    var settings = sp.GetRequiredService<IOptions<SchedulerSettings>>().Value;
-    return new ServiceBusClient(settings.ServiceBusNamespace, new DefaultAzureCredential());
+    var settings = sp.GetRequiredService<IOptions<AdminApiSettings>>().Value;
+    if (string.IsNullOrEmpty(settings.ServiceBusNamespace))
+        return (ServiceBusClient?)null;
+    return (ServiceBusClient?)new ServiceBusClient(settings.ServiceBusNamespace, new DefaultAzureCredential());
 });
 
 // Shared data source services
@@ -30,10 +35,10 @@ builder.Services.AddScoped<IDataSourceQueryService, DataSourceQueryService>();
 builder.Services.AddScoped<IDynamicTableManager, DynamicTableManager>();
 
 // Shared parsing and evaluation services
-builder.Services.AddScoped<IRunbookParser, RunbookParser>();
 builder.Services.AddScoped<IPhaseEvaluator, PhaseEvaluator>();
+builder.Services.AddScoped<IRunbookParser, RunbookParser>();
 
-// Scheduler-specific repositories
+// Repositories
 builder.Services.AddScoped<IRunbookRepository, RunbookRepository>();
 builder.Services.AddScoped<IAutomationSettingsRepository, AutomationSettingsRepository>();
 builder.Services.AddScoped<IBatchRepository, BatchRepository>();
@@ -42,17 +47,11 @@ builder.Services.AddScoped<IPhaseExecutionRepository, PhaseExecutionRepository>(
 builder.Services.AddScoped<IStepExecutionRepository, StepExecutionRepository>();
 builder.Services.AddScoped<IInitExecutionRepository, InitExecutionRepository>();
 
-// Scheduler-specific services
-builder.Services.AddScoped<IMemberDiffService, MemberDiffService>();
-builder.Services.AddScoped<ITemplateResolver, TemplateResolver>();
-builder.Services.AddScoped<IServiceBusPublisher, ServiceBusPublisher>();
-
-// Scheduler orchestration services
-builder.Services.AddScoped<IMemberSynchronizer, MemberSynchronizer>();
-builder.Services.AddScoped<IBatchDetector, BatchDetector>();
-builder.Services.AddScoped<IPhaseDispatcher, PhaseDispatcher>();
-builder.Services.AddScoped<IVersionTransitionHandler, VersionTransitionHandler>();
-builder.Services.AddScoped<IPollingManager, PollingManager>();
+// Admin services
+builder.Services.AddScoped<IQueryPreviewService, QueryPreviewService>();
+builder.Services.AddScoped<ICsvTemplateService, CsvTemplateService>();
+builder.Services.AddScoped<ICsvUploadService, CsvUploadService>();
+builder.Services.AddScoped<IManualBatchService, ManualBatchService>();
 
 builder.Services.AddApplicationInsightsTelemetryWorkerService();
 

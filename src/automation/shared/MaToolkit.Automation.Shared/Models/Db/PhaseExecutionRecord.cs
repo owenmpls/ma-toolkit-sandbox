@@ -8,7 +8,7 @@ public class PhaseExecutionRecord
     public int BatchId { get; set; }
     public string PhaseName { get; set; } = string.Empty;
     public int OffsetMinutes { get; set; }
-    public DateTime DueAt { get; set; }
+    public DateTime? DueAt { get; set; } // Nullable for manual batches
     public int RunbookVersion { get; set; }
     public string Status { get; set; } = PhaseStatus.Pending;
     public DateTime? DispatchedAt { get; set; }

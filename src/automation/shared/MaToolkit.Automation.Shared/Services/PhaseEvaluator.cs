@@ -71,15 +71,22 @@ public class PhaseEvaluator : IPhaseEvaluator
         return batchStartTime.AddMinutes(-offsetMinutes);
     }
 
+    public DateTime? CalculateDueAtNullable(DateTime? batchStartTime, int offsetMinutes)
+    {
+        if (batchStartTime is null)
+            return null;
+        return batchStartTime.Value.AddMinutes(-offsetMinutes);
+    }
+
     public List<PhaseExecutionRecord> CreatePhaseExecutions(
-        int batchId, DateTime batchStartTime, RunbookDefinition definition, int runbookVersion)
+        int batchId, DateTime? batchStartTime, RunbookDefinition definition, int runbookVersion)
     {
         var records = new List<PhaseExecutionRecord>();
 
         foreach (var phase in definition.Phases)
         {
             var offsetMinutes = ParseOffsetMinutes(phase.Offset);
-            var dueAt = CalculateDueAt(batchStartTime, offsetMinutes);
+            var dueAt = CalculateDueAtNullable(batchStartTime, offsetMinutes);
 
             records.Add(new PhaseExecutionRecord
             {
@@ -97,7 +104,7 @@ public class PhaseEvaluator : IPhaseEvaluator
 
     public List<PhaseExecutionRecord> HandleVersionTransition(
         IEnumerable<PhaseExecutionRecord> existingPhases,
-        int batchId, DateTime batchStartTime,
+        int batchId, DateTime? batchStartTime,
         RunbookDefinition newDefinition, int newVersion,
         string overdueBehavior, bool ignoreOverdueApplied)
     {
@@ -115,8 +122,8 @@ public class PhaseEvaluator : IPhaseEvaluator
         foreach (var phase in newDefinition.Phases)
         {
             var offsetMinutes = ParseOffsetMinutes(phase.Offset);
-            var dueAt = CalculateDueAt(batchStartTime, offsetMinutes);
-            var isOverdue = dueAt <= now;
+            var dueAt = CalculateDueAtNullable(batchStartTime, offsetMinutes);
+            var isOverdue = dueAt.HasValue && dueAt.Value <= now;
 
             var status = PhaseStatus.Pending;
 

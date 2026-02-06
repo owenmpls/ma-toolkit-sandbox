@@ -8,11 +8,12 @@ public interface IPhaseEvaluator
     int ParseOffsetMinutes(string offset);
     int ParseDurationSeconds(string duration);
     DateTime CalculateDueAt(DateTime batchStartTime, int offsetMinutes);
+    DateTime? CalculateDueAtNullable(DateTime? batchStartTime, int offsetMinutes);
     List<PhaseExecutionRecord> CreatePhaseExecutions(
-        int batchId, DateTime batchStartTime, RunbookDefinition definition, int runbookVersion);
+        int batchId, DateTime? batchStartTime, RunbookDefinition definition, int runbookVersion);
     List<PhaseExecutionRecord> HandleVersionTransition(
         IEnumerable<PhaseExecutionRecord> existingPhases,
-        int batchId, DateTime batchStartTime,
+        int batchId, DateTime? batchStartTime,
         RunbookDefinition newDefinition, int newVersion,
         string overdueBehavior, bool ignoreOverdueApplied);
 }

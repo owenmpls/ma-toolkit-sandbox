@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": {
+      "value": "matoolkit-admin-api"
+    },
+    "sqlConnectionString": {
+      "value": ""
+    },
+    "tags": {
+      "value": {
+        "component": "admin-api",
+        "project": "ma-toolkit",
+        "environment": "dev"
+      }
+    }
+  }
+}

@@ -120,14 +120,14 @@ public class VersionTransitionHandler : IVersionTransitionHandler
     }
 
     private Dictionary<string, string> ResolveInitParams(
-        Dictionary<string, string> paramTemplates, int batchId, DateTime batchStartTime)
+        Dictionary<string, string> paramTemplates, int batchId, DateTime? batchStartTime)
     {
         var resolved = new Dictionary<string, string>();
         foreach (var (key, template) in paramTemplates)
         {
             var value = template
                 .Replace("{{_batch_id}}", batchId.ToString())
-                .Replace("{{_batch_start_time}}", batchStartTime.ToString("o"));
+                .Replace("{{_batch_start_time}}", (batchStartTime ?? DateTime.UtcNow).ToString("o"));
             resolved[key] = value;
         }
         return resolved;

@@ -11,9 +11,9 @@ public interface ITemplateResolver
         Dictionary<string, string> paramTemplates,
         DataRow memberData,
         int batchId,
-        DateTime batchStartTime);
+        DateTime? batchStartTime);
 
-    string ResolveString(string template, DataRow memberData, int batchId, DateTime batchStartTime);
+    string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime);
 }
 
 public class TemplateResolver : ITemplateResolver
@@ -30,7 +30,7 @@ public class TemplateResolver : ITemplateResolver
         Dictionary<string, string> paramTemplates,
         DataRow memberData,
         int batchId,
-        DateTime batchStartTime)
+        DateTime? batchStartTime)
     {
         var resolved = new Dictionary<string, string>();
 
@@ -42,7 +42,7 @@ public class TemplateResolver : ITemplateResolver
         return resolved;
     }
 
-    public string ResolveString(string template, DataRow memberData, int batchId, DateTime batchStartTime)
+    public string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime)
     {
         return TemplatePattern.Replace(template, match =>
         {
@@ -52,7 +52,7 @@ public class TemplateResolver : ITemplateResolver
             if (variableName == "_batch_id")
                 return batchId.ToString();
             if (variableName == "_batch_start_time")
-                return batchStartTime.ToString("o");
+                return batchStartTime?.ToString("o") ?? DateTime.UtcNow.ToString("o");
 
             // Column lookup
             if (memberData.Table.Columns.Contains(variableName))

@@ -26,7 +26,7 @@ public class PhaseDueMessage
     public int OffsetMinutes { get; set; }
 
     [JsonPropertyName("dueAt")]
-    public DateTime DueAt { get; set; }
+    public DateTime? DueAt { get; set; }
 
     [JsonPropertyName("memberIds")]
     public List<int> MemberIds { get; set; } = new();

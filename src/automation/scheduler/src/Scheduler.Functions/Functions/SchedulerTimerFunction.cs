@@ -11,6 +11,7 @@ namespace Scheduler.Functions.Functions;
 public class SchedulerTimerFunction
 {
     private readonly IRunbookRepository _runbookRepo;
+    private readonly IAutomationSettingsRepository _automationRepo;
     private readonly IBatchRepository _batchRepo;
     private readonly IDynamicTableManager _dynamicTableManager;
     private readonly IDataSourceQueryService _dataSourceQuery;
@@ -23,6 +24,7 @@ public class SchedulerTimerFunction
 
     public SchedulerTimerFunction(
         IRunbookRepository runbookRepo,
+        IAutomationSettingsRepository automationRepo,
         IBatchRepository batchRepo,
         IDynamicTableManager dynamicTableManager,
         IDataSourceQueryService dataSourceQuery,
@@ -34,6 +36,7 @@ public class SchedulerTimerFunction
         ILogger<SchedulerTimerFunction> logger)
     {
         _runbookRepo = runbookRepo;
+        _automationRepo = automationRepo;
         _batchRepo = batchRepo;
         _dynamicTableManager = dynamicTableManager;
         _dataSourceQuery = dataSourceQuery;
@@ -78,49 +81,71 @@ public class SchedulerTimerFunction
         // Parse YAML
         var definition = _parser.Parse(runbook.YamlContent);
 
-        // Execute data source query
-        DataTable queryResults;
-        try
-        {
-            queryResults = await _dataSourceQuery.ExecuteAsync(definition.DataSource);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to execute data source query for runbook {RunbookName}", runbook.Name);
-            return;
-        }
-
-        if (queryResults.Rows.Count == 0)
-        {
-            _logger.LogInformation("No results from data source for runbook {RunbookName}", runbook.Name);
-            return;
-        }
-
-        // Ensure dynamic data table exists
-        var queryColumns = queryResults.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
-        await _dynamicTableManager.EnsureTableAsync(
-            runbook.DataTableName,
-            queryColumns,
-            definition.DataSource.MultiValuedColumns);
-
-        // Upsert query results into dynamic table
-        await _dynamicTableManager.UpsertDataAsync(
-            runbook.DataTableName,
-            definition.DataSource.PrimaryKey,
-            definition.DataSource.BatchTimeColumn,
-            queryResults,
-            definition.DataSource.MultiValuedColumns);
-
-        // Group by batch time and process each group
-        var batchGroups = await _batchDetector.GroupByBatchTimeAsync(queryResults, definition.DataSource);
+        // Check automation settings - skip query execution if automation is disabled
+        var automationSettings = await _automationRepo.GetByNameAsync(runbook.Name);
+        var automationEnabled = automationSettings?.AutomationEnabled ?? false;
 
         var now = DateTime.UtcNow;
 
-        foreach (var (batchTime, rows) in batchGroups)
+        if (automationEnabled)
         {
-            await _batchDetector.ProcessBatchGroupAsync(runbook, definition, batchTime, rows, now);
+            // Execute data source query only when automation is enabled
+            DataTable queryResults;
+            try
+            {
+                queryResults = await _dataSourceQuery.ExecuteAsync(definition.DataSource);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to execute data source query for runbook {RunbookName}", runbook.Name);
+                // Continue to process existing batches even if query fails
+                await ProcessExistingBatchesAsync(runbook, definition, now);
+                return;
+            }
+
+            if (queryResults.Rows.Count > 0)
+            {
+                // Ensure dynamic data table exists
+                var queryColumns = queryResults.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+                await _dynamicTableManager.EnsureTableAsync(
+                    runbook.DataTableName,
+                    queryColumns,
+                    definition.DataSource.MultiValuedColumns);
+
+                // Upsert query results into dynamic table
+                await _dynamicTableManager.UpsertDataAsync(
+                    runbook.DataTableName,
+                    definition.DataSource.PrimaryKey,
+                    definition.DataSource.BatchTimeColumn,
+                    queryResults,
+                    definition.DataSource.MultiValuedColumns);
+
+                // Group by batch time and process each group
+                var batchGroups = await _batchDetector.GroupByBatchTimeAsync(queryResults, definition.DataSource);
+
+                foreach (var (batchTime, rows) in batchGroups)
+                {
+                    await _batchDetector.ProcessBatchGroupAsync(runbook, definition, batchTime, rows, now);
+                }
+            }
+            else
+            {
+                _logger.LogInformation("No results from data source for runbook {RunbookName}", runbook.Name);
+            }
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Skipping query execution for runbook {RunbookName} - automation disabled",
+                runbook.Name);
         }
 
+        // ALWAYS process existing batches (including manual batches) regardless of automation setting
+        await ProcessExistingBatchesAsync(runbook, definition, now);
+    }
+
+    private async Task ProcessExistingBatchesAsync(RunbookRecord runbook, RunbookDefinition definition, DateTime now)
+    {
         // Evaluate pending phases and handle version transitions for all active batches
         var activeBatches = await _batchRepo.GetActiveByRunbookAsync(runbook.Id);
         foreach (var batch in activeBatches)

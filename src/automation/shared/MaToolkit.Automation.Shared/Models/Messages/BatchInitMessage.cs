@@ -17,7 +17,7 @@ public class BatchInitMessage
     public int BatchId { get; set; }
 
     [JsonPropertyName("batchStartTime")]
-    public DateTime BatchStartTime { get; set; }
+    public DateTime? BatchStartTime { get; set; }
 
     [JsonPropertyName("memberCount")]
     public int MemberCount { get; set; }

@@ -20,20 +20,40 @@ C# Azure Functions project (isolated worker, .NET 8). The timing and detection e
 
 See `src/automation/scheduler/CLAUDE.md` for details.
 
-### runbook-api (`src/automation/runbook-api/`)
+### admin-api (`src/automation/admin-api/`)
 
-C# Azure Functions project (isolated worker, .NET 8). RESTful API for managing runbook definitions. Provides endpoints for publishing, versioning, retrieval, and deactivation of runbooks.
+C# Azure Functions project (isolated worker, .NET 8). Comprehensive admin API for the migration pipeline. Combines runbook management with batch creation, CSV uploads, and automation control.
 
 | Method | Route | Description |
 |--------|-------|-------------|
+| **Runbook Management** | | |
 | POST | `/api/runbooks` | Publish new runbook version |
 | GET | `/api/runbooks` | List all active runbooks |
 | GET | `/api/runbooks/{name}` | Get latest active version |
 | GET | `/api/runbooks/{name}/versions` | List all versions |
 | GET | `/api/runbooks/{name}/versions/{v}` | Get specific version |
 | DELETE | `/api/runbooks/{name}/versions/{v}` | Deactivate version |
+| **Automation Control** | | |
+| GET | `/api/runbooks/{name}/automation` | Get automation status |
+| PUT | `/api/runbooks/{name}/automation` | Enable/disable automation |
+| **Query & Templates** | | |
+| POST | `/api/runbooks/{name}/query/preview` | Preview query results |
+| GET | `/api/runbooks/{name}/template` | Download CSV template |
+| **Batch Management** | | |
+| GET | `/api/batches` | List batches with filters |
+| POST | `/api/batches` | Create batch from CSV |
+| GET | `/api/batches/{id}` | Get batch details |
+| POST | `/api/batches/{id}/advance` | Advance manual batch |
+| POST | `/api/batches/{id}/cancel` | Cancel batch |
+| **Member Management** | | |
+| GET | `/api/batches/{id}/members` | List batch members |
+| POST | `/api/batches/{id}/members` | Add members from CSV |
+| DELETE | `/api/batches/{id}/members/{memberId}` | Remove member |
+| **Execution Tracking** | | |
+| GET | `/api/batches/{id}/phases` | List phase executions |
+| GET | `/api/batches/{id}/steps` | List step executions |
 
-See `src/automation/runbook-api/CLAUDE.md` for details.
+See `src/automation/admin-api/CLAUDE.md` for details.
 
 ### orchestrator (`src/automation/orchestrator/`)
 
@@ -48,11 +68,11 @@ See `src/automation/orchestrator/CLAUDE.md` for details.
 ```bash
 # Build all .NET projects
 dotnet build src/automation/scheduler/
-dotnet build src/automation/runbook-api/
+dotnet build src/automation/admin-api/
 dotnet build src/automation/orchestrator/
 
 # Run Functions locally (requires Azure Functions Core Tools v4)
-cd src/automation/runbook-api/src/RunbookApi.Functions && func start
+cd src/automation/admin-api/src/AdminApi.Functions && func start
 ```
 
 ### cloud-worker commands
@@ -73,11 +93,11 @@ docker-compose up
 ### Deploy infrastructure (Azure)
 
 ```bash
-# Deploy runbook-api
+# Deploy admin-api
 az deployment group create \
   --resource-group your-rg \
-  --template-file infra/automation/runbook-api/deploy.bicep \
-  --parameters infra/automation/runbook-api/deploy.parameters.json \
+  --template-file infra/automation/admin-api/deploy.bicep \
+  --parameters infra/automation/admin-api/deploy.parameters.json \
   --parameters sqlConnectionString="your-connection-string"
 
 # Deploy cloud-worker
@@ -91,8 +111,8 @@ az deployment group create \
 
 The system follows an **event-driven, queue-based pattern**:
 
-1. **Runbook API** → Publishes/manages YAML runbook definitions in SQL
-2. **Scheduler** → Timer-triggered, queries data sources, detects batches, dispatches events to Service Bus
+1. **Admin API** → Manages runbooks, enables/disables automation, supports manual batch creation via CSV upload
+2. **Scheduler** → Timer-triggered, queries data sources (when automation enabled), detects batches, dispatches events to Service Bus
 3. **Orchestrator** → Consumes scheduler events, coordinates step execution, dispatches jobs to workers
 4. **Cloud Worker** → Executes migration operations (Entra ID, Exchange Online) via RunspacePool
 
