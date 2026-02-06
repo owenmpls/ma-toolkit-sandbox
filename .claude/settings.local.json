@@ -16,7 +16,11 @@
       "Bash(pwsh -File tests/Test-WorkerLocal.ps1)",
       "Bash(git status:*)",
       "Bash(git reset:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(pwsh:*)",
+      "Bash(dotnet run:*)"
     ]
   }
 }
