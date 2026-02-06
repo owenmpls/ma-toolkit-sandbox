@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "Orchestrator__SqlConnectionString": "Server=localhost;Database=matoolkit;Trusted_Connection=true;TrustServerCertificate=true;",
+    "Orchestrator__ServiceBusNamespace": "matoolkit-sb.servicebus.windows.net",
+    "Orchestrator__OrchestratorEventsTopicName": "orchestrator-events",
+    "Orchestrator__OrchestratorSubscriptionName": "orchestrator",
+    "Orchestrator__WorkerJobsTopicName": "worker-jobs",
+    "Orchestrator__WorkerResultsTopicName": "worker-results",
+    "Orchestrator__WorkerResultsSubscriptionName": "orchestrator"
+  }
+}

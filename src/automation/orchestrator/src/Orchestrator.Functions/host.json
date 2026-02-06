@@ -1,0 +1,28 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      },
+      "enableLiveMetricsFilters": true
+    },
+    "logLevel": {
+      "default": "Information",
+      "Orchestrator": "Information"
+    }
+  },
+  "extensions": {
+    "serviceBus": {
+      "clientRetryOptions": {
+        "mode": "Exponential",
+        "maxRetries": 3
+      },
+      "prefetchCount": 0,
+      "autoCompleteMessages": false,
+      "maxConcurrentCalls": 16,
+      "maxMessageBatchSize": 1000
+    }
+  }
+}

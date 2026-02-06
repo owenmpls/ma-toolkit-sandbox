@@ -1,0 +1,278 @@
+// ---------------------------------------------------------------------------
+// Orchestrator – Azure Functions (Flex Consumption) + Service Bus RBAC
+// ---------------------------------------------------------------------------
+// The orchestrator reuses the SQL database and Service Bus namespace created
+// by the scheduler. This template creates only the Function App and necessary
+// RBAC assignments for Service Bus topics.
+// ---------------------------------------------------------------------------
+
+@description('Azure region for all new resources.')
+param location string = resourceGroup().location
+
+@description('Environment name used as a suffix for resource names (e.g. dev, staging, prod).')
+param environmentName string
+
+@description('Name of the existing Service Bus namespace.')
+param serviceBusNamespaceName string
+
+@description('Name of the existing SQL Server.')
+param sqlServerName string
+
+@description('Name of the existing SQL Database.')
+param sqlDatabaseName string
+
+@description('SQL connection string (from Key Vault or direct).')
+@secure()
+param sqlConnectionString string
+
+@description('Name of the existing Key Vault.')
+param keyVaultName string
+
+@description('Resource ID of the existing Log Analytics workspace.')
+param logAnalyticsWorkspaceId string
+
+// ---------------------------------------------------------------------------
+// Variables
+// ---------------------------------------------------------------------------
+
+var baseName = 'orchestrator-${environmentName}'
+var functionAppName = 'func-${baseName}'
+var appServicePlanName = 'asp-${baseName}'
+var storageAccountName = replace('st${baseName}', '-', '')
+var appInsightsName = 'appi-${baseName}'
+
+// Topic and subscription names
+var orchestratorEventsTopicName = 'orchestrator-events'
+var orchestratorSubscriptionName = 'orchestrator'
+var workerJobsTopicName = 'worker-jobs'
+var workerResultsTopicName = 'worker-results'
+var workerResultsSubscriptionName = 'orchestrator'
+
+// Built-in role definition IDs
+var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'  // Azure Service Bus Data Sender
+var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0' // Azure Service Bus Data Receiver
+var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key Vault Secrets User
+
+// ---------------------------------------------------------------------------
+// Existing resources
+// ---------------------------------------------------------------------------
+
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
+  name: serviceBusNamespaceName
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
+
+// ---------------------------------------------------------------------------
+// Storage Account (Functions runtime)
+// ---------------------------------------------------------------------------
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: storageAccountName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+  properties: {
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Application Insights
+// ---------------------------------------------------------------------------
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspaceId
+  }
+}
+
+// ---------------------------------------------------------------------------
+// App Service Plan – Flex Consumption
+// ---------------------------------------------------------------------------
+
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: appServicePlanName
+  location: location
+  kind: 'functionapp'
+  sku: {
+    tier: 'FlexConsumption'
+    name: 'FC1'
+  }
+  properties: {
+    reserved: true // Linux
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Function App (.NET 8 isolated, Linux, system-assigned managed identity)
+// ---------------------------------------------------------------------------
+
+resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
+  name: functionAppName
+  location: location
+  kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
+      appSettings: [
+        {
+          name: 'AzureWebJobsStorage'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+        }
+        {
+          name: 'WEBSITE_USE_PLACEHOLDER_DOTNETISOLATED'
+          value: '1'
+        }
+        {
+          name: 'FUNCTIONS_EXTENSION_VERSION'
+          value: '~4'
+        }
+        {
+          name: 'FUNCTIONS_WORKER_RUNTIME'
+          value: 'dotnet-isolated'
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsights.properties.ConnectionString
+        }
+        {
+          name: 'ServiceBusConnection__fullyQualifiedNamespace'
+          value: '${serviceBusNamespace.name}.servicebus.windows.net'
+        }
+        {
+          name: 'Orchestrator__SqlConnectionString'
+          value: sqlConnectionString
+        }
+        {
+          name: 'Orchestrator__ServiceBusNamespace'
+          value: '${serviceBusNamespace.name}.servicebus.windows.net'
+        }
+        {
+          name: 'Orchestrator__OrchestratorEventsTopicName'
+          value: orchestratorEventsTopicName
+        }
+        {
+          name: 'Orchestrator__OrchestratorSubscriptionName'
+          value: orchestratorSubscriptionName
+        }
+        {
+          name: 'Orchestrator__WorkerJobsTopicName'
+          value: workerJobsTopicName
+        }
+        {
+          name: 'Orchestrator__WorkerResultsTopicName'
+          value: workerResultsTopicName
+        }
+        {
+          name: 'Orchestrator__WorkerResultsSubscriptionName'
+          value: workerResultsSubscriptionName
+        }
+      ]
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Service Bus Topics + Subscriptions (create if not exists)
+// ---------------------------------------------------------------------------
+
+// worker-jobs topic (orchestrator sends to this)
+resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
+  parent: serviceBusNamespace
+  name: workerJobsTopicName
+  properties: {
+    maxSizeInMegabytes: 1024
+    defaultMessageTimeToLive: 'P1D'
+    requiresDuplicateDetection: false
+    enablePartitioning: false
+  }
+}
+
+// worker-results topic (orchestrator receives from this)
+resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
+  parent: serviceBusNamespace
+  name: workerResultsTopicName
+  properties: {
+    maxSizeInMegabytes: 1024
+    defaultMessageTimeToLive: 'P1D'
+    requiresDuplicateDetection: false
+    enablePartitioning: false
+  }
+}
+
+// Subscription for orchestrator on worker-results topic
+resource workerResultsSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
+  parent: workerResultsTopic
+  name: workerResultsSubscriptionName
+  properties: {
+    maxDeliveryCount: 10
+    lockDuration: 'PT1M'
+    defaultMessageTimeToLive: 'P1D'
+    deadLetteringOnMessageExpiration: true
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Role Assignments
+// ---------------------------------------------------------------------------
+
+// Service Bus Data Sender on the namespace (for sending to worker-jobs)
+resource serviceBusDataSenderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(serviceBusNamespace.id, functionApp.id, serviceBusDataSenderRoleId)
+  scope: serviceBusNamespace
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataSenderRoleId)
+  }
+}
+
+// Service Bus Data Receiver on the namespace (for receiving from orchestrator-events and worker-results)
+resource serviceBusDataReceiverAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(serviceBusNamespace.id, functionApp.id, serviceBusDataReceiverRoleId)
+  scope: serviceBusNamespace
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataReceiverRoleId)
+  }
+}
+
+// Key Vault Secrets User on the vault
+resource keyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, functionApp.id, keyVaultSecretsUserRoleId)
+  scope: keyVault
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Outputs
+// ---------------------------------------------------------------------------
+
+output functionAppName string = functionApp.name
+output functionAppDefaultHostName string = functionApp.properties.defaultHostName
+output functionAppPrincipalId string = functionApp.identity.principalId
+output appInsightsConnectionString string = appInsights.properties.ConnectionString
+output workerJobsTopicName string = workerJobsTopic.name
+output workerResultsTopicName string = workerResultsTopic.name
+output workerResultsSubscriptionName string = workerResultsSubscription.name
