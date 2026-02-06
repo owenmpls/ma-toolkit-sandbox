@@ -176,6 +176,10 @@ Key design choices:
 - EXO auth workaround: client secret → OAuth token via REST → `Connect-ExchangeOnline -AccessToken`
 - Throttle handling: exponential backoff + jitter, respects `Retry-After` headers
 
+## Code Review Recommendations
+
+- **2026-02-06**: Full codebase review of `src/automation/` and `infra/automation/` — [`docs/code-review-2026-02-06.md`](docs/code-review-2026-02-06.md). Covers 27 issues (4 critical, 10 high, 13 medium/low) with specific file paths, line numbers, and fix descriptions. An implementation plan exists at `.claude/plans/deep-coalescing-mitten.md`.
+
 ## PowerShell Gotchas
 
 These are real bugs encountered during development:
