@@ -27,11 +27,13 @@ dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/
 dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ --verbosity normal
 ```
 
-**Test coverage (58 tests):**
+**Test coverage (87 tests):**
 - `CsvUploadServiceTests` (20 tests) – CSV parsing, primary key validation, duplicate detection, quoted values
 - `CsvTemplateServiceTests` (19 tests) – Template generation, column extraction, multi-valued formats
 - `QueryPreviewServiceTests` (11 tests) – Query execution, sample rows, batch grouping
 - `ManualBatchServiceTests` (8 tests) – Init dispatch, phase advancement, error handling
+- `UserContextExtensionsTests` (7 tests) – Claim extraction: preferred_username, name, oid fallback chain
+- `AuthorizationAttributeTests` (22 tests) – Reflection-based verification of [Authorize] attributes, auth levels, and policy assignments across all endpoints
 
 ## Directory Structure
 
@@ -42,9 +44,12 @@ admin-api/
   src/
     AdminApi.Functions/
       AdminApi.Functions.csproj
-      Program.cs                     # DI registration, ServiceBusClient, all services
+      Program.cs                     # DI registration, JWT auth, ServiceBusClient, all services
       host.json                      # Functions host config, App Insights sampling
-      local.settings.json            # Local dev config (connection strings)
+      local.settings.json            # Local dev config (connection strings, AzureAd settings)
+      Auth/
+        AuthConstants.cs             # Policy names (AdminPolicy, AuthenticatedPolicy) and role constants
+        UserContextExtensions.cs     # HttpRequest.GetUserIdentity() - extracts user from JWT claims
       Settings/
         AdminApiSettings.cs          # Options class: SqlConnectionString, ServiceBusNamespace
       Functions/
@@ -86,6 +91,9 @@ admin-api/
   tests/
     AdminApi.Functions.Tests/
       AdminApi.Functions.Tests.csproj
+      Auth/
+        UserContextExtensionsTests.cs    # Claim extraction tests
+        AuthorizationAttributeTests.cs   # Reflection-based auth attribute verification
       Services/
         CsvUploadServiceTests.cs         # CSV parsing tests
         CsvTemplateServiceTests.cs       # Template generation tests
@@ -95,28 +103,30 @@ admin-api/
 
 ## API Endpoints
 
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/runbooks` | Publish new runbook version |
-| GET | `/api/runbooks` | List all active runbooks |
-| GET | `/api/runbooks/{name}` | Get latest active version |
-| GET | `/api/runbooks/{name}/versions` | List all versions |
-| GET | `/api/runbooks/{name}/versions/{v}` | Get specific version |
-| DELETE | `/api/runbooks/{name}/versions/{v}` | Deactivate version |
-| GET | `/api/runbooks/{name}/automation` | Get automation status |
-| PUT | `/api/runbooks/{name}/automation` | Enable/disable automation |
-| POST | `/api/runbooks/{name}/query/preview` | Preview query results |
-| GET | `/api/runbooks/{name}/template` | Download CSV template |
-| GET | `/api/batches` | List batches (with filters) |
-| GET | `/api/batches/{id}` | Get batch details |
-| POST | `/api/batches` | Create batch from CSV |
-| GET | `/api/batches/{id}/members` | List batch members |
-| POST | `/api/batches/{id}/members` | Add members from CSV |
-| DELETE | `/api/batches/{id}/members/{memberId}` | Remove member |
-| GET | `/api/batches/{id}/phases` | List phase executions |
-| GET | `/api/batches/{id}/steps` | List step executions |
-| POST | `/api/batches/{id}/advance` | Advance manual batch |
-| POST | `/api/batches/{id}/cancel` | Cancel batch |
+All endpoints require Entra ID authentication. Write operations require the `Admin` app role; read operations require any authenticated user.
+
+| Method | Route | Description | Policy |
+|--------|-------|-------------|--------|
+| POST | `/api/runbooks` | Publish new runbook version | Admin |
+| GET | `/api/runbooks` | List all active runbooks | Authenticated |
+| GET | `/api/runbooks/{name}` | Get latest active version | Authenticated |
+| GET | `/api/runbooks/{name}/versions` | List all versions | Authenticated |
+| GET | `/api/runbooks/{name}/versions/{v}` | Get specific version | Authenticated |
+| DELETE | `/api/runbooks/{name}/versions/{v}` | Deactivate version | Admin |
+| GET | `/api/runbooks/{name}/automation` | Get automation status | Authenticated |
+| PUT | `/api/runbooks/{name}/automation` | Enable/disable automation | Admin |
+| POST | `/api/runbooks/{name}/query/preview` | Preview query results | Admin |
+| GET | `/api/runbooks/{name}/template` | Download CSV template | Authenticated |
+| GET | `/api/batches` | List batches (with filters) | Authenticated |
+| GET | `/api/batches/{id}` | Get batch details | Authenticated |
+| POST | `/api/batches` | Create batch from CSV | Admin |
+| GET | `/api/batches/{id}/members` | List batch members | Authenticated |
+| POST | `/api/batches/{id}/members` | Add members from CSV | Admin |
+| DELETE | `/api/batches/{id}/members/{memberId}` | Remove member | Admin |
+| GET | `/api/batches/{id}/phases` | List phase executions | Authenticated |
+| GET | `/api/batches/{id}/steps` | List step executions | Authenticated |
+| POST | `/api/batches/{id}/advance` | Advance manual batch | Admin |
+| POST | `/api/batches/{id}/cancel` | Cancel batch | Admin |
 
 ## NuGet Packages
 
@@ -128,6 +138,7 @@ admin-api/
 | Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore | 2.0.0 | ASP.NET Core integration |
 | Microsoft.Extensions.Hosting | 9.0.0 | Generic host |
 | Azure.Messaging.ServiceBus | 7.18.2 | Service Bus SDK for dispatching events |
+| Microsoft.Identity.Web | 3.8.0 | Entra ID JWT bearer authentication |
 | Azure.Identity | 1.13.1 | DefaultAzureCredential for managed identity auth |
 | Microsoft.ApplicationInsights.WorkerService | 2.22.0 | Application Insights telemetry |
 
@@ -137,6 +148,22 @@ admin-api/
 | Microsoft.Data.SqlClient | SQL Server connectivity |
 | Dapper | Lightweight ORM for all SQL operations |
 | YamlDotNet | YAML deserialization for runbook definitions |
+
+## Authentication & Authorization
+
+The API uses Entra ID (Azure AD) JWT bearer authentication via `Microsoft.Identity.Web`. All endpoints use `AuthorizationLevel.Anonymous` (no function keys); authentication is handled entirely by the middleware.
+
+### Setup
+- Register an app in Entra ID with app roles `Admin` and `Reader`
+- Configure `AzureAd__*` settings (see Configuration section)
+- Assign app roles to users/groups in the Enterprise Application
+
+### Policies
+- **`RequireAdminRole`** — requires the `Admin` app role. Applied to all write operations (POST, PUT, DELETE).
+- **`RequireAuthenticated`** — requires any valid authenticated user. Applied to all read operations (GET).
+
+### User Identity
+`UserContextExtensions.GetUserIdentity()` extracts the caller's identity from JWT claims using this fallback chain: `preferred_username` → `name` → `oid` → `"system"`. Used in `AutomationSettingsFunction` and `BatchManagementFunction` to record who performed the action.
 
 ## Key Architecture Decisions
 
@@ -188,6 +215,13 @@ Settings are bound via `IOptions<AdminApiSettings>` from the `AdminApi` config s
 - `AdminApi__SqlConnectionString` – SQL Server connection string
 - `AdminApi__ServiceBusNamespace` – FQDN of the Service Bus namespace (optional for manual batch advancement)
 
+Entra ID authentication settings (bound via `builder.Configuration.GetSection("AzureAd")`):
+
+- `AzureAd__Instance` – `https://login.microsoftonline.com/`
+- `AzureAd__TenantId` – Entra ID tenant ID
+- `AzureAd__ClientId` – App registration client ID
+- `AzureAd__Audience` – API audience URI (e.g. `api://YOUR_CLIENT_ID`)
+
 Data source connections are read from environment variables by name (configured in each runbook's `data_source.connection` field):
 
 - `DATAVERSE_CONNECTION_STRING` – Dataverse TDS endpoint connection string
@@ -219,12 +253,16 @@ az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/admin-api/deploy.bicep \
   --parameters infra/automation/admin-api/deploy.parameters.json \
-  --parameters sqlConnectionString="your-connection-string"
+  --parameters sqlConnectionString="your-connection-string" \
+  --parameters entraIdTenantId="your-tenant-id" \
+  --parameters entraIdClientId="your-client-id" \
+  --parameters entraIdAudience="api://your-client-id"
 ```
 
 Creates:
 - Flex Consumption Function App (.NET 8 isolated)
 - Storage Account (for Functions runtime)
 - Application Insights
+- `AzureAd__*` app settings for Entra ID authentication
 - RBAC: Key Vault Secrets User on vault (for SQL connection string)
 - Optional: Service Bus Data Sender role for manual batch advancement

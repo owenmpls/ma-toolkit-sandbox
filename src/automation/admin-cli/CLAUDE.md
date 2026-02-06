@@ -60,7 +60,8 @@ admin-cli/
       README.md                      # User documentation
       Program.cs                     # Entry point, command registration
       Services/
-        AdminApiClient.cs            # HTTP client for Admin API
+        AdminApiClient.cs            # HTTP client for Admin API (async auth token injection)
+        AuthService.cs               # Device code flow auth via Azure.Identity
       Models/
         ApiModels.cs                 # API request/response DTOs
       Commands/
@@ -69,14 +70,18 @@ admin-cli/
         QueryCommands.cs             # query preview
         TemplateCommands.cs          # template download
         BatchCommands.cs             # batch list/get/create/advance/cancel/members/phases/steps
-        ConfigCommands.cs            # config show/set/path
+        ConfigCommands.cs            # config show/set/path (includes auth key mappings)
+        AuthCommands.cs              # auth login/status
   tests/
     AdminCli.Tests/
       AdminCli.Tests.csproj
       Services/
         AdminApiClientTests.cs       # API client tests with mocked HTTP
+        AdminApiClientAuthTests.cs   # Auth constructor and token injection tests
+        AuthServiceTests.cs          # AuthService config and IsConfigured tests
       Commands/
         CommandParsingTests.cs       # Command structure verification
+        AuthCommandParsingTests.cs   # Auth command structure verification
 ```
 
 ## Commands
@@ -103,6 +108,8 @@ admin-cli/
 | `batch remove-member <batch-id> <member-id>` | Remove member |
 | `batch phases <id>` | List phase executions |
 | `batch steps <id>` | List step executions |
+| `auth login` | Sign in using device code flow |
+| `auth status` | Show authentication status |
 | `config show` | Show configuration |
 | `config set <key> <value>` | Set configuration |
 | `config path` | Show config file path |
@@ -117,14 +124,48 @@ admin-cli/
 | Microsoft.Extensions.Configuration | 9.0.0 | Configuration binding |
 | Microsoft.Extensions.Configuration.Json | 9.0.0 | JSON config files |
 | Microsoft.Extensions.Configuration.EnvironmentVariables | 9.0.0 | Environment variables |
+| Azure.Identity | 1.13.1 | Entra ID device code flow authentication |
+| Microsoft.Identity.Client.Extensions.Msal | 4.67.2 | Persistent token cache |
 | Spectre.Console | 0.49.1 | Rich console output |
+
+## Authentication
+
+The CLI supports Entra ID authentication via device code flow. When configured, bearer tokens are automatically attached to all API requests.
+
+### Setup
+```bash
+# Configure auth settings
+matoolkit config set tenant-id YOUR_TENANT_ID
+matoolkit config set client-id YOUR_CLIENT_ID
+matoolkit config set api-scope api://YOUR_CLIENT_ID/.default  # optional, defaults to api://{client-id}/.default
+
+# Sign in
+matoolkit auth login
+
+# Check status
+matoolkit auth status
+```
+
+### How it works
+- `AuthService` uses `DeviceCodeCredential` from `Azure.Identity`
+- Tokens are cached persistently via MSAL (`TokenCachePersistenceOptions` named `"matoolkit-cli"`)
+- `AdminApiClient.GetConfiguredClientAsync()` attaches `Authorization: Bearer <token>` when auth is configured
+- If auth is not configured (no tenant-id/client-id), requests are sent without auth headers
+
+### Environment variables
+Auth settings can also be set via environment variables:
+- `MATOOLKIT_TENANT_ID` – Entra ID tenant ID
+- `MATOOLKIT_CLIENT_ID` – App registration client ID
+- `MATOOLKIT_API_SCOPE` – API scope (optional)
 
 ## Configuration
 
 The CLI reads configuration from:
 1. Command-line options (`--api-url`)
-2. Environment variables (`MATOOLKIT_API_URL`)
+2. Environment variables (`MATOOLKIT_*`)
 3. Config file (`~/.matoolkit/config.json`)
+
+Available config keys: `api-url`, `tenant-id`, `client-id`, `api-scope`
 
 Set configuration:
 ```bash
@@ -143,9 +184,11 @@ matoolkit --api-url https://your-api.azurewebsites.net runbook list
 - **System.CommandLine**: Modern .NET CLI framework with automatic help generation
 - **Spectre.Console**: Rich terminal output with tables, panels, colors
 - **Configuration hierarchy**: Command-line > Environment > Config file
+- **Device code flow auth**: `Azure.Identity` with persistent MSAL token cache for SSO across sessions
+- **Optional auth**: `AuthService` is passed as optional parameter — CLI works without auth configured
 - **Global tool packaging**: Installable via `dotnet tool install`
 - **Self-contained publishing**: Standalone executables for each platform
-- **Async/await throughout**: All API calls are async
+- **Async/await throughout**: All API calls are async (`GetConfiguredClientAsync` injects bearer tokens)
 
 ## Error Handling
 
@@ -155,5 +198,9 @@ matoolkit --api-url https://your-api.azurewebsites.net runbook list
 
 ## Testing
 
-- **AdminApiClientTests**: HTTP client tests with mocked responses (RichardSzalay.MockHttp)
-- **CommandParsingTests**: Verify command structure, arguments, options, descriptions
+**Test coverage (62 tests):**
+- **AdminApiClientTests** (28 tests) – HTTP client tests with mocked responses (RichardSzalay.MockHttp)
+- **CommandParsingTests** (18 tests) – Verify command structure, arguments, options, descriptions
+- **AuthServiceTests** (9 tests) – `IsConfigured()` logic, property accessors, unconfigured error handling
+- **AuthCommandParsingTests** (4 tests) – Auth command structure (login/status subcommands, descriptions)
+- **AdminApiClientAuthTests** (3 tests) – Constructor with/without AuthService, optional parameter default
