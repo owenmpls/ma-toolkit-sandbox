@@ -32,6 +32,7 @@ The runbook should include a section specifying how the orchestrator should proc
 Each step in the runbook should specify the worker ID that will be responsible for execution, the function to be called by the worker, and the parameters that should be supplied in the job for the function to complete its work. It can also optionally include failure handling, referring to a rollback sequence in the runbook. The runbook could have multiple rollback sequences to accommodate failure at different steps.
 
 The runbook needs a way to specify a polling step, for example to wait until an Entra attribute matches an expected value, indicating that Entra Connect sync has run. When the orchestrator hits this step, it will update the batch entry with a last polled date/time. Every execution, the scheduler needs to identify these polling steps in the runbook, identify the polling interval, and message the orchestrator when it's time to check again.
+
 When you build the SQL schema, make sure to include the columns that will be needed by the orchestrator to track step progression and execution results (we'll build the orchestrator next and iterate on this as needed).
 
 When you build this, include complete documentation for architecture, deployment guidance in Azure, and include enough code comments so it's relatively easy to follow what it's doing. Also document all of the information needed to build a compatible orchestrator so you have the necessary context to build that component in a later session.

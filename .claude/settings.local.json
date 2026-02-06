@@ -14,7 +14,9 @@
       "Bash(tree:*)",
       "Bash(git mv:*)",
       "Bash(pwsh -File tests/Test-WorkerLocal.ps1)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(git reset:*)",
+      "Bash(git rm:*)"
     ]
   }
 }
