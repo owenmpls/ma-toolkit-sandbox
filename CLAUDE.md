@@ -61,6 +61,26 @@ C# Azure Functions project (isolated worker, .NET 8). Consumes events from the s
 
 See `src/automation/orchestrator/CLAUDE.md` for details.
 
+### admin-cli (`src/automation/admin-cli/`)
+
+Cross-platform .NET CLI tool (`matoolkit`) for managing M&A Toolkit automation. Provides full coverage of the Admin API.
+
+```bash
+# Install as global tool
+cd src/automation/admin-cli/src/AdminCli && dotnet pack
+dotnet tool install --global --add-source ./bin/Release MaToolkit.AdminCli
+
+# Example usage
+matoolkit config set api-url https://your-api.azurewebsites.net
+matoolkit runbook list
+matoolkit batch create my-runbook members.csv
+matoolkit batch advance 123
+```
+
+Key commands: `runbook`, `automation`, `query`, `template`, `batch`, `config`
+
+See `src/automation/admin-cli/CLAUDE.md` for details.
+
 ## Common Commands
 
 ### Build .NET projects
@@ -70,9 +90,13 @@ See `src/automation/orchestrator/CLAUDE.md` for details.
 dotnet build src/automation/scheduler/
 dotnet build src/automation/admin-api/
 dotnet build src/automation/orchestrator/
+dotnet build src/automation/admin-cli/
 
 # Run Functions locally (requires Azure Functions Core Tools v4)
 cd src/automation/admin-api/src/AdminApi.Functions && func start
+
+# Run CLI
+dotnet run --project src/automation/admin-cli/src/AdminCli/ -- --help
 ```
 
 ### Run tests
@@ -81,9 +105,10 @@ cd src/automation/admin-api/src/AdminApi.Functions && func start
 # Run all tests
 dotnet test src/automation/shared/MaToolkit.Automation.Shared.Tests/
 dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/
+dotnet test src/automation/admin-cli/tests/AdminCli.Tests/
 
 # Run with verbose output
-dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ --verbosity normal
+dotnet test src/automation/admin-cli/tests/AdminCli.Tests/ --verbosity normal
 ```
 
 ### cloud-worker commands
