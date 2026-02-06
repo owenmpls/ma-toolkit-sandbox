@@ -10,68 +10,103 @@ This is the **Migration Automation (M&A) Toolkit sandbox** — a collection of e
 
 ### cloud-worker (`src/automation/cloud-worker/`)
 
-The primary component: a containerized PowerShell 7.4+ worker that runs in Azure Container Apps. It processes migration jobs (Entra ID + Exchange Online operations) via Azure Service Bus using a RunspacePool for parallel execution with per-runspace authenticated sessions.
+A containerized PowerShell 7.4+ worker that runs in Azure Container Apps. It processes migration jobs (Entra ID + Exchange Online operations) via Azure Service Bus using a RunspacePool for parallel execution with per-runspace authenticated sessions.
 
 See `src/automation/cloud-worker/CLAUDE.md` for detailed project context, architecture decisions, and implementation notes.
 
+### scheduler (`src/automation/scheduler/`)
+
+C# Azure Functions project (isolated worker, .NET 8). The timing and detection engine for the migration pipeline. Runs on a 5-minute timer, reads YAML runbook definitions from SQL, queries external data sources to discover migration members, detects batches, evaluates phase timing, and dispatches events to the orchestrator via Azure Service Bus.
+
+See `src/automation/scheduler/CLAUDE.md` for details.
+
+### runbook-api (`src/automation/runbook-api/`)
+
+C# Azure Functions project (isolated worker, .NET 8). RESTful API for managing runbook definitions. Provides endpoints for publishing, versioning, retrieval, and deactivation of runbooks.
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/runbooks` | Publish new runbook version |
+| GET | `/api/runbooks` | List all active runbooks |
+| GET | `/api/runbooks/{name}` | Get latest active version |
+| GET | `/api/runbooks/{name}/versions` | List all versions |
+| GET | `/api/runbooks/{name}/versions/{v}` | Get specific version |
+| DELETE | `/api/runbooks/{name}/versions/{v}` | Deactivate version |
+
+See `src/automation/runbook-api/CLAUDE.md` for details.
+
+### orchestrator (`src/automation/orchestrator/`)
+
+C# Azure Functions project (isolated worker, .NET 8). Consumes events from the scheduler via Service Bus and coordinates step execution by dispatching jobs to cloud-workers.
+
+See `src/automation/orchestrator/CLAUDE.md` for details.
+
 ## Common Commands
 
-All commands should be run from the `src/automation/cloud-worker/` directory.
-
-### Run local validation tests (no Azure credentials required)
+### Build .NET projects
 
 ```bash
+# Build all .NET projects
+dotnet build src/automation/scheduler/
+dotnet build src/automation/runbook-api/
+dotnet build src/automation/orchestrator/
+
+# Run Functions locally (requires Azure Functions Core Tools v4)
+cd src/automation/runbook-api/src/RunbookApi.Functions && func start
+```
+
+### cloud-worker commands
+
+Run from `src/automation/cloud-worker/`:
+
+```bash
+# Run local validation tests (no Azure credentials required)
 pwsh -File tests/Test-WorkerLocal.ps1
-```
 
-This validates parse correctness for all .ps1 files, module manifest, function exports, and function definitions (18 tests).
-
-### Build the container image
-
-```bash
+# Build the container image
 docker build -t matoolkitacr.azurecr.io/cloud-worker:latest .
-```
 
-### Run locally with Docker Compose
-
-```bash
+# Run locally with Docker Compose
 docker-compose up
 ```
 
 ### Deploy infrastructure (Azure)
 
 ```bash
+# Deploy runbook-api
 az deployment group create \
   --resource-group your-rg \
-  --template-file ../../../infra/automation/cloud-worker/deploy.bicep \
-  --parameters ../../../infra/automation/cloud-worker/deploy.parameters.json
-```
+  --template-file infra/automation/runbook-api/deploy.bicep \
+  --parameters infra/automation/runbook-api/deploy.parameters.json \
+  --parameters sqlConnectionString="your-connection-string"
 
-### Submit test jobs (requires Azure credentials + running worker)
-
-```powershell
-./tests/Submit-TestJob.ps1 `
-  -CsvPath ./tests/sample-jobs.csv `
-  -ServiceBusNamespace 'matoolkit-sb.servicebus.windows.net' `
-  -WorkerId 'worker-01' `
-  -FunctionName 'New-EntraUser'
+# Deploy cloud-worker
+az deployment group create \
+  --resource-group your-rg \
+  --template-file infra/automation/cloud-worker/deploy.bicep \
+  --parameters infra/automation/cloud-worker/deploy.parameters.json
 ```
 
 ## Architecture
 
-The worker follows a **queue-based, scale-to-zero pattern**:
+The system follows an **event-driven, queue-based pattern**:
 
-1. **Azure Service Bus** topics (`worker-jobs` / `worker-results`) connect the orchestrator to the worker
-2. **KEDA scaler** on the worker's subscription triggers ACA to scale 0→1 when messages arrive
-3. **Worker boot** (8 phases): config → logging → Azure auth → Key Vault secret → Service Bus client → RunspacePool with per-runspace Graph+EXO sessions → shutdown handler → job dispatch loop
-4. **Job dispatch loop**: receive (PeekLock) → validate → dispatch to available runspace → collect result → send result message → complete/abandon original message
-5. **Idle timeout** (default 300s): worker exits gracefully so ACA scales back to zero
+1. **Runbook API** → Publishes/manages YAML runbook definitions in SQL
+2. **Scheduler** → Timer-triggered, queries data sources, detects batches, dispatches events to Service Bus
+3. **Orchestrator** → Consumes scheduler events, coordinates step execution, dispatches jobs to workers
+4. **Cloud Worker** → Executes migration operations (Entra ID, Exchange Online) via RunspacePool
+
+### Cloud Worker Details
+
+The worker follows a **scale-to-zero pattern**:
+- **KEDA scaler** triggers ACA to scale 0→1 when Service Bus messages arrive
+- **RunspacePool** with per-runspace Graph + EXO sessions (isolated connections avoid thread-safety issues)
+- **Idle timeout** (300s): worker exits gracefully so ACA scales back to zero
 
 Key design choices:
-- **RunspacePool** (not ThreadJobs or `-Parallel`) — each runspace maintains isolated MgGraph + EXO connections to avoid thread-safety issues
-- **Service Bus .NET SDK** loaded directly — `Az.ServiceBus` is management-plane only
-- **EXO auth workaround**: client secret → OAuth token via REST → `Connect-ExchangeOnline -AccessToken` (EXO app-only natively requires certs)
-- **Throttle handling**: exponential backoff + jitter inside each runspace, respects `Retry-After` headers
+- Service Bus .NET SDK loaded directly (`Az.ServiceBus` is management-plane only)
+- EXO auth workaround: client secret → OAuth token via REST → `Connect-ExchangeOnline -AccessToken`
+- Throttle handling: exponential backoff + jitter, respects `Retry-After` headers
 
 ## PowerShell Gotchas
 
