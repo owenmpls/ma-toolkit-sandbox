@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Orchestrator.Functions.Models.Db;
-using Orchestrator.Functions.Models.Messages;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Models.Messages;
+using MaToolkit.Automation.Shared.Services;
 using Orchestrator.Functions.Services.Repositories;
 
 namespace Orchestrator.Functions.Services.Handlers;
@@ -64,7 +66,7 @@ public class MemberAddedHandler : IMemberAddedHandler
             return;
         }
 
-        if (batch.Status != "active")
+        if (batch.Status != BatchStatus.Active)
         {
             _logger.LogWarning(
                 "Batch {BatchId} is not active (status={Status}), skipping member-added",
@@ -111,7 +113,7 @@ public class MemberAddedHandler : IMemberAddedHandler
         // For each overdue phase, create step executions for this new member
         foreach (var phaseExec in overduePhases)
         {
-            var phaseDefinition = _phaseEvaluator.GetPhaseByName(definition, phaseExec.PhaseName);
+            var phaseDefinition = definition.Phases.FirstOrDefault(p => p.Name == phaseExec.PhaseName);
             if (phaseDefinition == null)
             {
                 _logger.LogWarning("Phase definition '{PhaseName}' not found in runbook", phaseExec.PhaseName);

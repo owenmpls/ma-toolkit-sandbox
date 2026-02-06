@@ -2,7 +2,7 @@ using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-using Orchestrator.Functions.Models.Messages;
+using MaToolkit.Automation.Shared.Models.Messages;
 using Orchestrator.Functions.Services.Handlers;
 
 namespace Orchestrator.Functions.Functions;

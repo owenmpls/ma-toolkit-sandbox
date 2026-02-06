@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Orchestrator.Functions.Models.Db;
-using Orchestrator.Functions.Models.Messages;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Messages;
+using MaToolkit.Automation.Shared.Services;
 using Orchestrator.Functions.Services.Repositories;
 
 namespace Orchestrator.Functions.Services.Handlers;
@@ -257,9 +258,9 @@ public class ResultProcessor : IResultProcessor
             var stepIndex = group.Key;
             var stepsAtIndex = group.ToList();
 
-            var pendingSteps = stepsAtIndex.Where(s => s.Status == "pending").ToList();
-            var inProgressSteps = stepsAtIndex.Where(s => s.Status == "dispatched" || s.Status == "polling").ToList();
-            var succeededSteps = stepsAtIndex.Where(s => s.Status == "succeeded").ToList();
+            var pendingSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Pending).ToList();
+            var inProgressSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Dispatched || s.Status == StepStatus.Polling).ToList();
+            var succeededSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Succeeded).ToList();
 
             // If there are pending steps at this index, dispatch them
             if (pendingSteps.Count > 0)
@@ -338,8 +339,8 @@ public class ResultProcessor : IResultProcessor
     private async Task CheckBatchCompletionAsync(int batchId)
     {
         var phases = await _phaseRepo.GetByBatchAsync(batchId);
-        var allCompleted = phases.All(p => p.Status == "completed" || p.Status == "skipped");
-        var anyFailed = phases.Any(p => p.Status == "failed");
+        var allCompleted = phases.All(p => p.Status == PhaseStatus.Completed || p.Status == PhaseStatus.Skipped);
+        var anyFailed = phases.Any(p => p.Status == PhaseStatus.Failed);
 
         if (anyFailed)
         {

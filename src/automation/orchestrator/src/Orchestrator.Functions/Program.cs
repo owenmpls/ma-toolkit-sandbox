@@ -4,6 +4,7 @@ using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using MaToolkit.Automation.Shared.Services;
 using Orchestrator.Functions.Services;
 using Orchestrator.Functions.Services.Handlers;
 using Orchestrator.Functions.Services.Repositories;
@@ -16,7 +17,7 @@ builder.ConfigureFunctionsWebApplication();
 builder.Services.Configure<OrchestratorSettings>(
     builder.Configuration.GetSection(OrchestratorSettings.SectionName));
 
-builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
+builder.Services.AddSingleton<IDbConnectionFactory, OrchestratorDbConnectionFactory>();
 
 builder.Services.AddSingleton(sp =>
 {

@@ -1,5 +1,6 @@
 using Dapper;
-using Scheduler.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Scheduler.Functions.Services;
 

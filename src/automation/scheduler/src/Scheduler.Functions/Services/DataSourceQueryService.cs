@@ -1,6 +1,6 @@
 using System.Data;
+using MaToolkit.Automation.Shared.Models.Yaml;
 using Microsoft.Extensions.Logging;
-using Scheduler.Functions.Models.Yaml;
 
 namespace Scheduler.Functions.Services;
 

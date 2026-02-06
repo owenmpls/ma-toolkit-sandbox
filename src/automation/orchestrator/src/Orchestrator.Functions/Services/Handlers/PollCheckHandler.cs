@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Orchestrator.Functions.Models.Messages;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Messages;
+using MaToolkit.Automation.Shared.Services;
 using Orchestrator.Functions.Services.Repositories;
 
 namespace Orchestrator.Functions.Services.Handlers;
@@ -66,7 +68,7 @@ public class PollCheckHandler : IPollCheckHandler
             return;
         }
 
-        if (step.Status != "polling")
+        if (step.Status != StepStatus.Polling)
         {
             _logger.LogDebug(
                 "Init execution {StepExecutionId} is not polling (status={Status}), skipping",
@@ -132,7 +134,7 @@ public class PollCheckHandler : IPollCheckHandler
             return;
         }
 
-        if (step.Status != "polling")
+        if (step.Status != StepStatus.Polling)
         {
             _logger.LogDebug(
                 "Step execution {StepExecutionId} is not polling (status={Status}), skipping",

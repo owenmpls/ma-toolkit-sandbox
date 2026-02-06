@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
+using MaToolkit.Automation.Shared.Services;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,7 +15,7 @@ builder.ConfigureFunctionsWebApplication();
 builder.Services.Configure<SchedulerSettings>(
     builder.Configuration.GetSection(SchedulerSettings.SectionName));
 
-builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
+builder.Services.AddSingleton<IDbConnectionFactory, SchedulerDbConnectionFactory>();
 
 builder.Services.AddSingleton(sp =>
 {
@@ -38,6 +39,13 @@ builder.Services.AddScoped<IMemberDiffService, MemberDiffService>();
 builder.Services.AddScoped<IPhaseEvaluator, PhaseEvaluator>();
 builder.Services.AddScoped<ITemplateResolver, TemplateResolver>();
 builder.Services.AddScoped<IServiceBusPublisher, ServiceBusPublisher>();
+
+// Scheduler orchestration services (refactored from SchedulerTimerFunction)
+builder.Services.AddScoped<IMemberSynchronizer, MemberSynchronizer>();
+builder.Services.AddScoped<IBatchDetector, BatchDetector>();
+builder.Services.AddScoped<IPhaseDispatcher, PhaseDispatcher>();
+builder.Services.AddScoped<IVersionTransitionHandler, VersionTransitionHandler>();
+builder.Services.AddScoped<IPollingManager, PollingManager>();
 
 builder.Services.AddApplicationInsightsTelemetryWorkerService();
 

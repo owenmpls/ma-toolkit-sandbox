@@ -1,5 +1,6 @@
 using Dapper;
-using RunbookApi.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace RunbookApi.Functions.Services;
 

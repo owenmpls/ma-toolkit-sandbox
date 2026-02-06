@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Scheduler.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Scheduler.Functions.Services;
 
@@ -35,10 +37,10 @@ public class InitExecutionRepository : IInitExecutionRepository
         return await conn.QueryAsync<InitExecutionRecord>(@"
             SELECT ie.* FROM init_executions ie
             JOIN batches b ON ie.batch_id = b.id
-            WHERE ie.status = 'polling'
+            WHERE ie.status = @Status
               AND ie.is_poll_step = 1
               AND DATEADD(SECOND, ie.poll_interval_sec, ie.last_polled_at) <= @Now",
-            new { Now = now });
+            new { Status = StepStatus.Polling, Now = now });
     }
 
     public async Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null)
@@ -53,10 +55,23 @@ public class InitExecutionRepository : IInitExecutionRepository
                     is_poll_step, poll_interval_sec, poll_timeout_sec)
                 VALUES (
                     @BatchId, @StepName, @StepIndex, @RunbookVersion,
-                    @WorkerId, @FunctionName, @ParamsJson, 'pending',
+                    @WorkerId, @FunctionName, @ParamsJson, @Status,
                     @IsPollStep, @PollIntervalSec, @PollTimeoutSec);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                record, transaction);
+                new
+                {
+                    record.BatchId,
+                    record.StepName,
+                    record.StepIndex,
+                    record.RunbookVersion,
+                    record.WorkerId,
+                    record.FunctionName,
+                    record.ParamsJson,
+                    Status = StepStatus.Pending,
+                    record.IsPollStep,
+                    record.PollIntervalSec,
+                    record.PollTimeoutSec
+                }, transaction);
         }
         finally
         {

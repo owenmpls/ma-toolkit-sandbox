@@ -1,7 +1,6 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Orchestrator.Functions.Models.Db;
-using Orchestrator.Functions.Models.Messages;
+using MaToolkit.Automation.Shared.Models.Messages;
+using MaToolkit.Automation.Shared.Services;
 using Orchestrator.Functions.Services.Repositories;
 
 namespace Orchestrator.Functions.Services.Handlers;

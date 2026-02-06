@@ -1,26 +1,22 @@
 using System.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using Scheduler.Functions.Settings;
+using SharedDbConnectionFactory = MaToolkit.Automation.Shared.Services.DbConnectionFactory;
 
 namespace Scheduler.Functions.Services;
 
-public interface IDbConnectionFactory
+/// <summary>
+/// Wrapper around the shared DbConnectionFactory that adapts IOptions&lt;SchedulerSettings&gt;
+/// to the shared library's constructor that takes a connection string directly.
+/// </summary>
+public class SchedulerDbConnectionFactory : MaToolkit.Automation.Shared.Services.IDbConnectionFactory
 {
-    IDbConnection CreateConnection();
-}
+    private readonly SharedDbConnectionFactory _inner;
 
-public class DbConnectionFactory : IDbConnectionFactory
-{
-    private readonly string _connectionString;
-
-    public DbConnectionFactory(IOptions<SchedulerSettings> settings)
+    public SchedulerDbConnectionFactory(IOptions<SchedulerSettings> settings)
     {
-        _connectionString = settings.Value.SqlConnectionString;
+        _inner = new SharedDbConnectionFactory(settings.Value.SqlConnectionString);
     }
 
-    public IDbConnection CreateConnection()
-    {
-        return new SqlConnection(_connectionString);
-    }
+    public IDbConnection CreateConnection() => _inner.CreateConnection();
 }

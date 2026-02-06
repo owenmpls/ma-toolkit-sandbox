@@ -3,8 +3,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Dapper;
+using MaToolkit.Automation.Shared.Models.Yaml;
+using MaToolkit.Automation.Shared.Services;
 using Microsoft.Extensions.Logging;
-using Scheduler.Functions.Models.Yaml;
 
 namespace Scheduler.Functions.Services;
 

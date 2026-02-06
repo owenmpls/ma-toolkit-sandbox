@@ -1,5 +1,7 @@
 using Dapper;
-using Orchestrator.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Orchestrator.Functions.Services.Repositories;
 
@@ -30,7 +32,7 @@ public class MemberRepository : IMemberRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<BatchMemberRecord>(
-            "SELECT * FROM batch_members WHERE batch_id = @BatchId AND status = 'active'",
+            $"SELECT * FROM batch_members WHERE batch_id = @BatchId AND status = '{MemberStatus.Active}'",
             new { BatchId = batchId });
     }
 }

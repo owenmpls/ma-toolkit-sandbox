@@ -1,6 +1,7 @@
 using System.Data;
 using Dapper;
 using Microsoft.Extensions.Logging;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Orchestrator.Functions.Services;
 

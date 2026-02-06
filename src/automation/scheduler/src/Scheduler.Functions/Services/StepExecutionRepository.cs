@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Scheduler.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Scheduler.Functions.Services;
 
@@ -36,10 +38,10 @@ public class StepExecutionRepository : IStepExecutionRepository
             SELECT se.* FROM step_executions se
             JOIN phase_executions pe ON se.phase_execution_id = pe.id
             JOIN batches b ON pe.batch_id = b.id
-            WHERE se.status = 'polling'
+            WHERE se.status = @Status
               AND se.is_poll_step = 1
               AND DATEADD(SECOND, se.poll_interval_sec, se.last_polled_at) <= @Now",
-            new { Now = now });
+            new { Status = StepStatus.Polling, Now = now });
     }
 
     public async Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null)
@@ -54,10 +56,23 @@ public class StepExecutionRepository : IStepExecutionRepository
                     is_poll_step, poll_interval_sec, poll_timeout_sec)
                 VALUES (
                     @PhaseExecutionId, @BatchMemberId, @StepName, @StepIndex,
-                    @WorkerId, @FunctionName, @ParamsJson, 'pending',
+                    @WorkerId, @FunctionName, @ParamsJson, @Status,
                     @IsPollStep, @PollIntervalSec, @PollTimeoutSec);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                record, transaction);
+                new
+                {
+                    record.PhaseExecutionId,
+                    record.BatchMemberId,
+                    record.StepName,
+                    record.StepIndex,
+                    record.WorkerId,
+                    record.FunctionName,
+                    record.ParamsJson,
+                    Status = StepStatus.Pending,
+                    record.IsPollStep,
+                    record.PollIntervalSec,
+                    record.PollTimeoutSec
+                }, transaction);
         }
         finally
         {

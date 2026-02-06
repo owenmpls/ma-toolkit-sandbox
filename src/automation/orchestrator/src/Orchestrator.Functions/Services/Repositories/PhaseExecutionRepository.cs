@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Orchestrator.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Orchestrator.Functions.Services.Repositories;
 
@@ -44,7 +46,7 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<PhaseExecutionRecord>(
-            "SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status IN ('dispatched', 'completed')",
+            $"SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status IN ('{PhaseStatus.Dispatched}', '{PhaseStatus.Completed}')",
             new { BatchId = batchId });
     }
 
@@ -60,7 +62,7 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE phase_executions SET status = 'completed', completed_at = SYSUTCDATETIME() WHERE id = @Id",
+            $"UPDATE phase_executions SET status = '{PhaseStatus.Completed}', completed_at = SYSUTCDATETIME() WHERE id = @Id",
             new { Id = id });
     }
 
@@ -68,7 +70,7 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE phase_executions SET status = 'failed', completed_at = SYSUTCDATETIME() WHERE id = @Id",
+            $"UPDATE phase_executions SET status = '{PhaseStatus.Failed}', completed_at = SYSUTCDATETIME() WHERE id = @Id",
             new { Id = id });
     }
 

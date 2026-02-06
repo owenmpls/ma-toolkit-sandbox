@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Scheduler.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Scheduler.Functions.Services;
 
@@ -34,8 +36,8 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<PhaseExecutionRecord>(
-            "SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status = 'pending' AND due_at <= @Now",
-            new { BatchId = batchId, Now = now });
+            "SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status = @Status AND due_at <= @Now",
+            new { BatchId = batchId, Status = PhaseStatus.Pending, Now = now });
     }
 
     public async Task<int> InsertAsync(PhaseExecutionRecord record, IDbTransaction? transaction = null)
@@ -60,8 +62,8 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE phase_executions SET status = 'dispatched', dispatched_at = SYSUTCDATETIME() WHERE id = @Id",
-            new { Id = id });
+            "UPDATE phase_executions SET status = @Status, dispatched_at = SYSUTCDATETIME() WHERE id = @Id",
+            new { Id = id, Status = PhaseStatus.Dispatched });
     }
 
     public async Task UpdateStatusAsync(int id, string status)

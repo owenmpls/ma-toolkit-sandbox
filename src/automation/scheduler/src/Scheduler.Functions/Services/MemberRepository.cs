@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Scheduler.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Scheduler.Functions.Services;
 
@@ -36,8 +38,8 @@ public class MemberRepository : IMemberRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<BatchMemberRecord>(
-            "SELECT * FROM batch_members WHERE batch_id = @BatchId AND status = 'active'",
-            new { BatchId = batchId });
+            "SELECT * FROM batch_members WHERE batch_id = @BatchId AND status = @Status",
+            new { BatchId = batchId, Status = MemberStatus.Active });
     }
 
     public async Task<int> InsertAsync(BatchMemberRecord record, IDbTransaction? transaction = null)
@@ -47,9 +49,9 @@ public class MemberRepository : IMemberRepository
         {
             return await conn.QuerySingleAsync<int>(@"
                 INSERT INTO batch_members (batch_id, member_key, status)
-                VALUES (@BatchId, @MemberKey, 'active');
+                VALUES (@BatchId, @MemberKey, @Status);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                record, transaction);
+                new { record.BatchId, record.MemberKey, Status = MemberStatus.Active }, transaction);
         }
         finally
         {
@@ -62,8 +64,8 @@ public class MemberRepository : IMemberRepository
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE batch_members SET status = 'removed', removed_at = SYSUTCDATETIME() WHERE id = @Id",
-            new { Id = id });
+            "UPDATE batch_members SET status = @Status, removed_at = SYSUTCDATETIME() WHERE id = @Id",
+            new { Id = id, Status = MemberStatus.Removed });
     }
 
     public async Task SetAddDispatchedAsync(int id)
@@ -91,9 +93,16 @@ public class MemberRepository : IMemberRepository
                 JOIN batches b ON bm.batch_id = b.id
                 WHERE b.runbook_id = @RunbookId
                   AND bm.member_key = @MemberKey
-                  AND bm.status = 'active'
-                  AND b.status NOT IN ('completed', 'failed')
+                  AND bm.status = @MemberActive
+                  AND b.status NOT IN (@BatchCompleted, @BatchFailed)
             ) THEN 1 ELSE 0 END",
-            new { RunbookId = runbookId, MemberKey = memberKey });
+            new
+            {
+                RunbookId = runbookId,
+                MemberKey = memberKey,
+                MemberActive = MemberStatus.Active,
+                BatchCompleted = BatchStatus.Completed,
+                BatchFailed = BatchStatus.Failed
+            });
     }
 }

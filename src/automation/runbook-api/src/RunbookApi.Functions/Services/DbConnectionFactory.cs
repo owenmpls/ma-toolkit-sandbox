@@ -1,26 +1,26 @@
 using System.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using RunbookApi.Functions.Settings;
+using SharedDbConnectionFactory = MaToolkit.Automation.Shared.Services.DbConnectionFactory;
+using IDbConnectionFactory = MaToolkit.Automation.Shared.Services.IDbConnectionFactory;
 
 namespace RunbookApi.Functions.Services;
 
-public interface IDbConnectionFactory
+/// <summary>
+/// Wrapper around the shared DbConnectionFactory that adapts IOptions&lt;RunbookApiSettings&gt;
+/// to the connection string parameter expected by the shared implementation.
+/// </summary>
+public class RunbookApiDbConnectionFactory : IDbConnectionFactory
 {
-    IDbConnection CreateConnection();
-}
+    private readonly SharedDbConnectionFactory _inner;
 
-public class DbConnectionFactory : IDbConnectionFactory
-{
-    private readonly string _connectionString;
-
-    public DbConnectionFactory(IOptions<RunbookApiSettings> settings)
+    public RunbookApiDbConnectionFactory(IOptions<RunbookApiSettings> settings)
     {
-        _connectionString = settings.Value.SqlConnectionString;
+        _inner = new SharedDbConnectionFactory(settings.Value.SqlConnectionString);
     }
 
     public IDbConnection CreateConnection()
     {
-        return new SqlConnection(_connectionString);
+        return _inner.CreateConnection();
     }
 }

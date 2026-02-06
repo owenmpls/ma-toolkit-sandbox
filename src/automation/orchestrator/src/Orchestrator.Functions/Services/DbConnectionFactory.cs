@@ -1,26 +1,16 @@
-using System.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using Orchestrator.Functions.Settings;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Orchestrator.Functions.Services;
 
-public interface IDbConnectionFactory
+/// <summary>
+/// Adapts IOptions&lt;OrchestratorSettings&gt; to create the shared DbConnectionFactory.
+/// </summary>
+public class OrchestratorDbConnectionFactory : DbConnectionFactory
 {
-    IDbConnection CreateConnection();
-}
-
-public class DbConnectionFactory : IDbConnectionFactory
-{
-    private readonly string _connectionString;
-
-    public DbConnectionFactory(IOptions<OrchestratorSettings> settings)
+    public OrchestratorDbConnectionFactory(IOptions<OrchestratorSettings> settings)
+        : base(settings.Value.SqlConnectionString)
     {
-        _connectionString = settings.Value.SqlConnectionString;
-    }
-
-    public IDbConnection CreateConnection()
-    {
-        return new SqlConnection(_connectionString);
     }
 }

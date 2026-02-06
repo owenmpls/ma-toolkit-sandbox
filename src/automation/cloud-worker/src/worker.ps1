@@ -27,6 +27,7 @@ $srcPath = Join-Path $basePath 'src'
 . (Join-Path $srcPath 'servicebus.ps1')
 . (Join-Path $srcPath 'runspace-manager.ps1')
 . (Join-Path $srcPath 'job-dispatcher.ps1')
+. (Join-Path $srcPath 'health-check.ps1')
 
 # --- Startup Banner ---
 Write-Host ''
@@ -116,8 +117,18 @@ catch {
     exit 1
 }
 
-# --- Phase 7: Register Shutdown Handler ---
-Write-WorkerLog -Message 'Phase 7: Registering shutdown handler...'
+# --- Phase 7: Start Health Check Server ---
+Write-WorkerLog -Message 'Phase 7: Starting health check server...'
+$healthCheckPort = $env:HEALTH_CHECK_PORT ?? 8080
+$healthCheckJob = Start-Job -ScriptBlock {
+    param($srcPath, $Port, $WorkerRunning, $RunspacePool, $ServiceBusReceiver, $Config)
+    . (Join-Path $srcPath 'health-check.ps1')
+    Start-HealthCheckServer -Port $Port -WorkerRunning $WorkerRunning -RunspacePool $RunspacePool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
+} -ArgumentList $srcPath, $healthCheckPort, ([ref]$script:WorkerRunning), $runspacePool, $sbReceiver, $config
+Write-WorkerLog -Message "Health check server started on port $healthCheckPort"
+
+# --- Phase 8: Register Shutdown Handler ---
+Write-WorkerLog -Message 'Phase 8: Registering shutdown handler...'
 
 $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
     $script:WorkerRunning = $false
@@ -140,8 +151,8 @@ catch {
     Write-WorkerLog -Message 'Could not register console cancel handler (non-interactive mode).' -Severity Verbose
 }
 
-# --- Phase 8: Start Job Dispatcher ---
-Write-WorkerLog -Message 'Phase 8: Starting job dispatcher...'
+# --- Phase 9: Start Job Dispatcher ---
+Write-WorkerLog -Message 'Phase 9: Starting job dispatcher...'
 Write-WorkerEvent -EventName 'WorkerReady' -Properties @{
     WorkerId       = $config.WorkerId
     MaxParallelism = $config.MaxParallelism
@@ -161,6 +172,18 @@ catch {
 
 # --- Shutdown ---
 Write-WorkerLog -Message 'Worker shutting down...'
+
+# Stop health check server
+try {
+    if ($null -ne $healthCheckJob) {
+        Stop-Job -Job $healthCheckJob -ErrorAction SilentlyContinue
+        Remove-Job -Job $healthCheckJob -Force -ErrorAction SilentlyContinue
+        Write-WorkerLog -Message 'Health check server stopped.'
+    }
+}
+catch {
+    Write-WorkerLog -Message "Error stopping health check server: $($_.Exception.Message)" -Severity Warning
+}
 
 try {
     Close-RunspacePool -Pool $runspacePool

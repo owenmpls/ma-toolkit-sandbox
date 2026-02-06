@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Scheduler.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Scheduler.Functions.Services;
 
@@ -34,8 +36,9 @@ public class BatchRepository : IBatchRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<BatchRecord>(
-            "SELECT * FROM batches WHERE runbook_id = @RunbookId AND status NOT IN ('completed', 'failed')",
-            new { RunbookId = runbookId });
+            @"SELECT * FROM batches WHERE runbook_id = @RunbookId
+              AND status NOT IN (@Completed, @Failed)",
+            new { RunbookId = runbookId, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
     }
 
     public async Task<int> InsertAsync(BatchRecord record, IDbTransaction? transaction = null)
@@ -68,7 +71,7 @@ public class BatchRepository : IBatchRepository
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE batches SET status = 'init_dispatched', init_dispatched_at = SYSUTCDATETIME() WHERE id = @Id",
-            new { Id = id });
+            @"UPDATE batches SET status = @Status, init_dispatched_at = SYSUTCDATETIME() WHERE id = @Id",
+            new { Id = id, Status = BatchStatus.InitDispatched });
     }
 }

@@ -1,5 +1,7 @@
 using Dapper;
-using Orchestrator.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Orchestrator.Functions.Services.Repositories;
 
@@ -39,14 +41,14 @@ public class BatchRepository : IBatchRepository
 
     public async Task SetActiveAsync(int id)
     {
-        await UpdateStatusAsync(id, "active");
+        await UpdateStatusAsync(id, BatchStatus.Active);
     }
 
     public async Task SetCompletedAsync(int id)
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE batches SET status = 'completed' WHERE id = @Id",
+            $"UPDATE batches SET status = '{BatchStatus.Completed}' WHERE id = @Id",
             new { Id = id });
     }
 
@@ -54,7 +56,7 @@ public class BatchRepository : IBatchRepository
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE batches SET status = 'failed' WHERE id = @Id",
+            $"UPDATE batches SET status = '{BatchStatus.Failed}' WHERE id = @Id",
             new { Id = id });
     }
 }

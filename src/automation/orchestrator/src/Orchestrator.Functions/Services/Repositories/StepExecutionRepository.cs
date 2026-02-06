@@ -1,6 +1,8 @@
 using System.Data;
 using Dapper;
-using Orchestrator.Functions.Models.Db;
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Services;
 
 namespace Orchestrator.Functions.Services.Repositories;
 
@@ -60,7 +62,7 @@ public class StepExecutionRepository : IStepExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<StepExecutionRecord>(
-            "SELECT * FROM step_executions WHERE phase_execution_id = @PhaseExecutionId AND step_index = @StepIndex AND status = 'pending'",
+            $"SELECT * FROM step_executions WHERE phase_execution_id = @PhaseExecutionId AND step_index = @StepIndex AND status = '{StepStatus.Pending}'",
             new { PhaseExecutionId = phaseExecutionId, StepIndex = stepIndex });
     }
 
@@ -68,7 +70,7 @@ public class StepExecutionRepository : IStepExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<StepExecutionRecord>(
-            "SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN ('pending', 'dispatched')",
+            $"SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN ('{StepStatus.Pending}', '{StepStatus.Dispatched}')",
             new { BatchMemberId = batchMemberId });
     }
 
@@ -77,14 +79,14 @@ public class StepExecutionRepository : IStepExecutionRepository
         var conn = transaction?.Connection ?? _db.CreateConnection();
         try
         {
-            return await conn.QuerySingleAsync<int>(@"
+            return await conn.QuerySingleAsync<int>($@"
                 INSERT INTO step_executions (
                     phase_execution_id, batch_member_id, step_name, step_index,
                     worker_id, function_name, params_json, status,
                     is_poll_step, poll_interval_sec, poll_timeout_sec, on_failure)
                 VALUES (
                     @PhaseExecutionId, @BatchMemberId, @StepName, @StepIndex,
-                    @WorkerId, @FunctionName, @ParamsJson, 'pending',
+                    @WorkerId, @FunctionName, @ParamsJson, '{StepStatus.Pending}',
                     @IsPollStep, @PollIntervalSec, @PollTimeoutSec, @OnFailure);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
                 record, transaction);
@@ -99,9 +101,9 @@ public class StepExecutionRepository : IStepExecutionRepository
     public async Task SetDispatchedAsync(int id, string jobId)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(@"
+        await conn.ExecuteAsync($@"
             UPDATE step_executions
-            SET status = 'dispatched', job_id = @JobId, dispatched_at = SYSUTCDATETIME()
+            SET status = '{StepStatus.Dispatched}', job_id = @JobId, dispatched_at = SYSUTCDATETIME()
             WHERE id = @Id",
             new { Id = id, JobId = jobId });
     }
@@ -109,9 +111,9 @@ public class StepExecutionRepository : IStepExecutionRepository
     public async Task SetSucceededAsync(int id, string? resultJson)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(@"
+        await conn.ExecuteAsync($@"
             UPDATE step_executions
-            SET status = 'succeeded', result_json = @ResultJson, completed_at = SYSUTCDATETIME()
+            SET status = '{StepStatus.Succeeded}', result_json = @ResultJson, completed_at = SYSUTCDATETIME()
             WHERE id = @Id",
             new { Id = id, ResultJson = resultJson });
     }
@@ -119,9 +121,9 @@ public class StepExecutionRepository : IStepExecutionRepository
     public async Task SetFailedAsync(int id, string errorMessage)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(@"
+        await conn.ExecuteAsync($@"
             UPDATE step_executions
-            SET status = 'failed', error_message = @ErrorMessage, completed_at = SYSUTCDATETIME()
+            SET status = '{StepStatus.Failed}', error_message = @ErrorMessage, completed_at = SYSUTCDATETIME()
             WHERE id = @Id",
             new { Id = id, ErrorMessage = errorMessage });
     }
@@ -129,9 +131,9 @@ public class StepExecutionRepository : IStepExecutionRepository
     public async Task SetPollingAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(@"
+        await conn.ExecuteAsync($@"
             UPDATE step_executions
-            SET status = 'polling',
+            SET status = '{StepStatus.Polling}',
                 poll_started_at = COALESCE(poll_started_at, SYSUTCDATETIME()),
                 last_polled_at = SYSUTCDATETIME()
             WHERE id = @Id",
@@ -141,9 +143,9 @@ public class StepExecutionRepository : IStepExecutionRepository
     public async Task SetPollTimeoutAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(@"
+        await conn.ExecuteAsync($@"
             UPDATE step_executions
-            SET status = 'poll_timeout', completed_at = SYSUTCDATETIME()
+            SET status = '{StepStatus.PollTimeout}', completed_at = SYSUTCDATETIME()
             WHERE id = @Id",
             new { Id = id });
     }
@@ -151,9 +153,9 @@ public class StepExecutionRepository : IStepExecutionRepository
     public async Task SetCancelledAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(@"
+        await conn.ExecuteAsync($@"
             UPDATE step_executions
-            SET status = 'cancelled', completed_at = SYSUTCDATETIME()
+            SET status = '{StepStatus.Cancelled}', completed_at = SYSUTCDATETIME()
             WHERE id = @Id",
             new { Id = id });
     }

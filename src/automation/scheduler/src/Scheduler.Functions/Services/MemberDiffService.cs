@@ -1,5 +1,6 @@
+using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
 using Microsoft.Extensions.Logging;
-using Scheduler.Functions.Models.Db;
 
 namespace Scheduler.Functions.Services;
 
@@ -31,7 +32,7 @@ public class MemberDiffService : IMemberDiffService
     {
         var result = new MemberDiffResult();
         var existingByKey = existingMembers
-            .Where(m => m.Status == "active")
+            .Where(m => m.Status == MemberStatus.Active)
             .ToDictionary(m => m.MemberKey);
         var currentSet = new HashSet<string>(currentMemberKeys);
 

@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
+using MaToolkit.Automation.Shared.Models.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Scheduler.Functions.Models.Messages;
 using Scheduler.Functions.Settings;
 
 namespace Scheduler.Functions.Services;

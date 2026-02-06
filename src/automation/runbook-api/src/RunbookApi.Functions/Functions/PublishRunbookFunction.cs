@@ -1,4 +1,7 @@
 using System.Text.RegularExpressions;
+using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Models.Yaml;
+using MaToolkit.Automation.Shared.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -55,7 +58,7 @@ public class PublishRunbookFunction
             return new BadRequestObjectResult(new { error = "overdue_behavior must be 'rerun' or 'ignore'" });
 
         // Parse and validate YAML
-        Models.Yaml.RunbookDefinition definition;
+        RunbookDefinition definition;
         try
         {
             definition = _parser.Parse(body.YamlContent);
@@ -94,7 +97,7 @@ public class PublishRunbookFunction
         }
 
         // Insert new runbook record
-        var runbookId = await _runbookRepo.InsertAsync(new Models.Db.RunbookRecord
+        var runbookId = await _runbookRepo.InsertAsync(new RunbookRecord
         {
             Name = body.Name,
             Version = newVersion,
