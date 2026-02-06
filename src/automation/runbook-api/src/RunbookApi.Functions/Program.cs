@@ -14,6 +14,7 @@ builder.Services.Configure<RunbookApiSettings>(
 
 builder.Services.AddSingleton<IDbConnectionFactory, RunbookApiDbConnectionFactory>();
 builder.Services.AddScoped<IRunbookRepository, RunbookRepository>();
+builder.Services.AddScoped<IPhaseEvaluator, PhaseEvaluator>();
 builder.Services.AddScoped<IRunbookParser, RunbookParser>();
 
 builder.Services.AddApplicationInsightsTelemetryWorkerService();
