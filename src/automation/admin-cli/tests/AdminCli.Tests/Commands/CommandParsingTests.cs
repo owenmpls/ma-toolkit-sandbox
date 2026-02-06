@@ -7,6 +7,8 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using Xunit;
 
+// Tests updated to pass AuthService=null to AdminApiClient constructor
+
 namespace AdminCli.Tests.Commands;
 
 public class CommandParsingTests

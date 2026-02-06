@@ -8,6 +8,15 @@
     "sqlConnectionString": {
       "value": ""
     },
+    "entraIdTenantId": {
+      "value": ""
+    },
+    "entraIdClientId": {
+      "value": ""
+    },
+    "entraIdAudience": {
+      "value": ""
+    },
     "tags": {
       "value": {
         "component": "admin-api",

@@ -2,10 +2,12 @@ using System.Text.RegularExpressions;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Yaml;
 using MaToolkit.Automation.Shared.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Models.Requests;
 using AdminApi.Functions.Services;
 
@@ -27,9 +29,10 @@ public class PublishRunbookFunction
         _logger = logger;
     }
 
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("PublishRunbook")]
     public async Task<IActionResult> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "runbooks")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "runbooks")] HttpRequest req)
     {
         _logger.LogInformation("PublishRunbook request received");
 

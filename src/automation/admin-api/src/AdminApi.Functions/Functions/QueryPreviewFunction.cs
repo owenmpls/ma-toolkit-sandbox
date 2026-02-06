@@ -1,8 +1,10 @@
 using MaToolkit.Automation.Shared.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 
 namespace AdminApi.Functions.Functions;
@@ -29,9 +31,10 @@ public class QueryPreviewFunction
     /// <summary>
     /// POST /api/runbooks/{name}/query/preview - Execute query and return preview (no batch created)
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("QueryPreview")]
     public async Task<IActionResult> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "runbooks/{name}/query/preview")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "runbooks/{name}/query/preview")] HttpRequest req,
         string name)
     {
         _logger.LogInformation("QueryPreview request for {RunbookName}", name);

@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 
 namespace AdminApi.Functions.Functions;
@@ -22,9 +24,10 @@ public class DeleteRunbookFunction
     /// <summary>
     /// DELETE /api/runbooks/{name}/versions/{version} - Deactivate (soft-delete) a specific runbook version
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("DeleteRunbookVersion")]
     public async Task<IActionResult> DeleteVersionAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "runbooks/{name}/versions/{version:int}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "runbooks/{name}/versions/{version:int}")] HttpRequest req,
         string name,
         int version)
     {

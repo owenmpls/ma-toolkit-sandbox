@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 
 namespace AdminApi.Functions.Functions;
@@ -22,9 +24,10 @@ public class ListRunbooksFunction
     /// <summary>
     /// GET /api/runbooks - List all active runbooks
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("ListRunbooks")]
     public async Task<IActionResult> ListActiveAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "runbooks")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "runbooks")] HttpRequest req)
     {
         _logger.LogInformation("ListRunbooks request received");
 
@@ -48,9 +51,10 @@ public class ListRunbooksFunction
     /// <summary>
     /// GET /api/runbooks/{name}/versions - List all versions of a runbook
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("ListRunbookVersions")]
     public async Task<IActionResult> ListVersionsAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "runbooks/{name}/versions")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "runbooks/{name}/versions")] HttpRequest req,
         string name)
     {
         _logger.LogInformation("ListRunbookVersions request for {RunbookName}", name);

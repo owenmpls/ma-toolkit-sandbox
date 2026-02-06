@@ -1,8 +1,10 @@
 using MaToolkit.Automation.Shared.Models.Db;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Models.Requests;
 using AdminApi.Functions.Services;
 using AdminApi.Functions.Services.Repositories;
@@ -28,9 +30,10 @@ public class AutomationSettingsFunction
     /// <summary>
     /// GET /api/runbooks/{name}/automation - Get automation status for a runbook
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("GetAutomationSettings")]
     public async Task<IActionResult> GetAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "runbooks/{name}/automation")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "runbooks/{name}/automation")] HttpRequest req,
         string name)
     {
         _logger.LogInformation("GetAutomationSettings request for {RunbookName}", name);
@@ -56,9 +59,10 @@ public class AutomationSettingsFunction
     /// <summary>
     /// PUT /api/runbooks/{name}/automation - Enable or disable automation for a runbook
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("SetAutomationSettings")]
     public async Task<IActionResult> SetAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "put", Route = "runbooks/{name}/automation")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "runbooks/{name}/automation")] HttpRequest req,
         string name)
     {
         _logger.LogInformation("SetAutomationSettings request for {RunbookName}", name);
@@ -84,8 +88,7 @@ public class AutomationSettingsFunction
         var existingSettings = await _automationRepo.GetByNameAsync(name);
         var now = DateTime.UtcNow;
 
-        // TODO: Get user from auth context when EasyAuth is implemented
-        var user = "system";
+        var user = req.GetUserIdentity();
 
         var record = new AutomationSettingsRecord
         {

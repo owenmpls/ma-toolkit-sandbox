@@ -8,6 +8,15 @@ param baseName string = 'matoolkit-admin-api'
 @secure()
 param sqlConnectionString string
 
+@description('Entra ID tenant ID for authentication')
+param entraIdTenantId string = ''
+
+@description('Entra ID client ID (app registration) for authentication')
+param entraIdClientId string = ''
+
+@description('Entra ID audience URI for authentication')
+param entraIdAudience string = ''
+
 @description('Tags to apply to all resources')
 param tags object = {
   component: 'admin-api'
@@ -97,6 +106,22 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'AdminApi__SqlConnectionString'
           value: sqlConnectionString
+        }
+        {
+          name: 'AzureAd__Instance'
+          value: 'https://login.microsoftonline.com/'
+        }
+        {
+          name: 'AzureAd__TenantId'
+          value: entraIdTenantId
+        }
+        {
+          name: 'AzureAd__ClientId'
+          value: entraIdClientId
+        }
+        {
+          name: 'AzureAd__Audience'
+          value: entraIdAudience
         }
       ]
       minTlsVersion: '1.2'

@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 
 namespace AdminApi.Functions.Functions;
@@ -22,9 +24,10 @@ public class GetRunbookFunction
     /// <summary>
     /// GET /api/runbooks/{name} - Get the latest active version of a runbook
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("GetRunbook")]
     public async Task<IActionResult> GetLatestAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "runbooks/{name}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "runbooks/{name}")] HttpRequest req,
         string name)
     {
         _logger.LogInformation("GetRunbook request for {RunbookName}", name);
@@ -50,9 +53,10 @@ public class GetRunbookFunction
     /// <summary>
     /// GET /api/runbooks/{name}/versions/{version} - Get a specific version of a runbook
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("GetRunbookVersion")]
     public async Task<IActionResult> GetVersionAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "runbooks/{name}/versions/{version:int}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "runbooks/{name}/versions/{version:int}")] HttpRequest req,
         string name,
         int version)
     {

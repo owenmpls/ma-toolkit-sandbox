@@ -1,9 +1,11 @@
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 using AdminApi.Functions.Services.Repositories;
 
@@ -46,9 +48,10 @@ public class BatchManagementFunction
     /// <summary>
     /// GET /api/batches - List batches with optional filters
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("ListBatches")]
     public async Task<IActionResult> ListAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "batches")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "batches")] HttpRequest req)
     {
         _logger.LogInformation("ListBatches request");
 
@@ -81,9 +84,10 @@ public class BatchManagementFunction
     /// <summary>
     /// GET /api/batches/{id} - Get batch details
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("GetBatch")]
     public async Task<IActionResult> GetAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "batches/{id:int}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "batches/{id:int}")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("GetBatch request for {BatchId}", id);
@@ -137,9 +141,10 @@ public class BatchManagementFunction
     /// - runbookName: string
     /// - file: CSV file
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("CreateBatch")]
     public async Task<IActionResult> CreateAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "batches")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "batches")] HttpRequest req)
     {
         _logger.LogInformation("CreateBatch request");
 
@@ -182,8 +187,7 @@ public class BatchManagementFunction
         }
 
         // Create batch
-        // TODO: Get user from auth context when EasyAuth is implemented
-        var createdBy = "system";
+        var createdBy = req.GetUserIdentity();
 
         var result = await _manualBatch.CreateBatchAsync(runbook, definition, csvResult.Data!, createdBy);
 
@@ -205,9 +209,10 @@ public class BatchManagementFunction
     /// <summary>
     /// GET /api/batches/{id}/phases - List phase executions for a batch
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("ListBatchPhases")]
     public async Task<IActionResult> ListPhasesAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "batches/{id:int}/phases")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "batches/{id:int}/phases")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("ListBatchPhases request for {BatchId}", id);
@@ -238,9 +243,10 @@ public class BatchManagementFunction
     /// <summary>
     /// GET /api/batches/{id}/steps - List step executions for a batch
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("ListBatchSteps")]
     public async Task<IActionResult> ListStepsAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "batches/{id:int}/steps")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "batches/{id:int}/steps")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("ListBatchSteps request for {BatchId}", id);
@@ -276,9 +282,10 @@ public class BatchManagementFunction
     /// <summary>
     /// POST /api/batches/{id}/advance - Advance manual batch to next phase
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("AdvanceBatch")]
     public async Task<IActionResult> AdvanceAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "batches/{id:int}/advance")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "batches/{id:int}/advance")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("AdvanceBatch request for {BatchId}", id);
@@ -319,9 +326,10 @@ public class BatchManagementFunction
     /// <summary>
     /// POST /api/batches/{id}/cancel - Cancel a batch
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("CancelBatch")]
     public async Task<IActionResult> CancelAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "batches/{id:int}/cancel")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "batches/{id:int}/cancel")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("CancelBatch request for {BatchId}", id);

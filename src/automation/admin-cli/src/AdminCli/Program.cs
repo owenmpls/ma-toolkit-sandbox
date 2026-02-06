@@ -12,7 +12,8 @@ public class Program
     public static async Task<int> Main(string[] args)
     {
         var configuration = BuildConfiguration();
-        var apiClient = new AdminApiClient(configuration);
+        var authService = new AuthService(configuration);
+        var apiClient = new AdminApiClient(configuration, authService);
 
         var rootCommand = new RootCommand("M&A Toolkit CLI - Manage migration automation runbooks and batches")
         {
@@ -33,6 +34,7 @@ public class Program
         rootCommand.AddCommand(TemplateCommands.Create(apiClient));
         rootCommand.AddCommand(BatchCommands.Create(apiClient));
         rootCommand.AddCommand(ConfigCommands.Create(configuration));
+        rootCommand.AddCommand(AuthCommands.Create(authService));
 
         var parser = new CommandLineBuilder(rootCommand)
             .UseDefaults()

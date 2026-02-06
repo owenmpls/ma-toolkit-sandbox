@@ -1,10 +1,13 @@
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
 using MaToolkit.Automation.Shared.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Web;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 using AdminApi.Functions.Services.Repositories;
 using AdminApi.Functions.Settings;
@@ -12,6 +15,20 @@ using AdminApi.Functions.Settings;
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
+
+// Entra ID authentication
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AuthConstants.AdminPolicy, policy =>
+        policy.RequireRole(AuthConstants.Roles.Admin));
+
+    options.AddPolicy(AuthConstants.AuthenticatedPolicy, policy =>
+        policy.RequireAuthenticatedUser());
+});
 
 builder.Services.Configure<AdminApiSettings>(
     builder.Configuration.GetSection(AdminApiSettings.SectionName));

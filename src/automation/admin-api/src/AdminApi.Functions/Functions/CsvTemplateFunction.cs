@@ -1,9 +1,11 @@
 using System.Text;
 using MaToolkit.Automation.Shared.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 
 namespace AdminApi.Functions.Functions;
@@ -30,9 +32,10 @@ public class CsvTemplateFunction
     /// <summary>
     /// GET /api/runbooks/{name}/template - Download CSV template for manual batch creation
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("CsvTemplate")]
     public async Task<IActionResult> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "runbooks/{name}/template")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "runbooks/{name}/template")] HttpRequest req,
         string name)
     {
         _logger.LogInformation("CsvTemplate request for {RunbookName}", name);

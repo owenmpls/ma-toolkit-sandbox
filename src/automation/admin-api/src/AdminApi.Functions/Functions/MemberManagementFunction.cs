@@ -1,10 +1,12 @@
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
 using AdminApi.Functions.Services.Repositories;
 
@@ -41,9 +43,10 @@ public class MemberManagementFunction
     /// <summary>
     /// GET /api/batches/{id}/members - List members for a batch
     /// </summary>
+    [Authorize(Policy = AuthConstants.AuthenticatedPolicy)]
     [Function("ListBatchMembers")]
     public async Task<IActionResult> ListAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "batches/{id:int}/members")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "batches/{id:int}/members")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("ListBatchMembers request for {BatchId}", id);
@@ -73,9 +76,10 @@ public class MemberManagementFunction
     /// <summary>
     /// POST /api/batches/{id}/members - Add members from CSV upload
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("AddBatchMembers")]
     public async Task<IActionResult> AddAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "batches/{id:int}/members")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "batches/{id:int}/members")] HttpRequest req,
         int id)
     {
         _logger.LogInformation("AddBatchMembers request for {BatchId}", id);
@@ -175,9 +179,10 @@ public class MemberManagementFunction
     /// <summary>
     /// DELETE /api/batches/{batchId}/members/{memberId} - Remove a member from a batch
     /// </summary>
+    [Authorize(Policy = AuthConstants.AdminPolicy)]
     [Function("RemoveBatchMember")]
     public async Task<IActionResult> RemoveAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "batches/{batchId:int}/members/{memberId:int}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "batches/{batchId:int}/members/{memberId:int}")] HttpRequest req,
         int batchId,
         int memberId)
     {

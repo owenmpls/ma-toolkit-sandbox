@@ -48,6 +48,21 @@ public static class ConfigCommands
                 table.AddRow("API URL", "[red]not set[/]", "-");
             }
 
+            // Auth settings
+            var tenantId = configuration["TENANT_ID"]
+                ?? Environment.GetEnvironmentVariable("MATOOLKIT_TENANT_ID");
+            var clientId = configuration["CLIENT_ID"]
+                ?? Environment.GetEnvironmentVariable("MATOOLKIT_CLIENT_ID");
+            var apiScope = configuration["API_SCOPE"]
+                ?? Environment.GetEnvironmentVariable("MATOOLKIT_API_SCOPE");
+
+            table.AddRow("Tenant ID", tenantId ?? "[dim]not set[/]",
+                !string.IsNullOrEmpty(tenantId) ? (Environment.GetEnvironmentVariable("MATOOLKIT_TENANT_ID") != null ? "environment" : "config file") : "-");
+            table.AddRow("Client ID", clientId ?? "[dim]not set[/]",
+                !string.IsNullOrEmpty(clientId) ? (Environment.GetEnvironmentVariable("MATOOLKIT_CLIENT_ID") != null ? "environment" : "config file") : "-");
+            table.AddRow("API Scope", apiScope ?? "[dim](default)[/]",
+                !string.IsNullOrEmpty(apiScope) ? (Environment.GetEnvironmentVariable("MATOOLKIT_API_SCOPE") != null ? "environment" : "config file") : "-");
+
             // Config file path
             table.AddRow("Config file", configPath, File.Exists(configPath) ? "[green]exists[/]" : "[dim]not found[/]");
 
@@ -102,6 +117,9 @@ public static class ConfigCommands
             var configKey = key.ToLowerInvariant() switch
             {
                 "api-url" or "apiurl" or "url" => "API_URL",
+                "tenant-id" or "tenantid" => "TENANT_ID",
+                "client-id" or "clientid" => "CLIENT_ID",
+                "api-scope" or "apiscope" or "scope" => "API_SCOPE",
                 _ => key.ToUpperInvariant().Replace("-", "_")
             };
 
