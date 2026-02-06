@@ -3,20 +3,21 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-using Scheduler.Functions.Services;
+using RunbookApi.Functions.Models.Requests;
+using RunbookApi.Functions.Services;
 
-namespace Scheduler.Functions.Functions;
+namespace RunbookApi.Functions.Functions;
 
-public class RunbookPublisherFunction
+public class PublishRunbookFunction
 {
     private readonly IRunbookRepository _runbookRepo;
     private readonly IRunbookParser _parser;
-    private readonly ILogger<RunbookPublisherFunction> _logger;
+    private readonly ILogger<PublishRunbookFunction> _logger;
 
-    public RunbookPublisherFunction(
+    public PublishRunbookFunction(
         IRunbookRepository runbookRepo,
         IRunbookParser parser,
-        ILogger<RunbookPublisherFunction> logger)
+        ILogger<PublishRunbookFunction> logger)
     {
         _runbookRepo = runbookRepo;
         _parser = parser;
@@ -25,7 +26,7 @@ public class RunbookPublisherFunction
 
     [Function("PublishRunbook")]
     public async Task<IActionResult> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "PublishRunbook")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "runbooks")] HttpRequest req)
     {
         _logger.LogInformation("PublishRunbook request received");
 
@@ -119,12 +120,4 @@ public class RunbookPublisherFunction
     {
         return Regex.Replace(name, @"[^a-zA-Z0-9]", "_").ToLowerInvariant();
     }
-}
-
-public class PublishRunbookRequest
-{
-    public string Name { get; set; } = string.Empty;
-    public string YamlContent { get; set; } = string.Empty;
-    public string? OverdueBehavior { get; set; }
-    public bool RerunInit { get; set; }
 }

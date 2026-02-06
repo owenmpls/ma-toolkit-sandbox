@@ -37,7 +37,6 @@ scheduler/
         SchedulerSettings.cs     # Options class: SqlConnectionString, ServiceBusNamespace, OrchestratorTopicName
       Functions/
         SchedulerTimerFunction.cs    # Main 5-min timer: runbook processing, batch detection, phase dispatch, poll checks
-        RunbookPublisherFunction.cs  # HTTP POST: validate + version + store runbook YAML
       Models/
         Db/
           RunbookRecord.cs           # runbooks table
@@ -86,8 +85,7 @@ scheduler/
 | Microsoft.Azure.Functions.Worker | 2.0.0 | Isolated worker model runtime |
 | Microsoft.Azure.Functions.Worker.Sdk | 2.0.0 | Build tooling for isolated worker |
 | Microsoft.Azure.Functions.Worker.Extensions.Timer | 4.3.1 | Timer trigger binding |
-| Microsoft.Azure.Functions.Worker.Extensions.Http | 3.2.0 | HTTP trigger binding |
-| Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore | 2.0.0 | ASP.NET Core integration for HTTP |
+| Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore | 2.0.0 | ASP.NET Core integration (required for FunctionsApplicationBuilder) |
 | Microsoft.Extensions.Hosting | 9.0.0 | Generic host |
 | Azure.Messaging.ServiceBus | 7.18.2 | Service Bus SDK for publishing messages |
 | Azure.Identity | 1.13.1 | DefaultAzureCredential for managed identity auth |
