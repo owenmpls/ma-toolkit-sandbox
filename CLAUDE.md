@@ -22,36 +22,36 @@ See `src/automation/scheduler/CLAUDE.md` for details.
 
 ### admin-api (`src/automation/admin-api/`)
 
-C# Azure Functions project (isolated worker, .NET 8). Comprehensive admin API for the migration pipeline. Combines runbook management with batch creation, CSV uploads, and automation control.
+C# Azure Functions project (isolated worker, .NET 8). Comprehensive admin API for the migration pipeline. Combines runbook management with batch creation, CSV uploads, and automation control. All endpoints are secured with Entra ID JWT bearer authentication (`Microsoft.Identity.Web`) — write operations require the `Admin` app role, read operations require any authenticated user.
 
-| Method | Route | Description |
-|--------|-------|-------------|
-| **Runbook Management** | | |
-| POST | `/api/runbooks` | Publish new runbook version |
-| GET | `/api/runbooks` | List all active runbooks |
-| GET | `/api/runbooks/{name}` | Get latest active version |
-| GET | `/api/runbooks/{name}/versions` | List all versions |
-| GET | `/api/runbooks/{name}/versions/{v}` | Get specific version |
-| DELETE | `/api/runbooks/{name}/versions/{v}` | Deactivate version |
-| **Automation Control** | | |
-| GET | `/api/runbooks/{name}/automation` | Get automation status |
-| PUT | `/api/runbooks/{name}/automation` | Enable/disable automation |
-| **Query & Templates** | | |
-| POST | `/api/runbooks/{name}/query/preview` | Preview query results |
-| GET | `/api/runbooks/{name}/template` | Download CSV template |
-| **Batch Management** | | |
-| GET | `/api/batches` | List batches with filters |
-| POST | `/api/batches` | Create batch from CSV |
-| GET | `/api/batches/{id}` | Get batch details |
-| POST | `/api/batches/{id}/advance` | Advance manual batch |
-| POST | `/api/batches/{id}/cancel` | Cancel batch |
-| **Member Management** | | |
-| GET | `/api/batches/{id}/members` | List batch members |
-| POST | `/api/batches/{id}/members` | Add members from CSV |
-| DELETE | `/api/batches/{id}/members/{memberId}` | Remove member |
-| **Execution Tracking** | | |
-| GET | `/api/batches/{id}/phases` | List phase executions |
-| GET | `/api/batches/{id}/steps` | List step executions |
+| Method | Route | Description | Auth |
+|--------|-------|-------------|------|
+| **Runbook Management** | | | |
+| POST | `/api/runbooks` | Publish new runbook version | Admin |
+| GET | `/api/runbooks` | List all active runbooks | Authenticated |
+| GET | `/api/runbooks/{name}` | Get latest active version | Authenticated |
+| GET | `/api/runbooks/{name}/versions` | List all versions | Authenticated |
+| GET | `/api/runbooks/{name}/versions/{v}` | Get specific version | Authenticated |
+| DELETE | `/api/runbooks/{name}/versions/{v}` | Deactivate version | Admin |
+| **Automation Control** | | | |
+| GET | `/api/runbooks/{name}/automation` | Get automation status | Authenticated |
+| PUT | `/api/runbooks/{name}/automation` | Enable/disable automation | Admin |
+| **Query & Templates** | | | |
+| POST | `/api/runbooks/{name}/query/preview` | Preview query results | Admin |
+| GET | `/api/runbooks/{name}/template` | Download CSV template | Authenticated |
+| **Batch Management** | | | |
+| GET | `/api/batches` | List batches with filters | Authenticated |
+| POST | `/api/batches` | Create batch from CSV | Admin |
+| GET | `/api/batches/{id}` | Get batch details | Authenticated |
+| POST | `/api/batches/{id}/advance` | Advance manual batch | Admin |
+| POST | `/api/batches/{id}/cancel` | Cancel batch | Admin |
+| **Member Management** | | | |
+| GET | `/api/batches/{id}/members` | List batch members | Authenticated |
+| POST | `/api/batches/{id}/members` | Add members from CSV | Admin |
+| DELETE | `/api/batches/{id}/members/{memberId}` | Remove member | Admin |
+| **Execution Tracking** | | | |
+| GET | `/api/batches/{id}/phases` | List phase executions | Authenticated |
+| GET | `/api/batches/{id}/steps` | List step executions | Authenticated |
 
 See `src/automation/admin-api/CLAUDE.md` for details.
 
@@ -63,21 +63,26 @@ See `src/automation/orchestrator/CLAUDE.md` for details.
 
 ### admin-cli (`src/automation/admin-cli/`)
 
-Cross-platform .NET CLI tool (`matoolkit`) for managing M&A Toolkit automation. Provides full coverage of the Admin API.
+Cross-platform .NET CLI tool (`matoolkit`) for managing M&A Toolkit automation. Provides full coverage of the Admin API with Entra ID device code flow authentication.
 
 ```bash
 # Install as global tool
 cd src/automation/admin-cli/src/AdminCli && dotnet pack
 dotnet tool install --global --add-source ./bin/Release MaToolkit.AdminCli
 
-# Example usage
+# Configure and authenticate
 matoolkit config set api-url https://your-api.azurewebsites.net
+matoolkit config set tenant-id YOUR_TENANT_ID
+matoolkit config set client-id YOUR_CLIENT_ID
+matoolkit auth login
+
+# Example usage
 matoolkit runbook list
 matoolkit batch create my-runbook members.csv
 matoolkit batch advance 123
 ```
 
-Key commands: `runbook`, `automation`, `query`, `template`, `batch`, `config`
+Key commands: `runbook`, `automation`, `query`, `template`, `batch`, `auth`, `config`
 
 See `src/automation/admin-cli/CLAUDE.md` for details.
 
@@ -134,7 +139,10 @@ az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/admin-api/deploy.bicep \
   --parameters infra/automation/admin-api/deploy.parameters.json \
-  --parameters sqlConnectionString="your-connection-string"
+  --parameters sqlConnectionString="your-connection-string" \
+  --parameters entraIdTenantId="your-tenant-id" \
+  --parameters entraIdClientId="your-client-id" \
+  --parameters entraIdAudience="api://your-client-id"
 
 # Deploy cloud-worker
 az deployment group create \
