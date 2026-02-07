@@ -6,17 +6,18 @@ Full codebase review ahead of initial Azure deployment, focused on issues that w
 
 ---
 
-## Tier 1: SQL Schema Drift (blocks deployment)
+## Tier 1: SQL Schema Drift — **ALL FIXED**
 
-The SQL schema file is **out of sync** with the C# models and repository code. Deploying the current `schema.sql` will cause runtime failures.
+The SQL schema file was **out of sync** with the C# models and repository code. All issues resolved in `e754c60`.
 
-### 1.1 Missing `runbook_automation_settings` table
+### 1.1 Missing `runbook_automation_settings` table — **FIXED**
 - **C# code**: `AutomationSettingsRepository` queries `runbook_automation_settings` table via MERGE/SELECT
 - **schema.sql**: Table does not exist
 - **Impact**: Admin API `/api/runbooks/{name}/automation` endpoints will crash on first call
 - **Files**: `src/automation/shared/.../Repositories/AutomationSettingsRepository.cs`, `src/automation/database/schema.sql`
+- **Resolution**: Table added to `schema.sql` with matching columns and constraints.
 
-### 1.2 Missing columns and wrong constraints in `batches` table
+### 1.2 Missing columns and wrong constraints in `batches` table — **FIXED**
 - **C# model** (`BatchRecord.cs`): Has `IsManual`, `CreatedBy`, `CurrentPhase` properties
 - **schema.sql**: `batches` table has none of these columns
 - **schema.sql line 26**: `batch_start_time DATETIME2 NOT NULL` — but manual batches set this to NULL (`ManualBatchService.cs:107`)
@@ -24,24 +25,28 @@ The SQL schema file is **out of sync** with the C# models and repository code. D
 - **Impact**: Manual batch INSERT will fail with NOT NULL violation; schema can't support the manual batch feature at all
 - **Fix**: Change to `batch_start_time DATETIME2` (nullable), add columns, adjust UNIQUE constraint to handle NULLs
 - **Files**: `src/automation/shared/.../Models/Db/BatchRecord.cs:14-17`, `src/automation/database/schema.sql:23-33`
+- **Resolution**: Added `is_manual`, `created_by`, `current_phase` columns; made `batch_start_time` nullable; adjusted UNIQUE constraint for NULL handling.
 
-### 1.3 Missing `on_failure` column in `step_executions` and `init_executions`
+### 1.3 Missing `on_failure` column in `step_executions` and `init_executions` — **FIXED**
 - **C# models**: Both `StepExecutionRecord` and `InitExecutionRecord` have `OnFailure` property
 - **schema.sql**: Neither table has this column
 - **Impact**: Rollback trigger tracking doesn't persist — orchestrator can't determine which rollback sequence to invoke after restart
 - **Files**: `src/automation/shared/.../Models/Db/StepExecutionRecord.cs:27`, `src/automation/database/schema.sql:66-91`
+- **Resolution**: Added `on_failure` column to both `step_executions` and `init_executions` tables.
 
-### 1.4 `phase_executions` status CHECK allows `in_progress` but constant doesn't exist
+### 1.4 `phase_executions` status CHECK allows `in_progress` but constant doesn't exist — **FIXED**
 - **schema.sql line 62**: CHECK constraint includes `'in_progress'`
 - **PhaseStatus.cs**: Defines `Pending`, `Dispatched`, `Completed`, `Skipped`, `Failed` — no `InProgress`
 - **Impact**: Unused status value in SQL wastes a CHECK slot; confusing if someone sets it directly via SQL
 
-### Fix (all 1.x)
-Update `schema.sql` to match the C# models:
-- Add `runbook_automation_settings` table
-- Add `is_manual BIT NOT NULL DEFAULT 0`, `created_by NVARCHAR(256)`, `current_phase NVARCHAR(128)` to `batches`
-- Add `on_failure NVARCHAR(256)` to both `step_executions` and `init_executions`
-- Remove `'in_progress'` from `phase_executions` CHECK constraint (or add the constant — pick one)
+- **Resolution**: Removed `'in_progress'` from `phase_executions` CHECK constraint to match `PhaseStatus.cs` constants.
+
+### Fix (all 1.x) — Completed in `e754c60`
+Updated `schema.sql` to match the C# models:
+- Added `runbook_automation_settings` table
+- Added `is_manual BIT NOT NULL DEFAULT 0`, `created_by NVARCHAR(256)`, `current_phase NVARCHAR(128)` to `batches`
+- Added `on_failure NVARCHAR(256)` to both `step_executions` and `init_executions`
+- Removed `'in_progress'` from `phase_executions` CHECK constraint
 
 ---
 
@@ -55,26 +60,29 @@ Update `schema.sql` to match the C# models:
 - **File**: `infra/automation/scheduler-orchestrator/deploy.bicep:88-98`
 - **Resolution**: VNet private networking wired up — `infra/shared/network.bicep` provides SQL private endpoint + DNS zone. Function Apps get VNet integration via subnet IDs. Scheduler/orchestrator Function Apps have `publicNetworkAccess: 'Disabled'` when VNet is active.
 
-### 2.2 SQL Database `autoPauseDelay` on a non-serverless SKU
+### 2.2 SQL Database `autoPauseDelay` on a non-serverless SKU — **FIXED**
 - **deploy.bicep line 106-112**: SKU is `S0` (Standard provisioned) but `autoPauseDelay: 60` is set
 - `autoPauseDelay` is a **serverless-only** property — it's silently ignored on Standard tier, or could cause deployment errors depending on API version
 - **Fix**: Either switch to serverless SKU (`name: 'GP_S_Gen5_1'`, `tier: 'GeneralPurpose'`) and keep `autoPauseDelay`, or remove `autoPauseDelay` for the S0 SKU
 - **File**: `infra/automation/scheduler-orchestrator/deploy.bicep:100-114`
+- **Resolution**: Switched SQL Database to serverless SKU (`GP_S_Gen5_1` / `GeneralPurpose`) to match `autoPauseDelay` usage.
 
-### 2.3 Service Bus duplicate detection disabled
+### 2.3 Service Bus duplicate detection disabled — **FIXED**
 - All three topics have `requiresDuplicateDetection: false`
 - The orchestrator relies on deterministic `JobId` values for idempotency, but without duplicate detection at the broker level, duplicate messages from retries can cause double-dispatch
 - **Hard to change later**: Enabling duplicate detection requires **recreating the topic** (cannot be toggled on existing topics)
 - **Fix**: Set `requiresDuplicateDetection: true` and `duplicateDetectionHistoryTimeWindow: 'PT10M'` on all three topics
 - **File**: `infra/shared/deploy.bicep:56-90`
+- **Resolution**: Enabled `requiresDuplicateDetection: true` with `duplicateDetectionHistoryTimeWindow: 'PT10M'` on all three topics in `deploy.bicep`.
 
-### 2.4 WorkerDispatcher sets `SessionId` but sessions aren't enabled (misleading, not broken)
+### 2.4 WorkerDispatcher sets `SessionId` but sessions aren't enabled (misleading, not broken) — **FIXED**
 - `WorkerDispatcher.cs:44,78` sets `SessionId = job.WorkerId` on messages
 - Routing actually works via SQL filter on the `WorkerId` application property (cloud-worker subscription, `deploy.bicep:130-138`)
 - Cloud-worker uses `CreateReceiver` (non-session receiver) — this is correct
 - The `SessionId` field is stored but never used for routing — misleading but not harmful
 - **Fix**: Remove `SessionId` assignment from `WorkerDispatcher.cs` to avoid confusion, OR document that SQL filters (not sessions) handle worker routing
 - **File**: `src/automation/orchestrator/.../Services/WorkerDispatcher.cs:44,78`
+- **Resolution**: Removed misleading `SessionId` assignment from `WorkerDispatcher.cs`; routing uses SQL filters on the `WorkerId` application property as intended.
 
 ### 2.5 Default public network access on Key Vault and Service Bus — **FIXED**
 - `disablePublicNetworkAccess` defaults to `false` — secrets and message bus are publicly accessible
@@ -88,17 +96,18 @@ Update `schema.sql` to match the C# models:
 - **File**: `infra/shared/deploy.bicep:118-128`
 - **Note**: Kept Basic for sandbox — no PE support without Premium ($$$), managed identity pulls use Azure backbone. Upgrade to Standard/Premium for production.
 
-### 2.7 Application Insights retention inconsistent
+### 2.7 Application Insights retention inconsistent — **FIXED**
 - Admin-api: explicit `RetentionInDays: 30`
 - Scheduler, orchestrator, cloud-worker: no retention set (defaults to 90 days)
 - **Fix**: Add `RetentionInDays: 30` to all App Insights resources
 - **Files**: `infra/automation/scheduler-orchestrator/deploy.bicep:164-173,268-277`, `infra/automation/cloud-worker/deploy.bicep:88-97`
+- **Resolution**: Added explicit `RetentionInDays: 30` to scheduler, orchestrator, and cloud-worker App Insights resources for consistency with admin-api.
 
 ---
 
 ## Tier 3: Cross-Service Contract Issues (painful to change once workers are running)
 
-### 3.1 WorkerResultStatus casing mismatch
+### 3.1 WorkerResultStatus casing mismatch — **FIXED**
 - `WorkerResultStatus.cs`: `"Success"`, `"Failure"` (PascalCase)
 - All other status constants: lowercase (`"pending"`, `"dispatched"`, `"completed"`, `"failed"`)
 - `ResultProcessor.cs:92`: `if (result.Status == "Success")` — hardcoded PascalCase match
@@ -106,11 +115,13 @@ Update `schema.sql` to match the C# models:
 - **Risk**: Any future worker implementation that sends `"success"` (lowercase, matching convention) silently fails result processing
 - **Fix**: Standardize on lowercase `"success"` / `"failure"` in `WorkerResultStatus.cs`, update `ResultProcessor.cs`, and update cloud-worker's `job-dispatcher.ps1`
 - **Files**: `src/automation/shared/.../Constants/WorkerResultStatus.cs`, `src/automation/orchestrator/.../Handlers/ResultProcessor.cs:92`, `src/automation/cloud-worker/src/job-dispatcher.ps1`
+- **Resolution**: Standardized to lowercase `"success"` / `"failure"` in `WorkerResultStatus.cs`, updated `ResultProcessor.cs` comparison, and updated cloud-worker `job-dispatcher.ps1` to match.
 
-### 3.2 Orchestrator `prefetchCount: 0` — poor throughput
+### 3.2 Orchestrator `prefetchCount: 0` — poor throughput — **FIXED**
 - `host.json:22`: Messages fetched one-at-a-time despite `maxConcurrentCalls: 16`
 - **Fix**: Set `prefetchCount` to `16` or `32` (match or exceed `maxConcurrentCalls`)
 - **File**: `src/automation/orchestrator/src/Orchestrator.Functions/host.json:22`
+- **Resolution**: Set `prefetchCount` to `16` to match `maxConcurrentCalls`.
 
 ### 3.3 Orchestrator: missing correlation data → silent message loss
 - `ResultProcessor.cs:59-63`: If `CorrelationData` is null, logs warning and returns — message is completed (not dead-lettered)
@@ -191,12 +202,18 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Implementation Order
 
-1. **Schema fixes** (Tier 1) — cannot deploy without these
-2. **SQL connectivity + SKU fix** (Tier 2.1, 2.2) — cannot run without these
-3. **Service Bus topic config** (Tier 2.3, 2.4) — must be right on first create
-4. **Cross-service contracts** (Tier 3) — affects all components
+1. ~~**Schema fixes** (Tier 1) — cannot deploy without these~~ — **DONE** (`e754c60`)
+2. ~~**SQL connectivity + SKU fix** (Tier 2.1, 2.2) — cannot run without these~~ — **DONE** (2.1 via network.bicep, 2.2 via `dd5dfce`)
+3. ~~**Service Bus topic config** (Tier 2.3, 2.4) — must be right on first create~~ — **DONE** (2.3 via `d178cb1`, 2.4 via `de8a303`)
+4. **Cross-service contracts** (Tier 3) — ~~affects all components~~ 3.1 and 3.2 fixed; 3.3 still open
 5. **Application fixes** (Tier 4) — fix before any real workload
-6. **Infrastructure hardening** (Tier 2.5-2.7) — before production
+6. ~~**Infrastructure hardening** (Tier 2.5-2.7) — before production~~ — **DONE** (2.5 via network.bicep, 2.7 via `194a8f1`; 2.6 deferred for sandbox)
+
+## Progress Summary
+
+- **Fixed**: 12 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2)
+- **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
+- **Open**: 21 items (3.3, 4.1–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 
