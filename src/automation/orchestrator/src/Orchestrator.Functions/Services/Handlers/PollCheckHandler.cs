@@ -98,10 +98,10 @@ public class PollCheckHandler : IPollCheckHandler
             }
         }
 
-        // Re-dispatch the same job
+        // Re-dispatch the same job with a unique poll-specific ID
         var job = new WorkerJobMessage
         {
-            JobId = step.JobId ?? Guid.NewGuid().ToString(),
+            JobId = $"init-{step.Id}-poll-{step.PollCount + 1}",
             BatchId = step.BatchId,
             WorkerId = step.WorkerId!,
             FunctionName = step.FunctionName!,
@@ -163,10 +163,10 @@ public class PollCheckHandler : IPollCheckHandler
             }
         }
 
-        // Re-dispatch the same job
+        // Re-dispatch the same job with a unique poll-specific ID
         var job = new WorkerJobMessage
         {
-            JobId = step.JobId ?? Guid.NewGuid().ToString(),
+            JobId = $"step-{step.Id}-poll-{step.PollCount + 1}",
             BatchId = message.BatchId,
             WorkerId = step.WorkerId!,
             FunctionName = step.FunctionName!,

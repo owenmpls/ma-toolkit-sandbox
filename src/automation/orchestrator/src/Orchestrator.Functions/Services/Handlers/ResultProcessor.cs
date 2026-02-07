@@ -97,7 +97,11 @@ public class ResultProcessor : IResultProcessor
                 _logger.LogInformation(
                     "Init execution {InitExecutionId} is polling (still in progress)",
                     initExec.Id);
-                await _initRepo.SetPollingAsync(initExec.Id);
+                if (!await _initRepo.SetPollingAsync(initExec.Id))
+                {
+                    _logger.LogWarning("Init execution {InitExecutionId} was already updated by another handler", initExec.Id);
+                    return;
+                }
                 return;
             }
 
@@ -107,7 +111,11 @@ public class ResultProcessor : IResultProcessor
                 ? JsonSerializer.Serialize(finalResult.Value)
                 : resultJson;
 
-            await _initRepo.SetSucceededAsync(initExec.Id, finalResultJson);
+            if (!await _initRepo.SetSucceededAsync(initExec.Id, finalResultJson))
+            {
+                _logger.LogWarning("Init execution {InitExecutionId} was already updated by another handler", initExec.Id);
+                return;
+            }
 
             _logger.LogInformation(
                 "Init execution {InitExecutionId} succeeded for batch {BatchId}",
@@ -120,7 +128,11 @@ public class ResultProcessor : IResultProcessor
         {
             // Failure
             var errorMessage = result.Error?.Message ?? "Unknown error";
-            await _initRepo.SetFailedAsync(initExec.Id, errorMessage);
+            if (!await _initRepo.SetFailedAsync(initExec.Id, errorMessage))
+            {
+                _logger.LogWarning("Init execution {InitExecutionId} was already updated by another handler", initExec.Id);
+                return;
+            }
 
             _logger.LogError(
                 "Init execution {InitExecutionId} failed for batch {BatchId}: {Error}",
@@ -158,7 +170,11 @@ public class ResultProcessor : IResultProcessor
                 _logger.LogInformation(
                     "Step execution {StepExecutionId} is polling (still in progress)",
                     stepExec.Id);
-                await _stepRepo.SetPollingAsync(stepExec.Id);
+                if (!await _stepRepo.SetPollingAsync(stepExec.Id))
+                {
+                    _logger.LogWarning("Step execution {StepExecutionId} was already updated by another handler", stepExec.Id);
+                    return;
+                }
                 return;
             }
 
@@ -168,7 +184,11 @@ public class ResultProcessor : IResultProcessor
                 ? JsonSerializer.Serialize(finalResult.Value)
                 : resultJson;
 
-            await _stepRepo.SetSucceededAsync(stepExec.Id, finalResultJson);
+            if (!await _stepRepo.SetSucceededAsync(stepExec.Id, finalResultJson))
+            {
+                _logger.LogWarning("Step execution {StepExecutionId} was already updated by another handler", stepExec.Id);
+                return;
+            }
 
             _logger.LogInformation(
                 "Step execution {StepExecutionId} succeeded",
@@ -181,7 +201,11 @@ public class ResultProcessor : IResultProcessor
         {
             // Failure
             var errorMessage = result.Error?.Message ?? "Unknown error";
-            await _stepRepo.SetFailedAsync(stepExec.Id, errorMessage);
+            if (!await _stepRepo.SetFailedAsync(stepExec.Id, errorMessage))
+            {
+                _logger.LogWarning("Step execution {StepExecutionId} was already updated by another handler", stepExec.Id);
+                return;
+            }
 
             _logger.LogError(
                 "Step execution {StepExecutionId} failed: {Error}",
@@ -219,7 +243,7 @@ public class ResultProcessor : IResultProcessor
         var nextStep = pendingSteps.First();
         var job = new WorkerJobMessage
         {
-            JobId = Guid.NewGuid().ToString(),
+            JobId = $"init-{nextStep.Id}",
             BatchId = batchId,
             WorkerId = nextStep.WorkerId!,
             FunctionName = nextStep.FunctionName!,
@@ -269,12 +293,16 @@ public class ResultProcessor : IResultProcessor
                     "Dispatching {Count} pending steps at index {StepIndex} for phase {PhaseExecutionId}",
                     pendingSteps.Count, stepIndex, phaseExecutionId);
 
+                // Get batch ID from phase (once, outside loop)
+                var phase = await _phaseRepo.GetByIdAsync(phaseExecutionId);
+                var batchId = phase?.BatchId ?? 0;
+
                 foreach (var step in pendingSteps)
                 {
                     var job = new WorkerJobMessage
                     {
-                        JobId = Guid.NewGuid().ToString(),
-                        BatchId = 0, // Will be set from phase
+                        JobId = $"step-{step.Id}",
+                        BatchId = batchId,
                         WorkerId = step.WorkerId!,
                         FunctionName = step.FunctionName!,
                         Parameters = string.IsNullOrEmpty(step.ParamsJson)
@@ -288,13 +316,6 @@ public class ResultProcessor : IResultProcessor
                             RunbookVersion = runbookVersion
                         }
                     };
-
-                    // Get batch ID from phase
-                    var phase = await _phaseRepo.GetByIdAsync(phaseExecutionId);
-                    if (phase != null)
-                    {
-                        job.BatchId = phase.BatchId;
-                    }
 
                     await _workerDispatcher.DispatchJobAsync(job);
                     await _stepRepo.SetDispatchedAsync(step.Id, job.JobId);

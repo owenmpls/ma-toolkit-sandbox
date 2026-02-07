@@ -51,7 +51,7 @@ public class WorkerResultMessage
                 return !complete.GetBoolean();
             }
         }
-        catch
+        catch (InvalidOperationException)
         {
             // Not a polling result format
         }
@@ -75,7 +75,7 @@ public class WorkerResultMessage
                 return data;
             }
         }
-        catch
+        catch (InvalidOperationException)
         {
             // Not a polling result format
         }

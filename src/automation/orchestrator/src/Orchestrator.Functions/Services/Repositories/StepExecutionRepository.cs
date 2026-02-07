@@ -16,12 +16,12 @@ public interface IStepExecutionRepository
     Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null);
 
     // Status updates
-    Task SetDispatchedAsync(int id, string jobId);
-    Task SetSucceededAsync(int id, string? resultJson);
-    Task SetFailedAsync(int id, string errorMessage);
-    Task SetPollingAsync(int id);
-    Task SetPollTimeoutAsync(int id);
-    Task SetCancelledAsync(int id);
+    Task<bool> SetDispatchedAsync(int id, string jobId);
+    Task<bool> SetSucceededAsync(int id, string? resultJson);
+    Task<bool> SetFailedAsync(int id, string errorMessage);
+    Task<bool> SetPollingAsync(int id);
+    Task<bool> SetPollTimeoutAsync(int id);
+    Task<bool> SetCancelledAsync(int id);
     Task UpdatePollStateAsync(int id);
 }
 
@@ -62,16 +62,16 @@ public class StepExecutionRepository : IStepExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<StepExecutionRecord>(
-            $"SELECT * FROM step_executions WHERE phase_execution_id = @PhaseExecutionId AND step_index = @StepIndex AND status = '{StepStatus.Pending}'",
-            new { PhaseExecutionId = phaseExecutionId, StepIndex = stepIndex });
+            "SELECT * FROM step_executions WHERE phase_execution_id = @PhaseExecutionId AND step_index = @StepIndex AND status = @Status",
+            new { PhaseExecutionId = phaseExecutionId, StepIndex = stepIndex, Status = StepStatus.Pending });
     }
 
     public async Task<IEnumerable<StepExecutionRecord>> GetPendingByMemberAsync(int batchMemberId)
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<StepExecutionRecord>(
-            $"SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN ('{StepStatus.Pending}', '{StepStatus.Dispatched}')",
-            new { BatchMemberId = batchMemberId });
+            "SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN (@Pending, @Dispatched)",
+            new { BatchMemberId = batchMemberId, Pending = StepStatus.Pending, Dispatched = StepStatus.Dispatched });
     }
 
     public async Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null)
@@ -79,17 +79,22 @@ public class StepExecutionRepository : IStepExecutionRepository
         var conn = transaction?.Connection ?? _db.CreateConnection();
         try
         {
-            return await conn.QuerySingleAsync<int>($@"
+            return await conn.QuerySingleAsync<int>(@"
                 INSERT INTO step_executions (
                     phase_execution_id, batch_member_id, step_name, step_index,
                     worker_id, function_name, params_json, status,
                     is_poll_step, poll_interval_sec, poll_timeout_sec, on_failure)
                 VALUES (
                     @PhaseExecutionId, @BatchMemberId, @StepName, @StepIndex,
-                    @WorkerId, @FunctionName, @ParamsJson, '{StepStatus.Pending}',
+                    @WorkerId, @FunctionName, @ParamsJson, @Status,
                     @IsPollStep, @PollIntervalSec, @PollTimeoutSec, @OnFailure);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                record, transaction);
+                new
+                {
+                    record.PhaseExecutionId, record.BatchMemberId, record.StepName, record.StepIndex,
+                    record.WorkerId, record.FunctionName, record.ParamsJson, Status = StepStatus.Pending,
+                    record.IsPollStep, record.PollIntervalSec, record.PollTimeoutSec, record.OnFailure
+                }, transaction);
         }
         finally
         {
@@ -98,66 +103,72 @@ public class StepExecutionRepository : IStepExecutionRepository
         }
     }
 
-    public async Task SetDispatchedAsync(int id, string jobId)
+    public async Task<bool> SetDispatchedAsync(int id, string jobId)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE step_executions
-            SET status = '{StepStatus.Dispatched}', job_id = @JobId, dispatched_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id, JobId = jobId });
+            SET status = @Status, job_id = @JobId, dispatched_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, JobId = jobId, Status = StepStatus.Dispatched, ExpectedStatus = StepStatus.Pending });
+        return rows > 0;
     }
 
-    public async Task SetSucceededAsync(int id, string? resultJson)
+    public async Task<bool> SetSucceededAsync(int id, string? resultJson)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE step_executions
-            SET status = '{StepStatus.Succeeded}', result_json = @ResultJson, completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id, ResultJson = resultJson });
+            SET status = @Status, result_json = @ResultJson, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status IN (@Dispatched, @Polling)",
+            new { Id = id, ResultJson = resultJson, Status = StepStatus.Succeeded, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetFailedAsync(int id, string errorMessage)
+    public async Task<bool> SetFailedAsync(int id, string errorMessage)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE step_executions
-            SET status = '{StepStatus.Failed}', error_message = @ErrorMessage, completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id, ErrorMessage = errorMessage });
+            SET status = @Status, error_message = @ErrorMessage, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status IN (@Dispatched, @Polling)",
+            new { Id = id, ErrorMessage = errorMessage, Status = StepStatus.Failed, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetPollingAsync(int id)
+    public async Task<bool> SetPollingAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE step_executions
-            SET status = '{StepStatus.Polling}',
+            SET status = @Status,
                 poll_started_at = COALESCE(poll_started_at, SYSUTCDATETIME()),
                 last_polled_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id });
+            WHERE id = @Id AND status IN (@Dispatched, @Polling)",
+            new { Id = id, Status = StepStatus.Polling, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetPollTimeoutAsync(int id)
+    public async Task<bool> SetPollTimeoutAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE step_executions
-            SET status = '{StepStatus.PollTimeout}', completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id });
+            SET status = @Status, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = StepStatus.PollTimeout, ExpectedStatus = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetCancelledAsync(int id)
+    public async Task<bool> SetCancelledAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE step_executions
-            SET status = '{StepStatus.Cancelled}', completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id });
+            SET status = @Status, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status IN (@Pending, @Dispatched, @Polling)",
+            new { Id = id, Status = StepStatus.Cancelled, Pending = StepStatus.Pending, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
     public async Task UpdatePollStateAsync(int id)

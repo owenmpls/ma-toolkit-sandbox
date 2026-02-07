@@ -113,6 +113,10 @@ try {
 catch {
     Write-WorkerLog -Message "Runspace pool initialization failed: $($_.Exception.Message)" -Severity Critical
     Write-WorkerException -Exception $_.Exception
+    # Dispose Service Bus resources from Phase 5
+    try { $sbReceiver.DisposeAsync().GetAwaiter().GetResult() } catch { }
+    try { $sbSender.DisposeAsync().GetAwaiter().GetResult() } catch { }
+    try { $sbClient.DisposeAsync().GetAwaiter().GetResult() } catch { }
     Flush-WorkerTelemetry
     exit 1
 }

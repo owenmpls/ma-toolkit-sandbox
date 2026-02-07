@@ -37,30 +37,32 @@ public class DynamicTableReader : IDynamicTableReader
     public async Task<DataRow?> GetMemberDataAsync(string tableName, string memberKey)
     {
         using var conn = _db.CreateConnection();
-        conn.Open();
 
-        // Use parameterized query for member key, but table name must be sanitized
         var sanitizedTableName = SanitizeTableName(tableName);
         var sql = $"SELECT * FROM [{sanitizedTableName}] WHERE _member_key = @MemberKey AND _is_current = 1";
 
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        var param = cmd.CreateParameter();
-        param.ParameterName = "@MemberKey";
-        param.Value = memberKey;
-        cmd.Parameters.Add(param);
+        var results = await conn.QueryAsync(sql, new { MemberKey = memberKey });
+        var resultList = results.ToList();
 
-        var adapter = new Microsoft.Data.SqlClient.SqlDataAdapter((Microsoft.Data.SqlClient.SqlCommand)cmd);
-        var dataTable = new DataTable();
-        adapter.Fill(dataTable);
-
-        if (dataTable.Rows.Count == 0)
+        if (resultList.Count == 0)
         {
             _logger.LogWarning("No member data found for key {MemberKey} in table {TableName}", memberKey, tableName);
             return null;
         }
 
-        return dataTable.Rows[0];
+        // Build DataRow from dynamic result
+        var dataTable = new DataTable();
+        var first = (IDictionary<string, object>)resultList[0];
+        foreach (var key in first.Keys)
+            dataTable.Columns.Add(key, first[key]?.GetType() ?? typeof(object));
+
+        var dict = (IDictionary<string, object>)resultList[0];
+        var dataRow = dataTable.NewRow();
+        foreach (var key in dict.Keys)
+            dataRow[key] = dict[key] ?? DBNull.Value;
+        dataTable.Rows.Add(dataRow);
+
+        return dataRow;
     }
 
     public async Task<Dictionary<string, DataRow>> GetMembersDataAsync(string tableName, IEnumerable<string> memberKeys)
@@ -70,13 +72,12 @@ public class DynamicTableReader : IDynamicTableReader
             return new Dictionary<string, DataRow>();
 
         using var conn = _db.CreateConnection();
-        conn.Open();
 
         var sanitizedTableName = SanitizeTableName(tableName);
         var sql = $"SELECT * FROM [{sanitizedTableName}] WHERE _member_key IN @MemberKeys AND _is_current = 1";
 
         // Use Dapper for IN clause handling
-        var results = await ((Microsoft.Data.SqlClient.SqlConnection)conn).QueryAsync(sql, new { MemberKeys = keyList });
+        var results = await conn.QueryAsync(sql, new { MemberKeys = keyList });
 
         var dataTable = new DataTable();
         var resultList = results.ToList();

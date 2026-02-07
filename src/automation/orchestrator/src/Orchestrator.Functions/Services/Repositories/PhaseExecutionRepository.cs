@@ -12,8 +12,8 @@ public interface IPhaseExecutionRepository
     Task<IEnumerable<PhaseExecutionRecord>> GetByBatchAsync(int batchId);
     Task<IEnumerable<PhaseExecutionRecord>> GetDispatchedByBatchAsync(int batchId);
     Task UpdateStatusAsync(int id, string status);
-    Task SetCompletedAsync(int id);
-    Task SetFailedAsync(int id);
+    Task<bool> SetCompletedAsync(int id);
+    Task<bool> SetFailedAsync(int id);
     Task<int> InsertAsync(PhaseExecutionRecord record, IDbTransaction? transaction = null);
 }
 
@@ -46,8 +46,8 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<PhaseExecutionRecord>(
-            $"SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status IN ('{PhaseStatus.Dispatched}', '{PhaseStatus.Completed}')",
-            new { BatchId = batchId });
+            "SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status IN (@Dispatched, @Completed)",
+            new { BatchId = batchId, Dispatched = PhaseStatus.Dispatched, Completed = PhaseStatus.Completed });
     }
 
     public async Task UpdateStatusAsync(int id, string status)
@@ -58,20 +58,22 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
             new { Id = id, Status = status });
     }
 
-    public async Task SetCompletedAsync(int id)
+    public async Task<bool> SetCompletedAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(
-            $"UPDATE phase_executions SET status = '{PhaseStatus.Completed}', completed_at = SYSUTCDATETIME() WHERE id = @Id",
-            new { Id = id });
+        var rows = await conn.ExecuteAsync(
+            "UPDATE phase_executions SET status = @Status, completed_at = SYSUTCDATETIME() WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = PhaseStatus.Completed, ExpectedStatus = PhaseStatus.Dispatched });
+        return rows > 0;
     }
 
-    public async Task SetFailedAsync(int id)
+    public async Task<bool> SetFailedAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(
-            $"UPDATE phase_executions SET status = '{PhaseStatus.Failed}', completed_at = SYSUTCDATETIME() WHERE id = @Id",
-            new { Id = id });
+        var rows = await conn.ExecuteAsync(
+            "UPDATE phase_executions SET status = @Status, completed_at = SYSUTCDATETIME() WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = PhaseStatus.Failed, ExpectedStatus = PhaseStatus.Dispatched });
+        return rows > 0;
     }
 
     public async Task<int> InsertAsync(PhaseExecutionRecord record, IDbTransaction? transaction = null)

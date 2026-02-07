@@ -7,6 +7,7 @@ namespace AdminApi.Functions.Services;
 public interface IRunbookRepository
 {
     Task<IEnumerable<RunbookRecord>> GetActiveRunbooksAsync();
+    Task<RunbookRecord?> GetByIdAsync(int id);
     Task<RunbookRecord?> GetByNameAsync(string name);
     Task<RunbookRecord?> GetByNameAndVersionAsync(string name, int version);
     Task<IEnumerable<RunbookRecord>> GetAllVersionsAsync(string name);
@@ -30,6 +31,14 @@ public class RunbookRepository : IRunbookRepository
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<RunbookRecord>(
             "SELECT * FROM runbooks WHERE is_active = 1 ORDER BY name");
+    }
+
+    public async Task<RunbookRecord?> GetByIdAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<RunbookRecord>(
+            "SELECT * FROM runbooks WHERE id = @Id",
+            new { Id = id });
     }
 
     public async Task<RunbookRecord?> GetByNameAsync(string name)

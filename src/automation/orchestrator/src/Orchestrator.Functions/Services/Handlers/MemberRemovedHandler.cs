@@ -109,8 +109,9 @@ public class MemberRemovedHandler : IMemberRemovedHandler
             "Dispatching {Count} on_member_removed steps for member {MemberKey}",
             definition.OnMemberRemoved.Count, message.MemberKey);
 
-        foreach (var step in definition.OnMemberRemoved)
+        for (var stepIndex = 0; stepIndex < definition.OnMemberRemoved.Count; stepIndex++)
         {
+            var step = definition.OnMemberRemoved[stepIndex];
             try
             {
                 Dictionary<string, string> resolvedParams;
@@ -133,7 +134,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
 
                 var job = new WorkerJobMessage
                 {
-                    JobId = Guid.NewGuid().ToString(),
+                    JobId = $"removed-{message.BatchMemberId}-{stepIndex}",
                     BatchId = message.BatchId,
                     WorkerId = step.WorkerId,
                     FunctionName = resolvedFunction,

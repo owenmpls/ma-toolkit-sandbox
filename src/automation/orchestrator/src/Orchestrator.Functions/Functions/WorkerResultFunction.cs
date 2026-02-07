@@ -40,8 +40,12 @@ public class WorkerResultFunction
 
             if (result == null)
             {
-                _logger.LogWarning("Failed to deserialize worker result message");
-                await messageActions.CompleteMessageAsync(message);
+                _logger.LogError("Failed to deserialize worker result message: {Body}", body);
+                await messageActions.DeadLetterMessageAsync(message, new Dictionary<string, object>
+                {
+                    ["DeadLetterReason"] = "DeserializationFailed",
+                    ["DeadLetterErrorDescription"] = "Could not deserialize message body"
+                });
                 return;
             }
 

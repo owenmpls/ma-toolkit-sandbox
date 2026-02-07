@@ -63,8 +63,9 @@ public class RollbackExecutor : IRollbackExecutor
             rollbackName, batch.Id);
 
         // Execute rollback steps sequentially
-        foreach (var step in rollbackSteps)
+        for (var stepIndex = 0; stepIndex < rollbackSteps.Count; stepIndex++)
         {
+            var step = rollbackSteps[stepIndex];
             try
             {
                 // Resolve parameters
@@ -82,7 +83,7 @@ public class RollbackExecutor : IRollbackExecutor
 
                 var job = new WorkerJobMessage
                 {
-                    JobId = Guid.NewGuid().ToString(),
+                    JobId = $"rollback-{batch.Id}-{rollbackName}-{stepIndex}",
                     BatchId = batch.Id,
                     WorkerId = step.WorkerId,
                     FunctionName = step.Function,

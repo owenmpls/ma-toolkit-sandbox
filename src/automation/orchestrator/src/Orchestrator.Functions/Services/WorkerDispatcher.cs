@@ -32,7 +32,7 @@ public class WorkerDispatcher : IWorkerDispatcher
     public async Task<string> DispatchJobAsync(WorkerJobMessage job)
     {
         if (string.IsNullOrEmpty(job.JobId))
-            job.JobId = Guid.NewGuid().ToString();
+            throw new ArgumentException("JobId must be set before dispatching. Use a deterministic ID based on the execution record.", nameof(job));
 
         await using var sender = _client.CreateSender(_topicName);
 
@@ -68,7 +68,7 @@ public class WorkerDispatcher : IWorkerDispatcher
         foreach (var job in jobList)
         {
             if (string.IsNullOrEmpty(job.JobId))
-                job.JobId = Guid.NewGuid().ToString();
+                throw new ArgumentException("JobId must be set before dispatching. Use a deterministic ID based on the execution record.", nameof(jobs));
 
             var json = JsonSerializer.Serialize(job);
             var sbMessage = new ServiceBusMessage(json)

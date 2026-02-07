@@ -36,7 +36,12 @@ public class MemberSynchronizer : IMemberSynchronizer
         RunbookRecord runbook, RunbookDefinition definition,
         BatchRecord batch, List<DataRow> rows, DateTime now)
     {
-        var existingMembers = await _memberRepo.GetByBatchAsync(batch.Id);
+        var existingMembers = (await _memberRepo.GetByBatchAsync(batch.Id)).ToList();
+
+        // Retry dispatch for members that were inserted but not yet dispatched
+        await RetryUndispatchedAdditionsAsync(runbook, batch, existingMembers);
+        await RetryUndispatchedRemovalsAsync(runbook, batch, existingMembers);
+
         var currentKeys = rows
             .Select(r => r[definition.DataSource.PrimaryKey]?.ToString() ?? string.Empty)
             .ToList();
@@ -65,15 +70,22 @@ public class MemberSynchronizer : IMemberSynchronizer
                 MemberKey = addedKey
             });
 
-            await _publisher.PublishMemberAddedAsync(new MemberAddedMessage
+            try
             {
-                RunbookName = runbook.Name,
-                RunbookVersion = runbook.Version,
-                BatchId = batch.Id,
-                BatchMemberId = memberId,
-                MemberKey = addedKey
-            });
-            await _memberRepo.SetAddDispatchedAsync(memberId);
+                await _publisher.PublishMemberAddedAsync(new MemberAddedMessage
+                {
+                    RunbookName = runbook.Name,
+                    RunbookVersion = runbook.Version,
+                    BatchId = batch.Id,
+                    BatchMemberId = memberId,
+                    MemberKey = addedKey
+                });
+                await _memberRepo.SetAddDispatchedAsync(memberId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish member-added for {MemberKey}, will retry next run", addedKey);
+            }
 
             _logger.LogInformation("Member {MemberKey} added to batch {BatchId}", addedKey, batch.Id);
         }
@@ -83,17 +95,82 @@ public class MemberSynchronizer : IMemberSynchronizer
         {
             await _memberRepo.MarkRemovedAsync(removedMember.Id);
 
-            await _publisher.PublishMemberRemovedAsync(new MemberRemovedMessage
+            try
             {
-                RunbookName = runbook.Name,
-                RunbookVersion = runbook.Version,
-                BatchId = batch.Id,
-                BatchMemberId = removedMember.Id,
-                MemberKey = removedMember.MemberKey
-            });
-            await _memberRepo.SetRemoveDispatchedAsync(removedMember.Id);
+                await _publisher.PublishMemberRemovedAsync(new MemberRemovedMessage
+                {
+                    RunbookName = runbook.Name,
+                    RunbookVersion = runbook.Version,
+                    BatchId = batch.Id,
+                    BatchMemberId = removedMember.Id,
+                    MemberKey = removedMember.MemberKey
+                });
+                await _memberRepo.SetRemoveDispatchedAsync(removedMember.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish member-removed for {MemberKey}, will retry next run", removedMember.MemberKey);
+            }
 
             _logger.LogInformation("Member {MemberKey} removed from batch {BatchId}", removedMember.MemberKey, batch.Id);
+        }
+    }
+
+    private async Task RetryUndispatchedAdditionsAsync(
+        RunbookRecord runbook, BatchRecord batch, List<BatchMemberRecord> existingMembers)
+    {
+        var undispatched = existingMembers
+            .Where(m => m.Status == "active" && m.AddDispatchedAt == null)
+            .ToList();
+
+        foreach (var member in undispatched)
+        {
+            try
+            {
+                await _publisher.PublishMemberAddedAsync(new MemberAddedMessage
+                {
+                    RunbookName = runbook.Name,
+                    RunbookVersion = runbook.Version,
+                    BatchId = batch.Id,
+                    BatchMemberId = member.Id,
+                    MemberKey = member.MemberKey
+                });
+                await _memberRepo.SetAddDispatchedAsync(member.Id);
+                _logger.LogInformation("Retried dispatch for member {MemberKey} in batch {BatchId}", member.MemberKey, batch.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Retry dispatch failed for member {MemberKey}", member.MemberKey);
+            }
+        }
+    }
+
+    private async Task RetryUndispatchedRemovalsAsync(
+        RunbookRecord runbook, BatchRecord batch, List<BatchMemberRecord> existingMembers)
+    {
+        var undispatched = existingMembers
+            .Where(m => m.Status == "removed" && m.RemoveDispatchedAt == null)
+            .ToList();
+
+        foreach (var member in undispatched)
+        {
+            try
+            {
+                await _publisher.PublishMemberRemovedAsync(new MemberRemovedMessage
+                {
+                    RunbookName = runbook.Name,
+                    RunbookVersion = runbook.Version,
+                    BatchId = batch.Id,
+                    BatchMemberId = member.Id,
+                    MemberKey = member.MemberKey
+                });
+                await _memberRepo.SetRemoveDispatchedAsync(member.Id);
+                _logger.LogInformation("Retried remove dispatch for member {MemberKey} in batch {BatchId}", member.MemberKey, batch.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Retry remove dispatch failed for member {MemberKey}", member.MemberKey);
+            }
         }
     }
 }

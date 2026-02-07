@@ -10,8 +10,8 @@ public interface IBatchRepository
     Task<BatchRecord?> GetByIdAsync(int id);
     Task UpdateStatusAsync(int id, string status);
     Task SetActiveAsync(int id);
-    Task SetCompletedAsync(int id);
-    Task SetFailedAsync(int id);
+    Task<bool> SetCompletedAsync(int id);
+    Task<bool> SetFailedAsync(int id);
 }
 
 public class BatchRepository : IBatchRepository
@@ -44,19 +44,21 @@ public class BatchRepository : IBatchRepository
         await UpdateStatusAsync(id, BatchStatus.Active);
     }
 
-    public async Task SetCompletedAsync(int id)
+    public async Task<bool> SetCompletedAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(
-            $"UPDATE batches SET status = '{BatchStatus.Completed}' WHERE id = @Id",
-            new { Id = id });
+        var rows = await conn.ExecuteAsync(
+            "UPDATE batches SET status = @Status WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = BatchStatus.Completed, ExpectedStatus = BatchStatus.Active });
+        return rows > 0;
     }
 
-    public async Task SetFailedAsync(int id)
+    public async Task<bool> SetFailedAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(
-            $"UPDATE batches SET status = '{BatchStatus.Failed}' WHERE id = @Id",
-            new { Id = id });
+        var rows = await conn.ExecuteAsync(
+            "UPDATE batches SET status = @Status WHERE id = @Id AND status NOT IN (@Completed, @Failed)",
+            new { Id = id, Status = BatchStatus.Failed, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
+        return rows > 0;
     }
 }

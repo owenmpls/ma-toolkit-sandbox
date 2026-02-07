@@ -50,6 +50,13 @@ public class PhaseDispatcher : IPhaseDispatcher
         RunbookRecord runbook, RunbookDefinition definition, BatchRecord batch, DateTime now)
     {
         var pendingPhases = await _phaseRepo.GetPendingDueAsync(batch.Id, now);
+        if (!pendingPhases.Any()) return;
+
+        // Load members and data ONCE for the batch
+        var members = (await _memberRepo.GetActiveByBatchAsync(batch.Id)).ToList();
+        Dictionary<string, DataRow>? memberData = null;
+        if (members.Count > 0)
+            memberData = await LoadMemberDataAsync(runbook.DataTableName, members);
 
         foreach (var phase in pendingPhases)
         {
@@ -61,17 +68,12 @@ public class PhaseDispatcher : IPhaseDispatcher
                 continue;
             }
 
-            // Get active members for this batch
-            var members = (await _memberRepo.GetActiveByBatchAsync(batch.Id)).ToList();
             if (members.Count == 0)
             {
                 _logger.LogInformation("No active members for phase '{PhaseName}' in batch {BatchId}",
                     phase.PhaseName, batch.Id);
                 continue;
             }
-
-            // Load member data from dynamic table
-            var memberData = await LoadMemberDataAsync(runbook.DataTableName, members);
 
             // Pre-create step executions with resolved params
             using var conn = _db.CreateConnection();
@@ -82,7 +84,7 @@ public class PhaseDispatcher : IPhaseDispatcher
             {
                 foreach (var member in members)
                 {
-                    if (!memberData.TryGetValue(member.MemberKey, out var dataRow))
+                    if (!memberData!.TryGetValue(member.MemberKey, out var dataRow))
                     {
                         _logger.LogWarning("No data found for member {MemberKey} in table {TableName}",
                             member.MemberKey, runbook.DataTableName);

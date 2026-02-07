@@ -172,6 +172,10 @@ public class BatchManagementFunction
         if (file is null || file.Length == 0)
             return new BadRequestObjectResult(new { error = "CSV file is required" });
 
+        const long MaxFileSizeBytes = 50 * 1024 * 1024; // 50MB
+        if (file.Length > MaxFileSizeBytes)
+            return new BadRequestObjectResult(new { error = "CSV file exceeds 50MB size limit" });
+
         // Parse CSV
         await using var stream = file.OpenReadStream();
         var csvResult = await _csvUpload.ParseCsvAsync(stream, definition);
@@ -298,9 +302,7 @@ public class BatchManagementFunction
             return new BadRequestObjectResult(new { error = "Only manual batches can be advanced via API" });
 
         // Get runbook
-        // Note: We need to get the runbook from the batch's runbook_id
-        var runbooks = await _runbookRepo.GetActiveRunbooksAsync();
-        var runbook = runbooks.FirstOrDefault(r => r.Id == batch.RunbookId);
+        var runbook = await _runbookRepo.GetByIdAsync(batch.RunbookId);
         if (runbook is null)
             return new BadRequestObjectResult(new { error = "Runbook not found or no longer active" });
 

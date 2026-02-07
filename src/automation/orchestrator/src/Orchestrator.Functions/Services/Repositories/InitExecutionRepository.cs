@@ -15,11 +15,11 @@ public interface IInitExecutionRepository
     Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null);
 
     // Status updates
-    Task SetDispatchedAsync(int id, string jobId);
-    Task SetSucceededAsync(int id, string? resultJson);
-    Task SetFailedAsync(int id, string errorMessage);
-    Task SetPollingAsync(int id);
-    Task SetPollTimeoutAsync(int id);
+    Task<bool> SetDispatchedAsync(int id, string jobId);
+    Task<bool> SetSucceededAsync(int id, string? resultJson);
+    Task<bool> SetFailedAsync(int id, string errorMessage);
+    Task<bool> SetPollingAsync(int id);
+    Task<bool> SetPollTimeoutAsync(int id);
     Task UpdatePollStateAsync(int id);
 }
 
@@ -60,8 +60,8 @@ public class InitExecutionRepository : IInitExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<InitExecutionRecord>(
-            $"SELECT * FROM init_executions WHERE batch_id = @BatchId AND status = '{StepStatus.Pending}' ORDER BY step_index",
-            new { BatchId = batchId });
+            "SELECT * FROM init_executions WHERE batch_id = @BatchId AND status = @Status ORDER BY step_index",
+            new { BatchId = batchId, Status = StepStatus.Pending });
     }
 
     public async Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null)
@@ -69,17 +69,22 @@ public class InitExecutionRepository : IInitExecutionRepository
         var conn = transaction?.Connection ?? _db.CreateConnection();
         try
         {
-            return await conn.QuerySingleAsync<int>($@"
+            return await conn.QuerySingleAsync<int>(@"
                 INSERT INTO init_executions (
                     batch_id, step_name, step_index, runbook_version,
                     worker_id, function_name, params_json, status,
                     is_poll_step, poll_interval_sec, poll_timeout_sec, on_failure)
                 VALUES (
                     @BatchId, @StepName, @StepIndex, @RunbookVersion,
-                    @WorkerId, @FunctionName, @ParamsJson, '{StepStatus.Pending}',
+                    @WorkerId, @FunctionName, @ParamsJson, @Status,
                     @IsPollStep, @PollIntervalSec, @PollTimeoutSec, @OnFailure);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                record, transaction);
+                new
+                {
+                    record.BatchId, record.StepName, record.StepIndex, record.RunbookVersion,
+                    record.WorkerId, record.FunctionName, record.ParamsJson, Status = StepStatus.Pending,
+                    record.IsPollStep, record.PollIntervalSec, record.PollTimeoutSec, record.OnFailure
+                }, transaction);
         }
         finally
         {
@@ -88,56 +93,61 @@ public class InitExecutionRepository : IInitExecutionRepository
         }
     }
 
-    public async Task SetDispatchedAsync(int id, string jobId)
+    public async Task<bool> SetDispatchedAsync(int id, string jobId)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE init_executions
-            SET status = '{StepStatus.Dispatched}', job_id = @JobId, dispatched_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id, JobId = jobId });
+            SET status = @Status, job_id = @JobId, dispatched_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, JobId = jobId, Status = StepStatus.Dispatched, ExpectedStatus = StepStatus.Pending });
+        return rows > 0;
     }
 
-    public async Task SetSucceededAsync(int id, string? resultJson)
+    public async Task<bool> SetSucceededAsync(int id, string? resultJson)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE init_executions
-            SET status = '{StepStatus.Succeeded}', result_json = @ResultJson, completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id, ResultJson = resultJson });
+            SET status = @Status, result_json = @ResultJson, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status IN (@Dispatched, @Polling)",
+            new { Id = id, ResultJson = resultJson, Status = StepStatus.Succeeded, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetFailedAsync(int id, string errorMessage)
+    public async Task<bool> SetFailedAsync(int id, string errorMessage)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE init_executions
-            SET status = '{StepStatus.Failed}', error_message = @ErrorMessage, completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id, ErrorMessage = errorMessage });
+            SET status = @Status, error_message = @ErrorMessage, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status IN (@Dispatched, @Polling)",
+            new { Id = id, ErrorMessage = errorMessage, Status = StepStatus.Failed, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetPollingAsync(int id)
+    public async Task<bool> SetPollingAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE init_executions
-            SET status = '{StepStatus.Polling}',
+            SET status = @Status,
                 poll_started_at = COALESCE(poll_started_at, SYSUTCDATETIME()),
                 last_polled_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id });
+            WHERE id = @Id AND status IN (@Dispatched, @Polling)",
+            new { Id = id, Status = StepStatus.Polling, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
     }
 
-    public async Task SetPollTimeoutAsync(int id)
+    public async Task<bool> SetPollTimeoutAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync($@"
+        var rows = await conn.ExecuteAsync(@"
             UPDATE init_executions
-            SET status = '{StepStatus.PollTimeout}', completed_at = SYSUTCDATETIME()
-            WHERE id = @Id",
-            new { Id = id });
+            SET status = @Status, completed_at = SYSUTCDATETIME()
+            WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = StepStatus.PollTimeout, ExpectedStatus = StepStatus.Polling });
+        return rows > 0;
     }
 
     public async Task UpdatePollStateAsync(int id)

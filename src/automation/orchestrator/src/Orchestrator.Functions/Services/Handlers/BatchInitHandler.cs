@@ -90,7 +90,7 @@ public class BatchInitHandler : IBatchInitHandler
     {
         var job = new WorkerJobMessage
         {
-            JobId = Guid.NewGuid().ToString(),
+            JobId = $"init-{step.Id}",
             BatchId = batch.Id,
             WorkerId = step.WorkerId!,
             FunctionName = step.FunctionName!,

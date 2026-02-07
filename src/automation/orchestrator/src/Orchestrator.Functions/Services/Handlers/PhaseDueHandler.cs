@@ -119,7 +119,7 @@ public class PhaseDueHandler : IPhaseDueHandler
             {
                 var job = new WorkerJobMessage
                 {
-                    JobId = Guid.NewGuid().ToString(),
+                    JobId = $"step-{step.Id}",
                     BatchId = message.BatchId,
                     WorkerId = step.WorkerId!,
                     FunctionName = step.FunctionName!,

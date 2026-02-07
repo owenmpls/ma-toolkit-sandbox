@@ -95,8 +95,7 @@ public class MemberManagementFunction
             return new BadRequestObjectResult(new { error = $"Cannot add members to a batch with status '{batch.Status}'" });
 
         // Get runbook
-        var runbooks = await _runbookRepo.GetActiveRunbooksAsync();
-        var runbook = runbooks.FirstOrDefault(r => r.Id == batch.RunbookId);
+        var runbook = await _runbookRepo.GetByIdAsync(batch.RunbookId);
         if (runbook is null)
             return new BadRequestObjectResult(new { error = "Runbook not found or no longer active" });
 
@@ -110,6 +109,10 @@ public class MemberManagementFunction
         var file = form.Files.GetFile("file");
         if (file is null || file.Length == 0)
             return new BadRequestObjectResult(new { error = "CSV file is required" });
+
+        const long MaxFileSizeBytes = 50 * 1024 * 1024; // 50MB
+        if (file.Length > MaxFileSizeBytes)
+            return new BadRequestObjectResult(new { error = "CSV file exceeds 50MB size limit" });
 
         // Parse CSV
         await using var stream = file.OpenReadStream();
