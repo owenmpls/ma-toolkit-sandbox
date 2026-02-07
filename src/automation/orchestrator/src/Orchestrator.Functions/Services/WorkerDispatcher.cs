@@ -40,8 +40,7 @@ public class WorkerDispatcher : IWorkerDispatcher
         var sbMessage = new ServiceBusMessage(json)
         {
             ContentType = "application/json",
-            MessageId = job.JobId,
-            SessionId = job.WorkerId // Route to specific worker pool
+            MessageId = job.JobId
         };
         sbMessage.ApplicationProperties["WorkerId"] = job.WorkerId;
         sbMessage.ApplicationProperties["FunctionName"] = job.FunctionName;
@@ -74,8 +73,7 @@ public class WorkerDispatcher : IWorkerDispatcher
             var sbMessage = new ServiceBusMessage(json)
             {
                 ContentType = "application/json",
-                MessageId = job.JobId,
-                SessionId = job.WorkerId
+                MessageId = job.JobId
             };
             sbMessage.ApplicationProperties["WorkerId"] = job.WorkerId;
             sbMessage.ApplicationProperties["FunctionName"] = job.FunctionName;
