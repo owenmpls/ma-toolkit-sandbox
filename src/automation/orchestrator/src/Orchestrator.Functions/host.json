@@ -19,7 +19,7 @@
         "mode": "Exponential",
         "maxRetries": 3
       },
-      "prefetchCount": 0,
+      "prefetchCount": 16,
       "autoCompleteMessages": false,
       "maxConcurrentCalls": 16,
       "maxMessageBatchSize": 1000
