@@ -17,7 +17,7 @@ The Bicep template at `infra/automation/scheduler/deploy.bicep` (relative to the
 - Azure Functions App (Flex Consumption plan, .NET 8 isolated, Linux, system-assigned managed identity)
 - Storage Account (for Functions runtime)
 - Application Insights (connected to Log Analytics)
-- Azure SQL Server + Database (Standard S0, 2 GB, auto-pause at 60 min)
+- Azure SQL Server + Database (General Purpose Serverless Gen5 1 vCore, 32 GB, auto-pause at 60 min)
 - Service Bus topic (`orchestrator-events`) and subscription (`orchestrator`)
 - RBAC role assignments:
   - **Azure Service Bus Data Sender** on the Service Bus namespace

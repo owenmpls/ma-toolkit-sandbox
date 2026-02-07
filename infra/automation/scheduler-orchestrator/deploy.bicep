@@ -103,13 +103,14 @@ resource sqlDatabase 'Microsoft.Sql/databases@2023-08-01-preview' = {
   location: location
   tags: schedulerTags
   sku: {
-    name: 'S0'
-    tier: 'Standard'
+    name: 'GP_S_Gen5_1'
+    tier: 'GeneralPurpose'
   }
   properties: {
     collation: 'SQL_Latin1_General_CP1_CI_AS'
-    maxSizeBytes: 2147483648 // 2 GB
+    maxSizeBytes: 34359738368 // 32 GB (serverless minimum)
     autoPauseDelay: 60 // minutes – serverless auto-pause
+    minCapacity: json('0.5') // minimum vCores when active
   }
 }
 
