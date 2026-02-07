@@ -112,53 +112,45 @@ public class MemberRemovedHandler : IMemberRemovedHandler
         for (var stepIndex = 0; stepIndex < definition.OnMemberRemoved.Count; stepIndex++)
         {
             var step = definition.OnMemberRemoved[stepIndex];
-            try
+
+            Dictionary<string, string> resolvedParams;
+            string resolvedFunction;
+
+            if (memberData != null)
             {
-                Dictionary<string, string> resolvedParams;
-                string resolvedFunction;
-
-                if (memberData != null)
-                {
-                    resolvedFunction = _templateResolver.ResolveString(
-                        step.Function, memberData, batch.Id, batch.BatchStartTime);
-                    resolvedParams = _templateResolver.ResolveParams(
-                        step.Params, memberData, batch.Id, batch.BatchStartTime);
-                }
-                else
-                {
-                    // Limited resolution - only batch-level variables
-                    resolvedFunction = step.Function;
-                    resolvedParams = _templateResolver.ResolveInitParams(
-                        step.Params, batch.Id, batch.BatchStartTime);
-                }
-
-                var job = new WorkerJobMessage
-                {
-                    JobId = $"removed-{message.BatchMemberId}-{stepIndex}",
-                    BatchId = message.BatchId,
-                    WorkerId = step.WorkerId,
-                    FunctionName = resolvedFunction,
-                    Parameters = resolvedParams,
-                    CorrelationData = new JobCorrelationData
-                    {
-                        IsInitStep = false,
-                        RunbookName = message.RunbookName,
-                        RunbookVersion = message.RunbookVersion
-                    }
-                };
-
-                await _workerDispatcher.DispatchJobAsync(job);
-
-                _logger.LogInformation(
-                    "Dispatched on_member_removed step '{StepName}' (job {JobId}) for member {MemberKey}",
-                    step.Name, job.JobId, message.MemberKey);
+                resolvedFunction = _templateResolver.ResolveString(
+                    step.Function, memberData, batch.Id, batch.BatchStartTime);
+                resolvedParams = _templateResolver.ResolveParams(
+                    step.Params, memberData, batch.Id, batch.BatchStartTime);
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex,
-                    "Failed to dispatch on_member_removed step '{StepName}' for member {MemberKey}",
-                    step.Name, message.MemberKey);
+                // Limited resolution - only batch-level variables
+                resolvedFunction = step.Function;
+                resolvedParams = _templateResolver.ResolveInitParams(
+                    step.Params, batch.Id, batch.BatchStartTime);
             }
+
+            var job = new WorkerJobMessage
+            {
+                JobId = $"removed-{message.BatchMemberId}-{stepIndex}",
+                BatchId = message.BatchId,
+                WorkerId = step.WorkerId,
+                FunctionName = resolvedFunction,
+                Parameters = resolvedParams,
+                CorrelationData = new JobCorrelationData
+                {
+                    IsInitStep = false,
+                    RunbookName = message.RunbookName,
+                    RunbookVersion = message.RunbookVersion
+                }
+            };
+
+            await _workerDispatcher.DispatchJobAsync(job);
+
+            _logger.LogInformation(
+                "Dispatched on_member_removed step '{StepName}' (job {JobId}) for member {MemberKey}",
+                step.Name, job.JobId, message.MemberKey);
         }
     }
 }

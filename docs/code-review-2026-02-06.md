@@ -232,7 +232,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 18. Inconsistent Error Handling Strategies (Orchestrator)
+### 18. Inconsistent Error Handling Strategies (Orchestrator) ✅ FIXED
+
+> **Fixed in:** Removed try-catch that swallowed exceptions in `MemberRemovedHandler` dispatch loop. Exceptions now bubble up to `OrchestratorEventFunction`, consistent with all other handlers. Deterministic job IDs (`removed-{batchMemberId}-{stepIndex}`) ensure Service Bus deduplication prevents duplicate processing on retry.
 
 `OrchestratorEventFunction.cs` throws on error (enabling Service Bus retry), but `MemberRemovedHandler.cs:155-160` catches and swallows exceptions.
 
