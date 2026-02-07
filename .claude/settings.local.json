@@ -20,7 +20,15 @@
       "Bash(dotnet test:*)",
       "Bash(dotnet restore:*)",
       "Bash(pwsh:*)",
-      "Bash(dotnet run:*)"
+      "Bash(dotnet run:*)",
+      "Bash(az bicep build:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:dev.to)",
+      "Bash(git -C /Users/me/Documents/GitHub/ma-toolkit-sandbox status)",
+      "Bash(git -C /Users/me/Documents/GitHub/ma-toolkit-sandbox diff)",
+      "Bash(git -C /Users/me/Documents/GitHub/ma-toolkit-sandbox log --oneline -5)",
+      "Bash(git -C /Users/me/Documents/GitHub/ma-toolkit-sandbox push)",
+      "Bash(gh label list:*)"
     ]
   }
 }
