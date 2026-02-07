@@ -21,5 +21,10 @@ services:
       # - AZURE_TENANT_ID=your-hosting-tenant-id
       # - AZURE_CLIENT_ID=your-dev-app-id
       # - AZURE_CLIENT_SECRET=your-dev-app-secret
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
     volumes:
       - ./modules/CustomFunctions:/app/modules/CustomFunctions:ro

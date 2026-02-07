@@ -252,7 +252,9 @@ No correlation ID passed through the job-dispatch-result pipeline. Makes cross-s
 
 ---
 
-### 20. Docker Container Security (Cloud Worker)
+### 20. Docker Container Security (Cloud Worker) ✅ FIXED
+
+> **Fixed in:** Added non-root `worker` user with `USER` directive, `HEALTHCHECK` instruction using `curl` against `/health` endpoint, `EXPOSE 8080`, and `deploy.resources.limits` (1.0 CPU, 2G memory) in `docker-compose.yml`.
 
 - No `HEALTHCHECK` instruction in Dockerfile (despite health endpoint on port 8080)
 - Container runs as root (no `USER` directive)

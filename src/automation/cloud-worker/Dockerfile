@@ -14,7 +14,7 @@ RUN Set-PSRepository -Name PSGallery -InstallationPolicy Trusted && \
 
 # Install .NET packages for Service Bus, App Insights, and Azure Identity
 SHELL ["/bin/bash", "-c"]
-RUN apt-get update && apt-get install -y wget apt-transport-https && \
+RUN apt-get update && apt-get install -y wget apt-transport-https curl && \
     wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
     dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb && \
     apt-get update && apt-get install -y dotnet-runtime-8.0 && \
@@ -65,5 +65,14 @@ COPY modules/ ./modules/
 
 # Set environment variable for .NET library path
 ENV DOTNET_LIB_PATH=/opt/dotnet-libs
+
+SHELL ["/bin/bash", "-c"]
+RUN useradd --create-home --shell /bin/bash worker
+USER worker
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["pwsh", "-File", "/app/src/worker.ps1"]
