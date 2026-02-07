@@ -11,8 +11,8 @@ param baseName string
 @description('Azure region for deployment.')
 param location string = resourceGroup().location
 
-@description('Disable public network access on Key Vault (safe when private endpoint is provisioned via network.bicep).')
-param disableKeyVaultPublicAccess bool = true
+@description('Enable Key Vault firewall (deny-by-default + trusted Azure service bypass for Arc hybrid workers). VNet resources use the private endpoint from network.bicep.')
+param enableKeyVaultFirewall bool = true
 
 @description('Disable public network access on Service Bus. Must remain false on Standard SKU (no private endpoint support).')
 param disableServiceBusPublicAccess bool = false
@@ -96,7 +96,10 @@ resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-p
 }
 
 // ---------------------------------------------------------------------------
-// Key Vault
+// Key Vault — hybrid access model:
+// - VNet resources connect via private endpoint (network.bicep)
+// - Azure Arc hybrid workers connect via public endpoint (trusted service bypass)
+// - All other public traffic denied when firewall is enabled
 // ---------------------------------------------------------------------------
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -113,8 +116,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     enablePurgeProtection: true
-    publicNetworkAccess: disableKeyVaultPublicAccess ? 'Disabled' : null
-    networkAcls: disableKeyVaultPublicAccess ? {
+    publicNetworkAccess: 'Enabled'
+    networkAcls: enableKeyVaultFirewall ? {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
     } : null

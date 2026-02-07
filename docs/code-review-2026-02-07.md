@@ -80,7 +80,7 @@ Update `schema.sql` to match the C# models:
 - `disablePublicNetworkAccess` defaults to `false` — secrets and message bus are publicly accessible
 - **Fix**: Change default to `true` in production parameter files, or add a note that dev deployments are intentionally public
 - **File**: `infra/shared/deploy.bicep:15`, `deploy.parameters.json:9`
-- **Resolution**: Split into per-service params: `disableKeyVaultPublicAccess` (defaults `true`, KV has private endpoint) and `disableServiceBusPublicAccess` (defaults `false`, Standard SKU has no PE support). KV also gets `networkAcls` with `defaultAction: 'Deny'` and `bypass: 'AzureServices'` for defense-in-depth.
+- **Resolution**: Split into per-service params: `enableKeyVaultFirewall` (defaults `true`, public endpoint enabled but firewalled with deny-by-default + trusted Azure service bypass for Arc hybrid workers; VNet resources use private endpoint) and `disableServiceBusPublicAccess` (defaults `false`, Standard SKU has no PE support).
 
 ### 2.6 ACR Basic SKU — no SLA, no geo-replication — **DEFERRED** (sandbox)
 - Cloud-worker image pulls will fail if ACR is unavailable (Basic has no SLA)
