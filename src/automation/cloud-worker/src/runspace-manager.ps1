@@ -79,33 +79,7 @@ function Initialize-RunspacePool {
         $ps = [PowerShell]::Create()
         $ps.RunspacePool = $pool
 
-        $authScript = {
-            param($TenantId, $AppId, $AppSecret, $RunspaceIndex)
-
-            # Connect MgGraph
-            $secureSecret = ConvertTo-SecureString $AppSecret -AsPlainText -Force
-            $clientCredential = [System.Management.Automation.PSCredential]::new($AppId, $secureSecret)
-            Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $clientCredential -NoWelcome -ErrorAction Stop
-
-            # Get EXO token via client credentials and connect
-            $tokenUrl = 'https://login.microsoftonline.com/{0}/oauth2/v2.0/token' -f $TenantId
-            $body = @{
-                client_id     = $AppId
-                client_secret = $AppSecret
-                scope         = 'https://outlook.office365.com/.default'
-                grant_type    = 'client_credentials'
-            }
-            $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType 'application/x-www-form-urlencoded' -ErrorAction Stop
-            $exoParams = @{
-                AccessToken  = $response.access_token
-                Organization = $TenantId
-                ShowBanner   = $false
-                ErrorAction  = 'Stop'
-            }
-            Connect-ExchangeOnline @exoParams
-
-            return "Runspace $RunspaceIndex authenticated."
-        }
+        $authScript = Get-RunspaceAuthScriptBlock -TenantId $Config.TargetTenantId -AppId $Config.AppId -AppSecret $AppSecret
 
         $ps.AddScript($authScript).AddParameters(@{
             TenantId      = $Config.TargetTenantId

@@ -301,7 +301,9 @@ No project validates required configuration at startup. Errors only surface at r
 
 ---
 
-### 25. Duplicated Code in Admin CLI
+### 25. Duplicated Code in Admin CLI ✅ FIXED
+
+> **Fixed in:** issue #25 — Extracted `GetApiUrlOption` to shared `CommandHelpers` class, removed 5 duplicate copies.
 
 `GetApiUrlOption()` is copy-pasted across 5 command files.
 
@@ -309,7 +311,9 @@ No project validates required configuration at startup. Errors only surface at r
 
 ---
 
-### 26. Duplicate Auth Scriptblock (Cloud Worker)
+### 26. Duplicate Auth Scriptblock (Cloud Worker) ✅ FIXED
+
+> **Fixed in:** issue #26 — Replaced inline auth scriptblock with call to existing `Get-RunspaceAuthScriptBlock` function from `auth.ps1`.
 
 `runspace-manager.ps1` lines 82-108 contains an inline auth scriptblock that duplicates `Get-RunspaceAuthScriptBlock` in `auth.ps1` lines 164-208. The function in `auth.ps1` is defined but never called.
 
@@ -317,7 +321,9 @@ No project validates required configuration at startup. Errors only surface at r
 
 ---
 
-### 27. Magic Strings for Message Types and Status Values
+### 27. Magic Strings for Message Types and Status Values ✅ FIXED
+
+> **Fixed in:** issue #27 — Created `MessageTypes`, `WorkerResultStatus`, and `OverdueBehavior` constant classes. Updated all message classes, `BatchMemberRecord`, `RunbookRecord`, `PhaseEvaluator`, and `VersionTransitionHandler` to use constants.
 
 - Message type strings (`"batch-init"`, `"phase-due"`, etc.) repeated in message classes
 - `BatchMemberRecord.Status` defaults to `"active"` string instead of `MemberStatus.Active` constant

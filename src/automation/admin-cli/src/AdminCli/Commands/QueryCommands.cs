@@ -104,18 +104,9 @@ public static class QueryCommands
 
                 AnsiConsole.Write(sampleTable);
             }
-        }, nameArg, limitOption, jsonOption, GetApiUrlOption(command));
+        }, nameArg, limitOption, jsonOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
 
-    private static Option<string?> GetApiUrlOption(Command command)
-    {
-        return command.Parents
-            .OfType<Command>()
-            .SelectMany(c => c.Options)
-            .OfType<Option<string?>>()
-            .FirstOrDefault(o => o.Aliases.Contains("--api-url"))
-            ?? new Option<string?>("--api-url");
-    }
 }

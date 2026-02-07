@@ -41,7 +41,7 @@ public static class AutomationCommands
             ));
             panel.Header = new PanelHeader("Automation Status");
             AnsiConsole.Write(panel);
-        }, nameArg, GetApiUrlOption(command));
+        }, nameArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -60,7 +60,7 @@ public static class AutomationCommands
             await apiClient.SetAutomationStatusAsync(name, true, apiUrl: apiUrl);
             AnsiConsole.MarkupLine($"[green]Enabled[/] automation for runbook [blue]{name}[/]");
             AnsiConsole.MarkupLine("[dim]The scheduler will now automatically execute queries and create batches.[/]");
-        }, nameArg, GetApiUrlOption(command));
+        }, nameArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -79,18 +79,9 @@ public static class AutomationCommands
             await apiClient.SetAutomationStatusAsync(name, false, apiUrl: apiUrl);
             AnsiConsole.MarkupLine($"[yellow]Disabled[/] automation for runbook [blue]{name}[/]");
             AnsiConsole.MarkupLine("[dim]Existing batches will continue processing. No new batches will be created automatically.[/]");
-        }, nameArg, GetApiUrlOption(command));
+        }, nameArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
 
-    private static Option<string?> GetApiUrlOption(Command command)
-    {
-        return command.Parents
-            .OfType<Command>()
-            .SelectMany(c => c.Options)
-            .OfType<Option<string?>>()
-            .FirstOrDefault(o => o.Aliases.Contains("--api-url"))
-            ?? new Option<string?>("--api-url");
-    }
 }

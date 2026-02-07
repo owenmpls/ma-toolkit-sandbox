@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using MaToolkit.Automation.Shared.Constants;
 
 namespace MaToolkit.Automation.Shared.Models.Messages;
 
 public class PollCheckMessage
 {
     [JsonPropertyName("messageType")]
-    public string MessageType => "poll-check";
+    public string MessageType => MessageTypes.PollCheck;
 
     [JsonPropertyName("runbookName")]
     public string RunbookName { get; set; } = string.Empty;

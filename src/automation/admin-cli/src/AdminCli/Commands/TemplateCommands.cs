@@ -51,18 +51,9 @@ public static class TemplateCommands
 
             AnsiConsole.MarkupLine($"\n[dim]Fill in the CSV and use:[/]");
             AnsiConsole.MarkupLine($"  matoolkit batch create {name} {outputPath}");
-        }, nameArg, outputOption, GetApiUrlOption(command));
+        }, nameArg, outputOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
 
-    private static Option<string?> GetApiUrlOption(Command command)
-    {
-        return command.Parents
-            .OfType<Command>()
-            .SelectMany(c => c.Options)
-            .OfType<Option<string?>>()
-            .FirstOrDefault(o => o.Aliases.Contains("--api-url"))
-            ?? new Option<string?>("--api-url");
-    }
 }

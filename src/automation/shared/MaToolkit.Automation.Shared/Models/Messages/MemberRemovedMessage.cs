@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using MaToolkit.Automation.Shared.Constants;
 
 namespace MaToolkit.Automation.Shared.Models.Messages;
 
 public class MemberRemovedMessage
 {
     [JsonPropertyName("messageType")]
-    public string MessageType => "member-removed";
+    public string MessageType => MessageTypes.MemberRemoved;
 
     [JsonPropertyName("runbookName")]
     public string RunbookName { get; set; } = string.Empty;

@@ -62,7 +62,7 @@ public static class RunbookCommands
 
                     AnsiConsole.MarkupLine($"[green]Successfully published[/] runbook [blue]{result.Name}[/] version [yellow]{result.Version}[/]");
                 });
-        }, fileArg, nameOption, GetApiUrlOption(command));
+        }, fileArg, nameOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -97,7 +97,7 @@ public static class RunbookCommands
             }
 
             AnsiConsole.Write(table);
-        }, GetApiUrlOption(command));
+        }, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -133,7 +133,7 @@ public static class RunbookCommands
                 AnsiConsole.MarkupLine($"[dim]# {runbook.Name} v{runbook.Version}[/]");
                 Console.WriteLine(runbook.YamlContent);
             }
-        }, nameArg, versionOption, outputOption, GetApiUrlOption(command));
+        }, nameArg, versionOption, outputOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -173,7 +173,7 @@ public static class RunbookCommands
             }
 
             AnsiConsole.Write(table);
-        }, nameArg, GetApiUrlOption(command));
+        }, nameArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -207,20 +207,9 @@ public static class RunbookCommands
 
             await apiClient.DeleteRunbookVersionAsync(name, version, apiUrl);
             AnsiConsole.MarkupLine($"[green]Deactivated[/] {name} version {version}");
-        }, nameArg, versionArg, forceOption, GetApiUrlOption(command));
+        }, nameArg, versionArg, forceOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
-    }
-
-    private static Option<string?> GetApiUrlOption(Command command)
-    {
-        // Find the global --api-url option from root
-        return command.Parents
-            .OfType<Command>()
-            .SelectMany(c => c.Options)
-            .OfType<Option<string?>>()
-            .FirstOrDefault(o => o.Aliases.Contains("--api-url"))
-            ?? new Option<string?>("--api-url");
     }
 
     private static string? ExtractNameFromYaml(string yamlContent)

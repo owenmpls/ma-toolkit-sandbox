@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Models.Yaml;
@@ -68,7 +69,7 @@ public class VersionTransitionHandler : IVersionTransitionHandler
             await _phaseRepo.InsertAsync(phase);
         }
 
-        if (runbook.OverdueBehavior == "ignore" && !runbook.IgnoreOverdueApplied)
+        if (runbook.OverdueBehavior == OverdueBehavior.Ignore && !runbook.IgnoreOverdueApplied)
         {
             await _runbookRepo.SetIgnoreOverdueAppliedAsync(runbook.Id);
         }

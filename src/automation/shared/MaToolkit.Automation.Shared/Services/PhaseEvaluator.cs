@@ -127,14 +127,14 @@ public class PhaseEvaluator : IPhaseEvaluator
 
             var status = PhaseStatus.Pending;
 
-            if (isOverdue && overdueBehavior == "ignore" && !ignoreOverdueApplied)
+            if (isOverdue && overdueBehavior == OverdueBehavior.Ignore && !ignoreOverdueApplied)
             {
                 status = PhaseStatus.Skipped;
                 _logger.LogInformation(
                     "Skipping overdue phase '{PhaseName}' for batch {BatchId} (ignore mode, first run)",
                     phase.Name, batchId);
             }
-            else if (isOverdue && overdueBehavior == "rerun")
+            else if (isOverdue && overdueBehavior == OverdueBehavior.Rerun)
             {
                 _logger.LogInformation(
                     "Re-creating overdue phase '{PhaseName}' for batch {BatchId} (rerun mode)",

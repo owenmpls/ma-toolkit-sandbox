@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using MaToolkit.Automation.Shared.Constants;
 
 namespace MaToolkit.Automation.Shared.Models.Messages;
 
 public class PhaseDueMessage
 {
     [JsonPropertyName("messageType")]
-    public string MessageType => "phase-due";
+    public string MessageType => MessageTypes.PhaseDue;
 
     [JsonPropertyName("runbookName")]
     public string RunbookName { get; set; } = string.Empty;

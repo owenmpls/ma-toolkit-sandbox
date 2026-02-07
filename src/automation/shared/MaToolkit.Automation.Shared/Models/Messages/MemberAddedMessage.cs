@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using MaToolkit.Automation.Shared.Constants;
 
 namespace MaToolkit.Automation.Shared.Models.Messages;
 
 public class MemberAddedMessage
 {
     [JsonPropertyName("messageType")]
-    public string MessageType => "member-added";
+    public string MessageType => MessageTypes.MemberAdded;
 
     [JsonPropertyName("runbookName")]
     public string RunbookName { get; set; } = string.Empty;

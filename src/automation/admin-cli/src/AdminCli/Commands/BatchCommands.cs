@@ -79,7 +79,7 @@ public static class BatchCommands
             }
 
             AnsiConsole.Write(table);
-        }, runbookOption, statusOption, GetApiUrlOption(command));
+        }, runbookOption, statusOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -133,7 +133,7 @@ public static class BatchCommands
             {
                 AnsiConsole.MarkupLine($"\n[dim]To advance this batch:[/] matoolkit batch advance {batch.Id}");
             }
-        }, idArg, GetApiUrlOption(command));
+        }, idArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -188,7 +188,7 @@ public static class BatchCommands
             }
 
             AnsiConsole.MarkupLine($"\n[dim]To advance this batch:[/] matoolkit batch advance {result.BatchId}");
-        }, runbookArg, fileArg, GetApiUrlOption(command));
+        }, runbookArg, fileArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -246,7 +246,7 @@ public static class BatchCommands
                         return;
                 }
             } while (auto);
-        }, idArg, autoOption, GetApiUrlOption(command));
+        }, idArg, autoOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -278,7 +278,7 @@ public static class BatchCommands
 
             await apiClient.CancelBatchAsync(id, apiUrl);
             AnsiConsole.MarkupLine($"[yellow]Cancelled[/] batch {id}");
-        }, idArg, forceOption, GetApiUrlOption(command));
+        }, idArg, forceOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -319,7 +319,7 @@ public static class BatchCommands
             }
 
             AnsiConsole.Write(table);
-        }, idArg, GetApiUrlOption(command));
+        }, idArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -368,7 +368,7 @@ public static class BatchCommands
                     AnsiConsole.MarkupLine($"  - {warning}");
                 }
             }
-        }, idArg, fileArg, GetApiUrlOption(command));
+        }, idArg, fileArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -402,7 +402,7 @@ public static class BatchCommands
 
             await apiClient.RemoveMemberAsync(batchId, memberId, apiUrl);
             AnsiConsole.MarkupLine($"[green]Removed[/] member {memberId} from batch {batchId}");
-        }, batchIdArg, memberIdArg, forceOption, GetApiUrlOption(command));
+        }, batchIdArg, memberIdArg, forceOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -454,7 +454,7 @@ public static class BatchCommands
             }
 
             AnsiConsole.Write(table);
-        }, idArg, GetApiUrlOption(command));
+        }, idArg, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
@@ -549,18 +549,9 @@ public static class BatchCommands
                     AnsiConsole.MarkupLine($"  [dim]... and {failedSteps.Count - 5} more[/]");
                 }
             }
-        }, idArg, phaseOption, statusOption, limitOption, GetApiUrlOption(command));
+        }, idArg, phaseOption, statusOption, limitOption, CommandHelpers.GetApiUrlOption(command));
 
         return command;
     }
 
-    private static Option<string?> GetApiUrlOption(Command command)
-    {
-        return command.Parents
-            .OfType<Command>()
-            .SelectMany(c => c.Options)
-            .OfType<Option<string?>>()
-            .FirstOrDefault(o => o.Aliases.Contains("--api-url"))
-            ?? new Option<string?>("--api-url");
-    }
 }
