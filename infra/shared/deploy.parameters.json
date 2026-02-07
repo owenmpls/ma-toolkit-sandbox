@@ -13,6 +13,13 @@
     },
     "serviceBusNamespaceName": {
       "value": "matoolkit-sb"
+    },
+    "tags": {
+      "value": {
+        "component": "shared-network",
+        "project": "ma-toolkit",
+        "environment": "dev"
+      }
     }
   }
 }

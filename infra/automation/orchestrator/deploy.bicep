@@ -34,6 +34,12 @@ param logAnalyticsWorkspaceId string
 @description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
 param orchestratorSubnetId string = ''
 
+@description('Tags to apply to all resources')
+param tags object = {
+  component: 'orchestrator'
+  project: 'ma-toolkit'
+}
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -87,6 +93,7 @@ resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
+  tags: tags
   kind: 'StorageV2'
   sku: {
     name: 'Standard_LRS'
@@ -112,6 +119,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
   location: location
+  tags: tags
   kind: 'web'
   properties: {
     Application_Type: 'web'
@@ -126,6 +134,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: appServicePlanName
   location: location
+  tags: tags
   kind: 'functionapp'
   sku: {
     tier: 'FlexConsumption'
@@ -143,6 +152,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
 resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
+  tags: tags
   kind: 'functionapp,linux'
   identity: {
     type: 'SystemAssigned'
@@ -220,6 +230,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBusNamespace
   name: workerJobsTopicName
+  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P1D'
@@ -232,6 +243,7 @@ resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-prev
 resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBusNamespace
   name: workerResultsTopicName
+  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P1D'
@@ -244,6 +256,7 @@ resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-p
 resource workerResultsSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
   parent: workerResultsTopic
   name: workerResultsSubscriptionName
+  tags: tags
   properties: {
     maxDeliveryCount: 10
     lockDuration: 'PT1M'

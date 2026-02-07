@@ -37,6 +37,12 @@ param idleTimeoutSeconds int = 300
 @description('Subnet resource ID for the Container App Environment. Leave empty to skip VNet integration.')
 param cloudWorkerSubnetId string = ''
 
+@description('Tags to apply to all resources')
+param tags object = {
+  component: 'cloud-worker'
+  project: 'ma-toolkit'
+}
+
 // Built-in role definition IDs
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
 
@@ -44,6 +50,7 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: '${baseName}-logs'
   location: location
+  tags: tags
   properties: {
     sku: {
       name: 'PerGB2018'
@@ -56,6 +63,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: '${baseName}-ai'
   location: location
+  tags: tags
   kind: 'web'
   properties: {
     Application_Type: 'web'
@@ -67,6 +75,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
   name: '${baseName}-sb'
   location: location
+  tags: tags
   sku: {
     name: 'Standard'
     tier: 'Standard'
@@ -80,6 +89,7 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
 resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
   name: 'worker-jobs'
+  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P1D'
@@ -89,6 +99,7 @@ resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' =
 resource resultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
   name: 'worker-results'
+  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P1D'
@@ -132,6 +143,7 @@ resource orchestratorSubscription 'Microsoft.ServiceBus/namespaces/topics/subscr
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: '${baseName}-kv'
   location: location
+  tags: tags
   properties: {
     sku: {
       family: 'A'
@@ -150,6 +162,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: '${baseName}acr'
   location: location
+  tags: tags
   sku: {
     name: 'Basic'
   }
@@ -162,6 +175,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: '${baseName}-env'
   location: location
+  tags: tags
   properties: {
     vnetConfiguration: !empty(cloudWorkerSubnetId) ? {
       infrastructureSubnetId: cloudWorkerSubnetId
@@ -203,6 +217,7 @@ resource sbConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
 resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: '${baseName}-worker-${workerId}'
   location: location
+  tags: tags
   identity: {
     type: 'SystemAssigned'
   }

@@ -24,6 +24,12 @@ param serviceBusNamespaceName string
 @description('Names of the storage accounts to create private endpoints for.')
 param storageAccountNames array = []
 
+@description('Tags to apply to all resources')
+param tags object = {
+  component: 'shared-network'
+  project: 'ma-toolkit'
+}
+
 // ---------------------------------------------------------------------------
 // Existing resource references
 // ---------------------------------------------------------------------------
@@ -47,6 +53,7 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
 resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
   name: '${baseName}-vnet'
   location: location
+  tags: tags
   properties: {
     addressSpace: {
       addressPrefixes: [
@@ -119,21 +126,25 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
 resource sqlDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: 'privatelink.database.windows.net'
   location: 'global'
+  tags: tags
 }
 
 resource kvDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: 'privatelink.vaultcore.azure.net'
   location: 'global'
+  tags: tags
 }
 
 resource sbDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: 'privatelink.servicebus.windows.net'
   location: 'global'
+  tags: tags
 }
 
 resource stDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: 'privatelink.blob.${environment().suffixes.storage}'
   location: 'global'
+  tags: tags
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +155,7 @@ resource sqlDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2
   parent: sqlDnsZone
   name: '${baseName}-sql-link'
   location: 'global'
+  tags: tags
   properties: {
     virtualNetwork: {
       id: vnet.id
@@ -156,6 +168,7 @@ resource kvDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@20
   parent: kvDnsZone
   name: '${baseName}-kv-link'
   location: 'global'
+  tags: tags
   properties: {
     virtualNetwork: {
       id: vnet.id
@@ -168,6 +181,7 @@ resource sbDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@20
   parent: sbDnsZone
   name: '${baseName}-sb-link'
   location: 'global'
+  tags: tags
   properties: {
     virtualNetwork: {
       id: vnet.id
@@ -180,6 +194,7 @@ resource stDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@20
   parent: stDnsZone
   name: '${baseName}-st-link'
   location: 'global'
+  tags: tags
   properties: {
     virtualNetwork: {
       id: vnet.id
@@ -195,6 +210,7 @@ resource stDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@20
 resource sqlPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
   name: '${baseName}-pe-sql'
   location: location
+  tags: tags
   properties: {
     subnet: {
       id: vnet.properties.subnets[4].id // snet-private-endpoints
@@ -216,6 +232,7 @@ resource sqlPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
 resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
   name: '${baseName}-pe-kv'
   location: location
+  tags: tags
   properties: {
     subnet: {
       id: vnet.properties.subnets[4].id // snet-private-endpoints
@@ -237,6 +254,7 @@ resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
 resource sbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
   name: '${baseName}-pe-sb'
   location: location
+  tags: tags
   properties: {
     subnet: {
       id: vnet.properties.subnets[4].id // snet-private-endpoints
@@ -262,6 +280,7 @@ resource sbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
 resource stPrivateEndpoints 'Microsoft.Network/privateEndpoints@2023-11-01' = [for (name, i) in storageAccountNames: {
   name: '${baseName}-pe-st-${i}'
   location: location
+  tags: tags
   properties: {
     subnet: {
       id: vnet.properties.subnets[4].id // snet-private-endpoints

@@ -262,7 +262,9 @@ No correlation ID passed through the job-dispatch-result pipeline. Makes cross-s
 
 ---
 
-### 21. Missing Tags on Infrastructure Resources
+### 21. Missing Tags on Infrastructure Resources ✅ FIXED
+
+> **Fixed in:** Added `tags` parameter with defaults (`component` + `project`) to scheduler, orchestrator, cloud-worker, and shared network Bicep templates. Tags applied to all taggable top-level resources (38 total across 4 templates). Parameter files updated with `environment: "dev"`. Also created missing orchestrator parameter file.
 
 Cloud worker, scheduler, and orchestrator Bicep templates define no `tags` parameter. Admin API has minimal tags. Prevents cost tracking and organizational compliance.
 

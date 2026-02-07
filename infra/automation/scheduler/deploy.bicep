@@ -27,6 +27,12 @@ param logAnalyticsWorkspaceId string
 @description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
 param schedulerSubnetId string = ''
 
+@description('Tags to apply to all resources')
+param tags object = {
+  component: 'scheduler'
+  project: 'ma-toolkit'
+}
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -76,6 +82,7 @@ resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
+  tags: tags
   kind: 'StorageV2'
   sku: {
     name: 'Standard_LRS'
@@ -101,6 +108,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
   location: location
+  tags: tags
   kind: 'web'
   properties: {
     Application_Type: 'web'
@@ -115,6 +123,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: appServicePlanName
   location: location
+  tags: tags
   kind: 'functionapp'
   sku: {
     tier: 'FlexConsumption'
@@ -132,6 +141,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
 resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
+  tags: tags
   kind: 'functionapp,linux'
   identity: {
     type: 'SystemAssigned'
@@ -188,6 +198,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 resource serviceBusTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBusNamespace
   name: serviceBusTopicName
+  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P14D'
@@ -197,6 +208,7 @@ resource serviceBusTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-prev
 resource serviceBusSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
   parent: serviceBusTopic
   name: serviceBusSubscriptionName
+  tags: tags
   properties: {
     maxDeliveryCount: 10
     lockDuration: 'PT1M'
@@ -212,6 +224,7 @@ resource serviceBusSubscription 'Microsoft.ServiceBus/namespaces/topics/subscrip
 resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   name: sqlServerName
   location: location
+  tags: tags
   properties: {
     administratorLogin: sqlAdminLogin
     administratorLoginPassword: sqlAdminPassword
@@ -224,6 +237,7 @@ resource sqlDatabase 'Microsoft.Sql/databases@2023-08-01-preview' = {
   parent: sqlServer
   name: sqlDatabaseName
   location: location
+  tags: tags
   sku: {
     name: 'S0'
     tier: 'Standard'
