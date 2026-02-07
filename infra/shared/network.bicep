@@ -65,6 +65,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
         name: 'snet-scheduler'
         properties: {
           addressPrefix: '10.0.1.0/24'
+          serviceEndpoints: [
+            { service: 'Microsoft.Storage' }
+          ]
           delegations: [
             {
               name: 'delegation-web'
@@ -79,6 +82,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
         name: 'snet-orchestrator'
         properties: {
           addressPrefix: '10.0.2.0/24'
+          serviceEndpoints: [
+            { service: 'Microsoft.Storage' }
+          ]
           delegations: [
             {
               name: 'delegation-web'
@@ -93,6 +99,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
         name: 'snet-admin-api'
         properties: {
           addressPrefix: '10.0.3.0/24'
+          serviceEndpoints: [
+            { service: 'Microsoft.Storage' }
+          ]
           delegations: [
             {
               name: 'delegation-web'
@@ -147,6 +156,18 @@ resource stDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   tags: tags
 }
 
+resource stQueueDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: 'privatelink.queue.${environment().suffixes.storage}'
+  location: 'global'
+  tags: tags
+}
+
+resource stTableDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: 'privatelink.table.${environment().suffixes.storage}'
+  location: 'global'
+  tags: tags
+}
+
 // ---------------------------------------------------------------------------
 // VNet links for DNS zones
 // ---------------------------------------------------------------------------
@@ -193,6 +214,32 @@ resource sbDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@20
 resource stDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
   parent: stDnsZone
   name: '${baseName}-st-link'
+  location: 'global'
+  tags: tags
+  properties: {
+    virtualNetwork: {
+      id: vnet.id
+    }
+    registrationEnabled: false
+  }
+}
+
+resource stQueueDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: stQueueDnsZone
+  name: '${baseName}-st-queue-link'
+  location: 'global'
+  tags: tags
+  properties: {
+    virtualNetwork: {
+      id: vnet.id
+    }
+    registrationEnabled: false
+  }
+}
+
+resource stTableDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: stTableDnsZone
+  name: '${baseName}-st-table-link'
   location: 'global'
   tags: tags
   properties: {
@@ -299,6 +346,50 @@ resource stPrivateEndpoints 'Microsoft.Network/privateEndpoints@2023-11-01' = [f
   }
 }]
 
+resource stQueuePrivateEndpoints 'Microsoft.Network/privateEndpoints@2023-11-01' = [for (name, i) in storageAccountNames: {
+  name: '${baseName}-pe-stq-${i}'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: vnet.properties.subnets[4].id // snet-private-endpoints
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${baseName}-plsc-stq-${i}'
+        properties: {
+          privateLinkServiceId: resourceId('Microsoft.Storage/storageAccounts', name)
+          groupIds: [
+            'queue'
+          ]
+        }
+      }
+    ]
+  }
+}]
+
+resource stTablePrivateEndpoints 'Microsoft.Network/privateEndpoints@2023-11-01' = [for (name, i) in storageAccountNames: {
+  name: '${baseName}-pe-stt-${i}'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: vnet.properties.subnets[4].id // snet-private-endpoints
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${baseName}-plsc-stt-${i}'
+        properties: {
+          privateLinkServiceId: resourceId('Microsoft.Storage/storageAccounts', name)
+          groupIds: [
+            'table'
+          ]
+        }
+      }
+    ]
+  }
+}]
+
 // ---------------------------------------------------------------------------
 // DNS Zone Groups (auto-register A records)
 // ---------------------------------------------------------------------------
@@ -357,6 +448,36 @@ resource stDnsGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@20
         name: 'st-config-${i}'
         properties: {
           privateDnsZoneId: stDnsZone.id
+        }
+      }
+    ]
+  }
+}]
+
+resource stQueueDnsGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = [for (name, i) in storageAccountNames: {
+  parent: stQueuePrivateEndpoints[i]
+  name: 'stq-dns-group-${i}'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'stq-config-${i}'
+        properties: {
+          privateDnsZoneId: stQueueDnsZone.id
+        }
+      }
+    ]
+  }
+}]
+
+resource stTableDnsGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = [for (name, i) in storageAccountNames: {
+  parent: stTablePrivateEndpoints[i]
+  name: 'stt-dns-group-${i}'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'stt-config-${i}'
+        properties: {
+          privateDnsZoneId: stTableDnsZone.id
         }
       }
     ]

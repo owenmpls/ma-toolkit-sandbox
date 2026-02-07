@@ -21,7 +21,7 @@
       "value": "matoolkit-kv"
     },
     "adminApiSubnetId": {
-      "value": ""
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/virtualNetworks/matoolkit-vnet/subnets/snet-admin-api"
     },
     "logAnalyticsWorkspaceId": {
       "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.OperationalInsights/workspaces/<WORKSPACE_NAME>"

@@ -11,8 +11,11 @@ param baseName string
 @description('Azure region for deployment.')
 param location string = resourceGroup().location
 
-@description('Disable public network access on Service Bus and Key Vault (for VNet-only deployments).')
-param disablePublicNetworkAccess bool = false
+@description('Disable public network access on Key Vault (safe when private endpoint is provisioned via network.bicep).')
+param disableKeyVaultPublicAccess bool = true
+
+@description('Disable public network access on Service Bus. Must remain false on Standard SKU (no private endpoint support).')
+param disableServiceBusPublicAccess bool = false
 
 @description('Tags to apply to all resources.')
 param tags object = {
@@ -49,7 +52,7 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
     tier: 'Standard'
   }
   properties: {
-    publicNetworkAccess: disablePublicNetworkAccess ? 'Disabled' : null
+    publicNetworkAccess: disableServiceBusPublicAccess ? 'Disabled' : null
   }
 }
 
@@ -107,7 +110,11 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     enablePurgeProtection: true
-    publicNetworkAccess: disablePublicNetworkAccess ? 'Disabled' : null
+    publicNetworkAccess: disableKeyVaultPublicAccess ? 'Disabled' : null
+    networkAcls: disableKeyVaultPublicAccess ? {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    } : null
   }
 }
 

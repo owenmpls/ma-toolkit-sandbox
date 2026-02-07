@@ -30,7 +30,7 @@
       "value": 300
     },
     "cloudWorkerSubnetId": {
-      "value": ""
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/virtualNetworks/matoolkit-vnet/subnets/snet-cloud-worker"
     },
     "serviceBusNamespaceName": {
       "value": "matoolkit-sb"

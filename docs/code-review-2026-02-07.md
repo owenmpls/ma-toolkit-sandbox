@@ -47,12 +47,13 @@ Update `schema.sql` to match the C# models:
 
 ## Tier 2: Infrastructure (hard to change after deployment)
 
-### 2.1 SQL Server has no connectivity path
+### 2.1 SQL Server has no connectivity path — **FIXED**
 - **deploy.bicep line 96**: `publicNetworkAccess: 'Disabled'`
 - No firewall rules, no private endpoint, no VNet service endpoint
 - **Impact**: Deployment succeeds but Function Apps cannot reach SQL — every query times out
 - **Fix**: Add `Microsoft.Sql/servers/firewallRules` with `0.0.0.0`-`0.0.0.0` (Allow Azure Services), or configure VNet + private endpoint
 - **File**: `infra/automation/scheduler-orchestrator/deploy.bicep:88-98`
+- **Resolution**: VNet private networking wired up — `infra/shared/network.bicep` provides SQL private endpoint + DNS zone. Function Apps get VNet integration via subnet IDs. Scheduler/orchestrator Function Apps have `publicNetworkAccess: 'Disabled'` when VNet is active.
 
 ### 2.2 SQL Database `autoPauseDelay` on a non-serverless SKU
 - **deploy.bicep line 106-112**: SKU is `S0` (Standard provisioned) but `autoPauseDelay: 60` is set
@@ -75,15 +76,17 @@ Update `schema.sql` to match the C# models:
 - **Fix**: Remove `SessionId` assignment from `WorkerDispatcher.cs` to avoid confusion, OR document that SQL filters (not sessions) handle worker routing
 - **File**: `src/automation/orchestrator/.../Services/WorkerDispatcher.cs:44,78`
 
-### 2.5 Default public network access on Key Vault and Service Bus
+### 2.5 Default public network access on Key Vault and Service Bus — **FIXED**
 - `disablePublicNetworkAccess` defaults to `false` — secrets and message bus are publicly accessible
 - **Fix**: Change default to `true` in production parameter files, or add a note that dev deployments are intentionally public
 - **File**: `infra/automation/shared/deploy.bicep:15`, `deploy.parameters.json:9`
+- **Resolution**: Split into per-service params: `disableKeyVaultPublicAccess` (defaults `true`, KV has private endpoint) and `disableServiceBusPublicAccess` (defaults `false`, Standard SKU has no PE support). KV also gets `networkAcls` with `defaultAction: 'Deny'` and `bypass: 'AzureServices'` for defense-in-depth.
 
-### 2.6 ACR Basic SKU — no SLA, no geo-replication
+### 2.6 ACR Basic SKU — no SLA, no geo-replication — **DEFERRED** (sandbox)
 - Cloud-worker image pulls will fail if ACR is unavailable (Basic has no SLA)
 - **Fix**: Use `Standard` SKU for any non-dev environment
 - **File**: `infra/automation/shared/deploy.bicep:118-128`
+- **Note**: Kept Basic for sandbox — no PE support without Premium ($$$), managed identity pulls use Azure backbone. Upgrade to Standard/Premium for production.
 
 ### 2.7 Application Insights retention inconsistent
 - Admin-api: explicit `RetentionInDays: 30`

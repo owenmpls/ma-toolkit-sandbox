@@ -5,7 +5,10 @@
     "baseName": {
       "value": "matoolkit"
     },
-    "disablePublicNetworkAccess": {
+    "disableKeyVaultPublicAccess": {
+      "value": true
+    },
+    "disableServiceBusPublicAccess": {
       "value": false
     },
     "tags": {

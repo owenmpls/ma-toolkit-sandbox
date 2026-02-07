@@ -104,7 +104,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   properties: {
     vnetConfiguration: !empty(cloudWorkerSubnetId) ? {
       infrastructureSubnetId: cloudWorkerSubnetId
-      internal: false
+      internal: true
     } : null
     appLogsConfiguration: {
       destination: 'log-analytics'
