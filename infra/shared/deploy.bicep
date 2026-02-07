@@ -17,6 +17,9 @@ param enableKeyVaultFirewall bool = true
 @description('Disable public network access on Service Bus. Must remain false on Standard SKU (no private endpoint support).')
 param disableServiceBusPublicAccess bool = false
 
+@description('Log Analytics workspace data retention in days. Workspace-based App Insights inherit this value.')
+param logAnalyticsRetentionDays int = 30
+
 @description('Tags to apply to all resources.')
 param tags object = {
   component: 'shared'
@@ -35,7 +38,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
     sku: {
       name: 'PerGB2018'
     }
-    retentionInDays: 30
+    retentionInDays: logAnalyticsRetentionDays
   }
 }
 
