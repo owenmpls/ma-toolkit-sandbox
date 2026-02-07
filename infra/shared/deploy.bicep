@@ -63,7 +63,8 @@ resource orchestratorEventsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P7D'
-    requiresDuplicateDetection: false
+    requiresDuplicateDetection: true
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
     enablePartitioning: false
   }
 }
@@ -75,7 +76,8 @@ resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-prev
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P7D'
-    requiresDuplicateDetection: false
+    requiresDuplicateDetection: true
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
     enablePartitioning: false
   }
 }
@@ -87,7 +89,8 @@ resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-p
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P7D'
-    requiresDuplicateDetection: false
+    requiresDuplicateDetection: true
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
     enablePartitioning: false
   }
 }
