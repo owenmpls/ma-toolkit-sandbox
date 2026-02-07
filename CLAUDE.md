@@ -194,6 +194,7 @@ Key design choices:
 ## Code Review Recommendations
 
 - **2026-02-06**: Full codebase review of `src/automation/` and `infra/automation/` — [`docs/code-review-2026-02-06.md`](docs/code-review-2026-02-06.md). Covers 27 issues (4 critical, 10 high, 13 medium/low) with specific file paths, line numbers, and fix descriptions. An implementation plan exists at `.claude/plans/deep-coalescing-mitten.md`.
+- **2026-02-07**: Pre-deployment review of `src/automation/` and `infra/automation/` — [`docs/code-review-2026-02-07.md`](docs/code-review-2026-02-07.md). Covers 28 issues across 5 tiers (4 schema drift, 7 infrastructure, 3 cross-service contracts, 9 application-level, 5 deferred) organized by deployment-lock-in risk.
 
 ## PowerShell Gotchas
 

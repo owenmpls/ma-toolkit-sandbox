@@ -1,0 +1,218 @@
+# Pre-Deployment Code Review: `src/automation/` and `infra/automation/`
+
+## Context
+
+Full codebase review ahead of initial Azure deployment, focused on issues that will be **difficult or impossible to change after deployment** — schema decisions, infrastructure topology, cross-service contracts, and resource configurations that require recreation or data migration to fix. Organized into tiers by deployment-lock-in risk.
+
+---
+
+## Tier 1: SQL Schema Drift (blocks deployment)
+
+The SQL schema file is **out of sync** with the C# models and repository code. Deploying the current `schema.sql` will cause runtime failures.
+
+### 1.1 Missing `runbook_automation_settings` table
+- **C# code**: `AutomationSettingsRepository` queries `runbook_automation_settings` table via MERGE/SELECT
+- **schema.sql**: Table does not exist
+- **Impact**: Admin API `/api/runbooks/{name}/automation` endpoints will crash on first call
+- **Files**: `src/automation/shared/.../Repositories/AutomationSettingsRepository.cs`, `src/automation/database/schema.sql`
+
+### 1.2 Missing columns and wrong constraints in `batches` table
+- **C# model** (`BatchRecord.cs`): Has `IsManual`, `CreatedBy`, `CurrentPhase` properties
+- **schema.sql**: `batches` table has none of these columns
+- **schema.sql line 26**: `batch_start_time DATETIME2 NOT NULL` — but manual batches set this to NULL (`ManualBatchService.cs:107`)
+- **schema.sql line 30**: `UNIQUE (runbook_id, batch_start_time)` — NULL values break this constraint for multiple manual batches of the same runbook
+- **Impact**: Manual batch INSERT will fail with NOT NULL violation; schema can't support the manual batch feature at all
+- **Fix**: Change to `batch_start_time DATETIME2` (nullable), add columns, adjust UNIQUE constraint to handle NULLs
+- **Files**: `src/automation/shared/.../Models/Db/BatchRecord.cs:14-17`, `src/automation/database/schema.sql:23-33`
+
+### 1.3 Missing `on_failure` column in `step_executions` and `init_executions`
+- **C# models**: Both `StepExecutionRecord` and `InitExecutionRecord` have `OnFailure` property
+- **schema.sql**: Neither table has this column
+- **Impact**: Rollback trigger tracking doesn't persist — orchestrator can't determine which rollback sequence to invoke after restart
+- **Files**: `src/automation/shared/.../Models/Db/StepExecutionRecord.cs:27`, `src/automation/database/schema.sql:66-91`
+
+### 1.4 `phase_executions` status CHECK allows `in_progress` but constant doesn't exist
+- **schema.sql line 62**: CHECK constraint includes `'in_progress'`
+- **PhaseStatus.cs**: Defines `Pending`, `Dispatched`, `Completed`, `Skipped`, `Failed` — no `InProgress`
+- **Impact**: Unused status value in SQL wastes a CHECK slot; confusing if someone sets it directly via SQL
+
+### Fix (all 1.x)
+Update `schema.sql` to match the C# models:
+- Add `runbook_automation_settings` table
+- Add `is_manual BIT NOT NULL DEFAULT 0`, `created_by NVARCHAR(256)`, `current_phase NVARCHAR(128)` to `batches`
+- Add `on_failure NVARCHAR(256)` to both `step_executions` and `init_executions`
+- Remove `'in_progress'` from `phase_executions` CHECK constraint (or add the constant — pick one)
+
+---
+
+## Tier 2: Infrastructure (hard to change after deployment)
+
+### 2.1 SQL Server has no connectivity path
+- **deploy.bicep line 96**: `publicNetworkAccess: 'Disabled'`
+- No firewall rules, no private endpoint, no VNet service endpoint
+- **Impact**: Deployment succeeds but Function Apps cannot reach SQL — every query times out
+- **Fix**: Add `Microsoft.Sql/servers/firewallRules` with `0.0.0.0`-`0.0.0.0` (Allow Azure Services), or configure VNet + private endpoint
+- **File**: `infra/automation/scheduler-orchestrator/deploy.bicep:88-98`
+
+### 2.2 SQL Database `autoPauseDelay` on a non-serverless SKU
+- **deploy.bicep line 106-112**: SKU is `S0` (Standard provisioned) but `autoPauseDelay: 60` is set
+- `autoPauseDelay` is a **serverless-only** property — it's silently ignored on Standard tier, or could cause deployment errors depending on API version
+- **Fix**: Either switch to serverless SKU (`name: 'GP_S_Gen5_1'`, `tier: 'GeneralPurpose'`) and keep `autoPauseDelay`, or remove `autoPauseDelay` for the S0 SKU
+- **File**: `infra/automation/scheduler-orchestrator/deploy.bicep:100-114`
+
+### 2.3 Service Bus duplicate detection disabled
+- All three topics have `requiresDuplicateDetection: false`
+- The orchestrator relies on deterministic `JobId` values for idempotency, but without duplicate detection at the broker level, duplicate messages from retries can cause double-dispatch
+- **Hard to change later**: Enabling duplicate detection requires **recreating the topic** (cannot be toggled on existing topics)
+- **Fix**: Set `requiresDuplicateDetection: true` and `duplicateDetectionHistoryTimeWindow: 'PT10M'` on all three topics
+- **File**: `infra/automation/shared/deploy.bicep:56-90`
+
+### 2.4 WorkerDispatcher sets `SessionId` but sessions aren't enabled (misleading, not broken)
+- `WorkerDispatcher.cs:44,78` sets `SessionId = job.WorkerId` on messages
+- Routing actually works via SQL filter on the `WorkerId` application property (cloud-worker subscription, `deploy.bicep:130-138`)
+- Cloud-worker uses `CreateReceiver` (non-session receiver) — this is correct
+- The `SessionId` field is stored but never used for routing — misleading but not harmful
+- **Fix**: Remove `SessionId` assignment from `WorkerDispatcher.cs` to avoid confusion, OR document that SQL filters (not sessions) handle worker routing
+- **File**: `src/automation/orchestrator/.../Services/WorkerDispatcher.cs:44,78`
+
+### 2.5 Default public network access on Key Vault and Service Bus
+- `disablePublicNetworkAccess` defaults to `false` — secrets and message bus are publicly accessible
+- **Fix**: Change default to `true` in production parameter files, or add a note that dev deployments are intentionally public
+- **File**: `infra/automation/shared/deploy.bicep:15`, `deploy.parameters.json:9`
+
+### 2.6 ACR Basic SKU — no SLA, no geo-replication
+- Cloud-worker image pulls will fail if ACR is unavailable (Basic has no SLA)
+- **Fix**: Use `Standard` SKU for any non-dev environment
+- **File**: `infra/automation/shared/deploy.bicep:118-128`
+
+### 2.7 Application Insights retention inconsistent
+- Admin-api: explicit `RetentionInDays: 30`
+- Scheduler, orchestrator, cloud-worker: no retention set (defaults to 90 days)
+- **Fix**: Add `RetentionInDays: 30` to all App Insights resources
+- **Files**: `infra/automation/scheduler-orchestrator/deploy.bicep:164-173,268-277`, `infra/automation/cloud-worker/deploy.bicep:88-97`
+
+---
+
+## Tier 3: Cross-Service Contract Issues (painful to change once workers are running)
+
+### 3.1 WorkerResultStatus casing mismatch
+- `WorkerResultStatus.cs`: `"Success"`, `"Failure"` (PascalCase)
+- All other status constants: lowercase (`"pending"`, `"dispatched"`, `"completed"`, `"failed"`)
+- `ResultProcessor.cs:92`: `if (result.Status == "Success")` — hardcoded PascalCase match
+- Cloud-worker `job-dispatcher.ps1` also uses PascalCase to match
+- **Risk**: Any future worker implementation that sends `"success"` (lowercase, matching convention) silently fails result processing
+- **Fix**: Standardize on lowercase `"success"` / `"failure"` in `WorkerResultStatus.cs`, update `ResultProcessor.cs`, and update cloud-worker's `job-dispatcher.ps1`
+- **Files**: `src/automation/shared/.../Constants/WorkerResultStatus.cs`, `src/automation/orchestrator/.../Handlers/ResultProcessor.cs:92`, `src/automation/cloud-worker/src/job-dispatcher.ps1`
+
+### 3.2 Orchestrator `prefetchCount: 0` — poor throughput
+- `host.json:22`: Messages fetched one-at-a-time despite `maxConcurrentCalls: 16`
+- **Fix**: Set `prefetchCount` to `16` or `32` (match or exceed `maxConcurrentCalls`)
+- **File**: `src/automation/orchestrator/src/Orchestrator.Functions/host.json:22`
+
+### 3.3 Orchestrator: missing correlation data → silent message loss
+- `ResultProcessor.cs:59-63`: If `CorrelationData` is null, logs warning and returns — message is completed (not dead-lettered)
+- **Fix**: Dead-letter the message instead of completing it, so operators can investigate
+- **File**: `src/automation/orchestrator/.../Handlers/ResultProcessor.cs:59-63`
+
+---
+
+## Tier 4: Application-Level Issues (fix before production load)
+
+### 4.1 Admin API: no global error handling
+- Each function has its own try/catch; unhandled exceptions expose stack traces
+- **Fix**: Add exception-handling middleware in `Program.cs` that returns sanitized errors
+- **File**: `src/automation/admin-api/src/AdminApi.Functions/Program.cs`
+
+### 4.2 Admin API: CSV upload doesn't validate required columns present
+- `CsvUploadService` checks for unexpected columns but does NOT verify all expected columns exist
+- A batch created with missing columns will fail at template resolution time
+- **Fix**: Add missing-column validation in `CsvUploadService.ParseCsvAsync()`
+- **File**: `src/automation/admin-api/src/AdminApi.Functions/Services/CsvUploadService.cs`
+
+### 4.3 Admin API: Service Bus is optional — manual batch advancement silently skips publishing
+- `Program.cs`: `ServiceBusClient` is nullable; `ManualBatchService` skips publish if null
+- Batch appears "advanced" to the user but orchestrator never receives the event
+- **Fix**: Make Service Bus required (throw on startup if not configured)
+- **File**: `src/automation/admin-api/src/AdminApi.Functions/Program.cs:48-54`
+
+### 4.4 Scheduler: unresolved template variables passed silently to workers
+- `TemplateResolver.cs`: If a `{{column}}` doesn't match query data, the literal `{{column}}` string is sent to the worker
+- **Fix**: Either throw or mark the step as failed instead of dispatching bad parameters
+- **File**: `src/automation/shared/.../Services/TemplateResolver.cs`
+
+### 4.5 Scheduler: YAML parse errors silently skip runbook
+- `SchedulerTimerFunction.ProcessRunbookAsync()`: Generic catch logs error but continues
+- Operator may not notice a runbook is dead
+- **Fix**: Log at Critical severity; consider adding a "last_error" field to the runbook table
+- **File**: `src/automation/scheduler/src/Scheduler.Functions/Functions/SchedulerTimerFunction.cs`
+
+### 4.6 Cloud-worker: app secret never refreshed
+- Secret fetched once at startup, used for the entire worker lifetime
+- **Fix**: Add periodic refresh (e.g., every 10 minutes) or catch 401 errors and refresh on demand
+- **File**: `src/automation/cloud-worker/src/worker.ps1:84-91`
+
+### 4.7 Cloud-worker: idle timeout can fire mid-job
+- `job-dispatcher.ps1`: `lastActivityTime` resets on message receipt, but if a job runs longer than the idle timeout (300s default), the worker exits while the job is still in-flight
+- **Fix**: Reset `lastActivityTime` when checking active jobs, not just on message receipt
+- **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:229-244`
+
+### 4.8 Cloud-worker: unused `throttle-handler.ps1`
+- `Invoke-WithThrottleRetry` is loaded but never called — actual retry logic is inline in `runspace-manager.ps1`
+- **Fix**: Remove `throttle-handler.ps1` or consolidate retry logic into it
+- **Files**: `src/automation/cloud-worker/src/throttle-handler.ps1`, `src/automation/cloud-worker/src/runspace-manager.ps1`
+
+### 4.9 Cloud-worker: 30-second shutdown grace period is hard-coded
+- If EXO operations take longer, they get killed mid-execution
+- **Fix**: Make configurable via `SHUTDOWN_GRACE_SECONDS` environment variable
+- **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:408`
+
+---
+
+## Tier 5: Deferred / Low-Priority
+
+These are worth tracking but can be addressed post-initial-deployment:
+
+- **DynamicTableManager**: No SQL keyword filtering on column names (regex only blocks special chars)
+- **DynamicTableManager**: `json_array` format passthrough doesn't validate JSON
+- **PhaseEvaluator**: Seconds→minutes rounding via `Math.Ceiling` is undocumented
+- **Orchestrator**: Phase progression race conditions (concurrent handlers can double-dispatch) — mitigated by deterministic JobIds but warrants distributed locking long-term
+- **Orchestrator**: `PhaseDueHandler` doesn't update `phase_executions.status` to `dispatched`
+- **Admin API**: No pagination on batch list endpoint (hardcoded `TOP 100`)
+- **Admin API**: No health check endpoint
+- **Admin API**: Inconsistent HTTP status codes across endpoints (400 vs 409 vs 422)
+- **Bicep**: No diagnostic settings (SQL audit logs, Key Vault access logs)
+- **Bicep**: Storage accounts default to public access when no subnet ID provided
+- **Bicep**: KEDA scaler has no explicit `cooldownPeriod` or `pollingInterval`
+
+---
+
+## Implementation Order
+
+1. **Schema fixes** (Tier 1) — cannot deploy without these
+2. **SQL connectivity + SKU fix** (Tier 2.1, 2.2) — cannot run without these
+3. **Service Bus topic config** (Tier 2.3, 2.4) — must be right on first create
+4. **Cross-service contracts** (Tier 3) — affects all components
+5. **Application fixes** (Tier 4) — fix before any real workload
+6. **Infrastructure hardening** (Tier 2.5-2.7) — before production
+
+## Verification
+
+After implementing:
+
+```bash
+# 1. Build all .NET projects
+dotnet build src/automation/scheduler/
+dotnet build src/automation/admin-api/
+dotnet build src/automation/orchestrator/
+
+# 2. Run all test suites
+dotnet test src/automation/shared/MaToolkit.Automation.Shared.Tests/
+dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/
+dotnet test src/automation/admin-cli/tests/AdminCli.Tests/
+
+# 3. Run cloud-worker tests
+pwsh -File src/automation/cloud-worker/tests/Test-WorkerLocal.ps1
+
+# 4. Manual review: compare schema.sql columns against all *Record.cs models
+# 5. Manual review: verify Bicep topic properties include duplicate detection
+```
