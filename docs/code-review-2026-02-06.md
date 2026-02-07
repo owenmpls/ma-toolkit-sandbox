@@ -213,7 +213,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 16. Repository Duplication Across Projects
+### 16. Repository Duplication Across Projects ✅ FIXED
+
+> **Fixed in:** `0e976d0` — Consolidated all 7 repository types (AutomationSettings, Runbook, Batch, Member, PhaseExecution, StepExecution, InitExecution) into `MaToolkit.Automation.Shared.Services.Repositories`. Deleted 20 duplicate files across admin-api (7), scheduler (7), and orchestrator (6). Each shared interface is the union of all methods from all projects. Also fixed SQL injection in orchestrator's `MemberRepository.GetActiveByBatchAsync` and standardized `UpdateLastPolledAsync` → `UpdatePollStateAsync`.
 
 `BatchRepository`, `MemberRepository`, `PhaseExecutionRepository`, etc. are duplicated across admin-api, scheduler, and orchestrator. Schema changes require updates in 3+ places.
 
