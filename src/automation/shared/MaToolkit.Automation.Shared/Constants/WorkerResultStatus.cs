@@ -5,6 +5,6 @@ namespace MaToolkit.Automation.Shared.Constants;
 /// </summary>
 public static class WorkerResultStatus
 {
-    public const string Success = "Success";
-    public const string Failure = "Failure";
+    public const string Success = "success";
+    public const string Failure = "failure";
 }

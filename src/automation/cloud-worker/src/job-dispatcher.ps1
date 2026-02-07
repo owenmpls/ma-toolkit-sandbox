@@ -78,7 +78,7 @@ function New-JobResult {
         [string]$WorkerId,
 
         [Parameter(Mandatory)]
-        [ValidateSet('Success', 'Failure')]
+        [ValidateSet('success', 'failure')]
         [string]$Status,
 
         $Result = $null,
@@ -259,7 +259,7 @@ function Start-JobDispatcher {
 
                         if ($executionResult.Success) {
                             $resultMsg = New-JobResult -Job $activeJob.Job -WorkerId $Config.WorkerId `
-                                -Status 'Success' -Result $executionResult.Result -DurationMs $duration
+                                -Status 'success' -Result $executionResult.Result -DurationMs $duration
 
                             Write-WorkerLog -Message "Job '$($activeJob.Job.JobId)' completed successfully ($($duration)ms)." -Properties @{
                                 JobId        = $activeJob.Job.JobId
@@ -269,7 +269,7 @@ function Start-JobDispatcher {
                         }
                         else {
                             $resultMsg = New-JobResult -Job $activeJob.Job -WorkerId $Config.WorkerId `
-                                -Status 'Failure' -ErrorInfo $executionResult.Error -DurationMs $duration
+                                -Status 'failure' -ErrorInfo $executionResult.Error -DurationMs $duration
 
                             Write-WorkerLog -Message "Job '$($activeJob.Job.JobId)' failed: $($executionResult.Error.Message)" -Severity Error -Properties @{
                                 JobId        = $activeJob.Job.JobId
@@ -332,7 +332,7 @@ function Start-JobDispatcher {
                             JobId        = $job.JobId ?? 'unknown'
                             BatchId      = $job.BatchId ?? $null
                             FunctionName = $job.FunctionName ?? 'unknown'
-                        }) -WorkerId $Config.WorkerId -Status 'Failure' -ErrorInfo ([PSCustomObject]@{
+                        }) -WorkerId $Config.WorkerId -Status 'failure' -ErrorInfo ([PSCustomObject]@{
                             Message     = "Invalid job: $($validation.Error)"
                             Type        = 'ValidationError'
                             IsThrottled = $false
@@ -349,7 +349,7 @@ function Start-JobDispatcher {
                             JobId        = $job.JobId
                             FunctionName = $job.FunctionName
                         }
-                        $errorResult = New-JobResult -Job $job -WorkerId $Config.WorkerId -Status 'Failure' -ErrorInfo ([PSCustomObject]@{
+                        $errorResult = New-JobResult -Job $job -WorkerId $Config.WorkerId -Status 'failure' -ErrorInfo ([PSCustomObject]@{
                             Message     = "Function '$($job.FunctionName)' is not allowed. Only exported module functions can be invoked."
                             Type        = 'SecurityValidationError'
                             IsThrottled = $false
@@ -415,7 +415,7 @@ function Start-JobDispatcher {
                     try {
                         $executionResult = Get-RunspaceResult -AsyncHandle $activeJobs[$i].AsyncHandle
                         $duration = [long]((Get-Date) - $activeJobs[$i].StartTime).TotalMilliseconds
-                        $status = if ($executionResult.Success) { 'Success' } else { 'Failure' }
+                        $status = if ($executionResult.Success) { 'success' } else { 'failure' }
 
                         $resultMsg = New-JobResult -Job $activeJobs[$i].Job -WorkerId $Config.WorkerId `
                             -Status $status -Result $executionResult.Result -ErrorInfo $executionResult.Error -DurationMs $duration

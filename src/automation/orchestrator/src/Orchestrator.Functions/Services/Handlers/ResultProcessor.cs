@@ -89,7 +89,7 @@ public class ResultProcessor : IResultProcessor
             ? JsonSerializer.Serialize(result.Result.Value)
             : null;
 
-        if (result.Status == "Success")
+        if (result.Status == WorkerResultStatus.Success)
         {
             // Check if this is a polling response
             if (result.IsPollingInProgress())
@@ -162,7 +162,7 @@ public class ResultProcessor : IResultProcessor
             ? JsonSerializer.Serialize(result.Result.Value)
             : null;
 
-        if (result.Status == "Success")
+        if (result.Status == WorkerResultStatus.Success)
         {
             // Check if this is a polling response
             if (result.IsPollingInProgress())
