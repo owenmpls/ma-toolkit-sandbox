@@ -19,14 +19,27 @@ CREATE TABLE runbooks (
     CONSTRAINT CK_overdue_behavior CHECK (overdue_behavior IN ('rerun', 'ignore'))
 );
 
+-- Automation toggle per runbook
+CREATE TABLE runbook_automation_settings (
+    runbook_name        NVARCHAR(128) NOT NULL PRIMARY KEY,
+    automation_enabled  BIT NOT NULL DEFAULT 0,
+    enabled_at          DATETIME2,
+    enabled_by          NVARCHAR(256),
+    disabled_at         DATETIME2,
+    disabled_by         NVARCHAR(256)
+);
+
 -- Batch tracking (unique per runbook + execution time)
 CREATE TABLE batches (
     id                  INT IDENTITY(1,1) PRIMARY KEY,
     runbook_id          INT NOT NULL REFERENCES runbooks(id),
-    batch_start_time    DATETIME2 NOT NULL,
+    batch_start_time    DATETIME2,
     status              NVARCHAR(32) NOT NULL DEFAULT 'detected',
     detected_at         DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     init_dispatched_at  DATETIME2,
+    is_manual           BIT NOT NULL DEFAULT 0,
+    created_by          NVARCHAR(256),
+    current_phase       NVARCHAR(128),
     CONSTRAINT UQ_batch UNIQUE (runbook_id, batch_start_time),
     CONSTRAINT CK_batch_status CHECK (status IN (
         'detected', 'init_dispatched', 'active', 'completed', 'failed'))
@@ -59,7 +72,7 @@ CREATE TABLE phase_executions (
     completed_at        DATETIME2,
     CONSTRAINT UQ_phase_exec UNIQUE (batch_id, phase_name, runbook_version),
     CONSTRAINT CK_phase_status CHECK (status IN (
-        'pending', 'dispatched', 'in_progress', 'completed', 'failed', 'skipped'))
+        'pending', 'dispatched', 'completed', 'failed', 'skipped'))
 );
 
 -- Per-member step execution tracking
@@ -72,6 +85,7 @@ CREATE TABLE step_executions (
     worker_id           NVARCHAR(64),
     function_name       NVARCHAR(128),
     params_json         NVARCHAR(MAX),
+    on_failure          NVARCHAR(256),
     status              NVARCHAR(32) NOT NULL DEFAULT 'pending',
     job_id              NVARCHAR(128),
     result_json         NVARCHAR(MAX),
@@ -100,6 +114,7 @@ CREATE TABLE init_executions (
     worker_id           NVARCHAR(64),
     function_name       NVARCHAR(128),
     params_json         NVARCHAR(MAX),
+    on_failure          NVARCHAR(256),
     status              NVARCHAR(32) NOT NULL DEFAULT 'pending',
     job_id              NVARCHAR(128),
     result_json         NVARCHAR(MAX),
