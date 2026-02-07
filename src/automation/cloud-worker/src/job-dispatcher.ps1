@@ -108,16 +108,17 @@ function New-JobResult {
     }
 
     return [PSCustomObject]@{
-        JobId        = $Job.JobId
-        BatchId      = if ($Job.PSObject.Properties['BatchId']) { $Job.BatchId } else { $null }
-        WorkerId     = $WorkerId
-        FunctionName = $Job.FunctionName
-        Status       = $Status
-        ResultType   = $resultType
-        Result       = $resultValue
-        Error        = $ErrorInfo
-        DurationMs   = $DurationMs
-        Timestamp    = (Get-Date).ToUniversalTime().ToString('o')
+        JobId           = $Job.JobId
+        BatchId         = if ($Job.PSObject.Properties['BatchId']) { $Job.BatchId } else { $null }
+        WorkerId        = $WorkerId
+        FunctionName    = $Job.FunctionName
+        Status          = $Status
+        ResultType      = $resultType
+        Result          = $resultValue
+        Error           = $ErrorInfo
+        DurationMs      = $DurationMs
+        Timestamp       = (Get-Date).ToUniversalTime().ToString('o')
+        CorrelationData = if ($Job.PSObject.Properties['CorrelationData']) { $Job.CorrelationData } else { $null }
     }
 }
 

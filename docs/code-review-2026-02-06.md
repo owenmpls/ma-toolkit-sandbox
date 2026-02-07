@@ -242,7 +242,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 19. No Correlation IDs
+### 19. No Correlation IDs ✅ FIXED
+
+> **Fixed in:** Cloud worker `New-JobResult` now passes `CorrelationData` from the inbound job message through to the result message, completing the orchestrator↔worker correlation chain.
 
 No correlation ID passed through the job-dispatch-result pipeline. Makes cross-service debugging very difficult.
 
