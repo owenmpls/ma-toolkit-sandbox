@@ -135,6 +135,27 @@ docker build -t matoolkitacr.azurecr.io/cloud-worker:latest .
 docker-compose up
 ```
 
+### Infrastructure layout (`infra/`)
+
+```
+infra/
+├── shared/                              ← shared across all subsystems
+│   ├── deploy.bicep                     ← Log Analytics, Service Bus, Key Vault, ACR
+│   ├── deploy.parameters.json
+│   ├── network.bicep                    ← VNet, subnets, private endpoints, DNS zones
+│   └── network.parameters.json
+└── automation/                          ← per-component templates
+    ├── scheduler-orchestrator/
+    │   ├── deploy.bicep                 ← SQL, storage, Function Apps (scheduler + orchestrator)
+    │   └── deploy.parameters.json
+    ├── admin-api/
+    │   ├── deploy.bicep                 ← storage, Function App
+    │   └── deploy.parameters.json
+    └── cloud-worker/
+        ├── deploy.bicep                 ← ACA environment + app
+        └── deploy.parameters.json
+```
+
 ### Deploy infrastructure (Azure)
 
 Deploy in four stages. The network template must come after component templates (it references their storage accounts) and the components must be re-deployed with subnet IDs to enable VNet integration.
@@ -233,8 +254,8 @@ Key design choices:
 
 ## Code Review Recommendations
 
-- **2026-02-06**: Full codebase review of `src/automation/` and `infra/automation/` — [`docs/code-review-2026-02-06.md`](docs/code-review-2026-02-06.md). Covers 27 issues (4 critical, 10 high, 13 medium/low) with specific file paths, line numbers, and fix descriptions. An implementation plan exists at `.claude/plans/deep-coalescing-mitten.md`.
-- **2026-02-07**: Pre-deployment review of `src/automation/` and `infra/automation/` — [`docs/code-review-2026-02-07.md`](docs/code-review-2026-02-07.md). Covers 28 issues across 5 tiers (4 schema drift, 7 infrastructure, 3 cross-service contracts, 9 application-level, 5 deferred) organized by deployment-lock-in risk.
+- **2026-02-06**: Full codebase review of `src/automation/` and `infra/` — [`docs/code-review-2026-02-06.md`](docs/code-review-2026-02-06.md). Covers 27 issues (4 critical, 10 high, 13 medium/low) with specific file paths, line numbers, and fix descriptions. An implementation plan exists at `.claude/plans/deep-coalescing-mitten.md`.
+- **2026-02-07**: Pre-deployment review of `src/automation/` and `infra/` — [`docs/code-review-2026-02-07.md`](docs/code-review-2026-02-07.md). Covers 28 issues across 5 tiers (4 schema drift, 7 infrastructure, 3 cross-service contracts, 9 application-level, 5 deferred) organized by deployment-lock-in risk.
 
 ## PowerShell Gotchas
 
