@@ -1,1 +1,1 @@
-Experiments and ideas for the M&A toolkit. Mostly vibe-coded. Mostly untested.
+Experiments and ideas for the M&A toolkit. Built with AI. Not thoroughly tested.
