@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using AdminApi.Functions.Auth;
 using AdminApi.Functions.Models.Requests;
 using AdminApi.Functions.Services;
-using AdminApi.Functions.Services.Repositories;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 namespace AdminApi.Functions.Functions;
 

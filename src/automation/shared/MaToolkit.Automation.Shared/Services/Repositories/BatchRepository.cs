@@ -2,19 +2,8 @@ using System.Data;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
-using MaToolkit.Automation.Shared.Services;
 
-namespace AdminApi.Functions.Services.Repositories;
-
-public interface IBatchRepository
-{
-    Task<BatchRecord?> GetByIdAsync(int id);
-    Task<IEnumerable<BatchRecord>> ListAsync(int? runbookId = null, string? status = null, bool? isManual = null, int limit = 100);
-    Task<int> InsertAsync(BatchRecord record, IDbTransaction? transaction = null);
-    Task UpdateStatusAsync(int id, string status);
-    Task UpdateCurrentPhaseAsync(int id, string? phaseName);
-    Task SetInitDispatchedAsync(int id);
-}
+namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class BatchRepository : IBatchRepository
 {
@@ -31,6 +20,23 @@ public class BatchRepository : IBatchRepository
         return await conn.QuerySingleOrDefaultAsync<BatchRecord>(
             "SELECT * FROM batches WHERE id = @Id",
             new { Id = id });
+    }
+
+    public async Task<BatchRecord?> GetByRunbookAndTimeAsync(int runbookId, DateTime batchStartTime)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<BatchRecord>(
+            "SELECT * FROM batches WHERE runbook_id = @RunbookId AND batch_start_time = @BatchStartTime",
+            new { RunbookId = runbookId, BatchStartTime = batchStartTime });
+    }
+
+    public async Task<IEnumerable<BatchRecord>> GetActiveByRunbookAsync(int runbookId)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<BatchRecord>(
+            @"SELECT * FROM batches WHERE runbook_id = @RunbookId
+              AND status NOT IN (@Completed, @Failed)",
+            new { RunbookId = runbookId, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
     }
 
     public async Task<IEnumerable<BatchRecord>> ListAsync(int? runbookId = null, string? status = null, bool? isManual = null, int limit = 100)
@@ -104,5 +110,28 @@ public class BatchRepository : IBatchRepository
         await conn.ExecuteAsync(
             @"UPDATE batches SET status = @Status, init_dispatched_at = SYSUTCDATETIME() WHERE id = @Id",
             new { Id = id, Status = BatchStatus.InitDispatched });
+    }
+
+    public async Task SetActiveAsync(int id)
+    {
+        await UpdateStatusAsync(id, BatchStatus.Active);
+    }
+
+    public async Task<bool> SetCompletedAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.ExecuteAsync(
+            "UPDATE batches SET status = @Status WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = BatchStatus.Completed, ExpectedStatus = BatchStatus.Active });
+        return rows > 0;
+    }
+
+    public async Task<bool> SetFailedAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.ExecuteAsync(
+            "UPDATE batches SET status = @Status WHERE id = @Id AND status NOT IN (@Completed, @Failed)",
+            new { Id = id, Status = BatchStatus.Failed, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
+        return rows > 0;
     }
 }

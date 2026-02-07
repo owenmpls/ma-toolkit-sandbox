@@ -5,6 +5,7 @@ using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Models.Yaml;
 using MaToolkit.Automation.Shared.Services;
+using MaToolkit.Automation.Shared.Services.Repositories;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 

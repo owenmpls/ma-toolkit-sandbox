@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 namespace AdminApi.Functions.Functions;
 

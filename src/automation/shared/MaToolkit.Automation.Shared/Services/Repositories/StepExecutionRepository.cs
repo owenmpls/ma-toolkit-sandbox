@@ -2,28 +2,8 @@ using System.Data;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
-using MaToolkit.Automation.Shared.Services;
 
-namespace Orchestrator.Functions.Services.Repositories;
-
-public interface IStepExecutionRepository
-{
-    Task<StepExecutionRecord?> GetByIdAsync(int id);
-    Task<StepExecutionRecord?> GetByJobIdAsync(string jobId);
-    Task<IEnumerable<StepExecutionRecord>> GetByPhaseExecutionAsync(int phaseExecutionId);
-    Task<IEnumerable<StepExecutionRecord>> GetPendingByPhaseAndIndexAsync(int phaseExecutionId, int stepIndex);
-    Task<IEnumerable<StepExecutionRecord>> GetPendingByMemberAsync(int batchMemberId);
-    Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null);
-
-    // Status updates
-    Task<bool> SetDispatchedAsync(int id, string jobId);
-    Task<bool> SetSucceededAsync(int id, string? resultJson);
-    Task<bool> SetFailedAsync(int id, string errorMessage);
-    Task<bool> SetPollingAsync(int id);
-    Task<bool> SetPollTimeoutAsync(int id);
-    Task<bool> SetCancelledAsync(int id);
-    Task UpdatePollStateAsync(int id);
-}
+namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class StepExecutionRepository : IStepExecutionRepository
 {
@@ -50,6 +30,17 @@ public class StepExecutionRepository : IStepExecutionRepository
             new { JobId = jobId });
     }
 
+    public async Task<IEnumerable<StepExecutionRecord>> GetByBatchAsync(int batchId)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<StepExecutionRecord>(@"
+            SELECT se.* FROM step_executions se
+            JOIN phase_executions pe ON se.phase_execution_id = pe.id
+            WHERE pe.batch_id = @BatchId
+            ORDER BY pe.offset_minutes, se.step_index, se.id",
+            new { BatchId = batchId });
+    }
+
     public async Task<IEnumerable<StepExecutionRecord>> GetByPhaseExecutionAsync(int phaseExecutionId)
     {
         using var conn = _db.CreateConnection();
@@ -72,6 +63,19 @@ public class StepExecutionRepository : IStepExecutionRepository
         return await conn.QueryAsync<StepExecutionRecord>(
             "SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN (@Pending, @Dispatched)",
             new { BatchMemberId = batchMemberId, Pending = StepStatus.Pending, Dispatched = StepStatus.Dispatched });
+    }
+
+    public async Task<IEnumerable<StepExecutionRecord>> GetPollingStepsDueAsync(DateTime now)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<StepExecutionRecord>(@"
+            SELECT se.* FROM step_executions se
+            JOIN phase_executions pe ON se.phase_execution_id = pe.id
+            JOIN batches b ON pe.batch_id = b.id
+            WHERE se.status = @Status
+              AND se.is_poll_step = 1
+              AND DATEADD(SECOND, se.poll_interval_sec, se.last_polled_at) <= @Now",
+            new { Status = StepStatus.Polling, Now = now });
     }
 
     public async Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null)

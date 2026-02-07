@@ -1,15 +1,7 @@
 using Dapper;
 using MaToolkit.Automation.Shared.Models.Db;
-using MaToolkit.Automation.Shared.Services;
 
-namespace AdminApi.Functions.Services.Repositories;
-
-public interface IAutomationSettingsRepository
-{
-    Task<AutomationSettingsRecord?> GetByNameAsync(string runbookName);
-    Task<IEnumerable<AutomationSettingsRecord>> GetAllAsync();
-    Task UpsertAsync(AutomationSettingsRecord record);
-}
+namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class AutomationSettingsRepository : IAutomationSettingsRepository
 {

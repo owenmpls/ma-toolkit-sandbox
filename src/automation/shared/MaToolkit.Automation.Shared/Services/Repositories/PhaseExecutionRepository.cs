@@ -2,18 +2,8 @@ using System.Data;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
-using MaToolkit.Automation.Shared.Services;
 
-namespace AdminApi.Functions.Services.Repositories;
-
-public interface IPhaseExecutionRepository
-{
-    Task<IEnumerable<PhaseExecutionRecord>> GetByBatchAsync(int batchId);
-    Task<PhaseExecutionRecord?> GetFirstPendingAsync(int batchId);
-    Task<int> InsertAsync(PhaseExecutionRecord record, IDbTransaction? transaction = null);
-    Task SetDispatchedAsync(int id);
-    Task UpdateStatusAsync(int id, string status);
-}
+namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class PhaseExecutionRepository : IPhaseExecutionRepository
 {
@@ -24,6 +14,14 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
         _db = db;
     }
 
+    public async Task<PhaseExecutionRecord?> GetByIdAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<PhaseExecutionRecord>(
+            "SELECT * FROM phase_executions WHERE id = @Id",
+            new { Id = id });
+    }
+
     public async Task<IEnumerable<PhaseExecutionRecord>> GetByBatchAsync(int batchId)
     {
         using var conn = _db.CreateConnection();
@@ -32,12 +30,28 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
             new { BatchId = batchId });
     }
 
+    public async Task<IEnumerable<PhaseExecutionRecord>> GetDispatchedByBatchAsync(int batchId)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<PhaseExecutionRecord>(
+            "SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status IN (@Dispatched, @Completed)",
+            new { BatchId = batchId, Dispatched = PhaseStatus.Dispatched, Completed = PhaseStatus.Completed });
+    }
+
     public async Task<PhaseExecutionRecord?> GetFirstPendingAsync(int batchId)
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<PhaseExecutionRecord>(
             "SELECT TOP 1 * FROM phase_executions WHERE batch_id = @BatchId AND status = @Status ORDER BY offset_minutes",
             new { BatchId = batchId, Status = PhaseStatus.Pending });
+    }
+
+    public async Task<IEnumerable<PhaseExecutionRecord>> GetPendingDueAsync(int batchId, DateTime now)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<PhaseExecutionRecord>(
+            "SELECT * FROM phase_executions WHERE batch_id = @BatchId AND status = @Status AND due_at <= @Now",
+            new { BatchId = batchId, Status = PhaseStatus.Pending, Now = now });
     }
 
     public async Task<int> InsertAsync(PhaseExecutionRecord record, IDbTransaction? transaction = null)
@@ -72,5 +86,23 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
         await conn.ExecuteAsync(
             "UPDATE phase_executions SET status = @Status WHERE id = @Id",
             new { Id = id, Status = status });
+    }
+
+    public async Task<bool> SetCompletedAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.ExecuteAsync(
+            "UPDATE phase_executions SET status = @Status, completed_at = SYSUTCDATETIME() WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = PhaseStatus.Completed, ExpectedStatus = PhaseStatus.Dispatched });
+        return rows > 0;
+    }
+
+    public async Task<bool> SetFailedAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.ExecuteAsync(
+            "UPDATE phase_executions SET status = @Status, completed_at = SYSUTCDATETIME() WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = PhaseStatus.Failed, ExpectedStatus = PhaseStatus.Dispatched });
+        return rows > 0;
     }
 }

@@ -8,7 +8,7 @@ using MaToolkit.Automation.Shared.Models.Yaml;
 using MaToolkit.Automation.Shared.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-using AdminApi.Functions.Services.Repositories;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 namespace AdminApi.Functions.Services;
 

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Scheduler.Functions.Services;
 using Scheduler.Functions.Settings;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 

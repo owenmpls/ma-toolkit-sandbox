@@ -7,8 +7,8 @@ using Microsoft.Extensions.Options;
 using MaToolkit.Automation.Shared.Services;
 using Orchestrator.Functions.Services;
 using Orchestrator.Functions.Services.Handlers;
-using Orchestrator.Functions.Services.Repositories;
 using Orchestrator.Functions.Settings;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 

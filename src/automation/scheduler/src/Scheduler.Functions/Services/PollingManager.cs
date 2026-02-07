@@ -1,5 +1,6 @@
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
+using MaToolkit.Automation.Shared.Services.Repositories;
 using Microsoft.Extensions.Logging;
 
 namespace Scheduler.Functions.Services;
@@ -61,7 +62,7 @@ public class PollingManager : IPollingManager
                 IsInitStep = false
             });
 
-            await _stepRepo.UpdateLastPolledAsync(step.Id);
+            await _stepRepo.UpdatePollStateAsync(step.Id);
 
             _logger.LogDebug("Published poll-check for step execution {StepId}", step.Id);
         }
@@ -92,7 +93,7 @@ public class PollingManager : IPollingManager
                 IsInitStep = true
             });
 
-            await _initRepo.UpdateLastPolledAsync(init.Id);
+            await _initRepo.UpdatePollStateAsync(init.Id);
 
             _logger.LogDebug("Published poll-check for init execution {InitId}", init.Id);
         }

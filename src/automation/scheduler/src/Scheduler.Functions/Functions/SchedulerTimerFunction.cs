@@ -4,6 +4,7 @@ using MaToolkit.Automation.Shared.Models.Yaml;
 using MaToolkit.Automation.Shared.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using MaToolkit.Automation.Shared.Services.Repositories;
 using Scheduler.Functions.Services;
 
 namespace Scheduler.Functions.Functions;

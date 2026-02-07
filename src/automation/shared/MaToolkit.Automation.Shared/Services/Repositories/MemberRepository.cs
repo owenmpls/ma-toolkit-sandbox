@@ -2,20 +2,8 @@ using System.Data;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
-using MaToolkit.Automation.Shared.Services;
 
-namespace Scheduler.Functions.Services;
-
-public interface IMemberRepository
-{
-    Task<IEnumerable<BatchMemberRecord>> GetByBatchAsync(int batchId);
-    Task<IEnumerable<BatchMemberRecord>> GetActiveByBatchAsync(int batchId);
-    Task<int> InsertAsync(BatchMemberRecord record, IDbTransaction? transaction = null);
-    Task MarkRemovedAsync(int id);
-    Task SetAddDispatchedAsync(int id);
-    Task SetRemoveDispatchedAsync(int id);
-    Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey);
-}
+namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class MemberRepository : IMemberRepository
 {
@@ -26,11 +14,19 @@ public class MemberRepository : IMemberRepository
         _db = db;
     }
 
+    public async Task<BatchMemberRecord?> GetByIdAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<BatchMemberRecord>(
+            "SELECT * FROM batch_members WHERE id = @Id",
+            new { Id = id });
+    }
+
     public async Task<IEnumerable<BatchMemberRecord>> GetByBatchAsync(int batchId)
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<BatchMemberRecord>(
-            "SELECT * FROM batch_members WHERE batch_id = @BatchId",
+            "SELECT * FROM batch_members WHERE batch_id = @BatchId ORDER BY id",
             new { BatchId = batchId });
     }
 
@@ -38,7 +34,7 @@ public class MemberRepository : IMemberRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<BatchMemberRecord>(
-            "SELECT * FROM batch_members WHERE batch_id = @BatchId AND status = @Status",
+            "SELECT * FROM batch_members WHERE batch_id = @BatchId AND status = @Status ORDER BY id",
             new { BatchId = batchId, Status = MemberStatus.Active });
     }
 

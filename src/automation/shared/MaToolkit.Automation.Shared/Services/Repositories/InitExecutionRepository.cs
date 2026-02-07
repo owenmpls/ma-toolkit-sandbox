@@ -2,26 +2,8 @@ using System.Data;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
-using MaToolkit.Automation.Shared.Services;
 
-namespace Orchestrator.Functions.Services.Repositories;
-
-public interface IInitExecutionRepository
-{
-    Task<InitExecutionRecord?> GetByIdAsync(int id);
-    Task<InitExecutionRecord?> GetByJobIdAsync(string jobId);
-    Task<IEnumerable<InitExecutionRecord>> GetByBatchAsync(int batchId);
-    Task<IEnumerable<InitExecutionRecord>> GetPendingByBatchAsync(int batchId);
-    Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null);
-
-    // Status updates
-    Task<bool> SetDispatchedAsync(int id, string jobId);
-    Task<bool> SetSucceededAsync(int id, string? resultJson);
-    Task<bool> SetFailedAsync(int id, string errorMessage);
-    Task<bool> SetPollingAsync(int id);
-    Task<bool> SetPollTimeoutAsync(int id);
-    Task UpdatePollStateAsync(int id);
-}
+namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class InitExecutionRepository : IInitExecutionRepository
 {
@@ -62,6 +44,18 @@ public class InitExecutionRepository : IInitExecutionRepository
         return await conn.QueryAsync<InitExecutionRecord>(
             "SELECT * FROM init_executions WHERE batch_id = @BatchId AND status = @Status ORDER BY step_index",
             new { BatchId = batchId, Status = StepStatus.Pending });
+    }
+
+    public async Task<IEnumerable<InitExecutionRecord>> GetPollingStepsDueAsync(DateTime now)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<InitExecutionRecord>(@"
+            SELECT ie.* FROM init_executions ie
+            JOIN batches b ON ie.batch_id = b.id
+            WHERE ie.status = @Status
+              AND ie.is_poll_step = 1
+              AND DATEADD(SECOND, ie.poll_interval_sec, ie.last_polled_at) <= @Now",
+            new { Status = StepStatus.Polling, Now = now });
     }
 
     public async Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null)

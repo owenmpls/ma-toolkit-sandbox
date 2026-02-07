@@ -9,8 +9,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
 using AdminApi.Functions.Auth;
 using AdminApi.Functions.Services;
-using AdminApi.Functions.Services.Repositories;
 using AdminApi.Functions.Settings;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 

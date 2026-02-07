@@ -1,7 +1,7 @@
 using System.Data;
 using FluentAssertions;
 using AdminApi.Functions.Services;
-using AdminApi.Functions.Services.Repositories;
+using MaToolkit.Automation.Shared.Services.Repositories;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Yaml;

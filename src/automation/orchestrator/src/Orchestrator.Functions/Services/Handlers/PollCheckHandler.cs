@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
-using Orchestrator.Functions.Services.Repositories;
+using MaToolkit.Automation.Shared.Services.Repositories;
 
 namespace Orchestrator.Functions.Services.Handlers;
 
