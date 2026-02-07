@@ -24,7 +24,7 @@ public class AdminApiClient
     {
         _configuration = configuration;
         _authService = authService;
-        _httpClient = new HttpClient();
+        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
     }
 
     public string? GetApiUrl(string? overrideUrl = null)

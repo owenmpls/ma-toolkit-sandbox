@@ -291,7 +291,9 @@ No project validates required configuration at startup. Errors only surface at r
 
 ---
 
-### 24. HTTP Client Missing Timeout (Admin CLI)
+### 24. HTTP Client Missing Timeout (Admin CLI) ✅ FIXED
+
+> **Fixed in:** issue #24 — Set `Timeout = TimeSpan.FromSeconds(30)` on the HttpClient.
 
 `AdminApiClient.cs:27` — `new HttpClient()` with no timeout. Requests can hang indefinitely.
 
