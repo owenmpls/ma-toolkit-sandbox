@@ -281,7 +281,9 @@ Cloud worker, scheduler, and orchestrator Bicep templates define no `tags` param
 
 ---
 
-### 23. No Startup Configuration Validation
+### 23. No Startup Configuration Validation ✅ FIXED
+
+> **Fixed in:** issue #23 — Added `[Required]`/`[Range]` data annotations to all settings classes and `ValidateDataAnnotations().ValidateOnStart()` in all three `Program.cs` files. Missing required config now fails fast at startup.
 
 No project validates required configuration at startup. Errors only surface at request/processing time.
 

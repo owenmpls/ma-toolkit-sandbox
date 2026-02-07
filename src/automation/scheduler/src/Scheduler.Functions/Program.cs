@@ -14,11 +14,15 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-builder.Services.Configure<SchedulerSettings>(
-    builder.Configuration.GetSection(SchedulerSettings.SectionName));
+builder.Services.AddOptions<SchedulerSettings>()
+    .Bind(builder.Configuration.GetSection(SchedulerSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-builder.Services.Configure<QueryClientSettings>(
-    builder.Configuration.GetSection(QueryClientSettings.SectionName));
+builder.Services.AddOptions<QueryClientSettings>()
+    .Bind(builder.Configuration.GetSection(QueryClientSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddSingleton<IDbConnectionFactory, SchedulerDbConnectionFactory>();
 

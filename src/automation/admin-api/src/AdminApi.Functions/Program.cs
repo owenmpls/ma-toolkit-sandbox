@@ -31,11 +31,15 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser());
 });
 
-builder.Services.Configure<AdminApiSettings>(
-    builder.Configuration.GetSection(AdminApiSettings.SectionName));
+builder.Services.AddOptions<AdminApiSettings>()
+    .Bind(builder.Configuration.GetSection(AdminApiSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-builder.Services.Configure<QueryClientSettings>(
-    builder.Configuration.GetSection(QueryClientSettings.SectionName));
+builder.Services.AddOptions<QueryClientSettings>()
+    .Bind(builder.Configuration.GetSection(QueryClientSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddSingleton<IDbConnectionFactory, AdminApiDbConnectionFactory>();
 

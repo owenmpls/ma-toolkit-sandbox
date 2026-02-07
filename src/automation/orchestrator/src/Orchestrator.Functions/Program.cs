@@ -14,8 +14,10 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-builder.Services.Configure<OrchestratorSettings>(
-    builder.Configuration.GetSection(OrchestratorSettings.SectionName));
+builder.Services.AddOptions<OrchestratorSettings>()
+    .Bind(builder.Configuration.GetSection(OrchestratorSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddSingleton<IDbConnectionFactory, OrchestratorDbConnectionFactory>();
 

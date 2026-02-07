@@ -1,9 +1,12 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AdminApi.Functions.Settings;
 
 public class AdminApiSettings
 {
     public const string SectionName = "AdminApi";
 
+    [Required]
     public string SqlConnectionString { get; set; } = string.Empty;
 
     /// <summary>
