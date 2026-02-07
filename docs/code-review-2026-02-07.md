@@ -66,7 +66,7 @@ Update `schema.sql` to match the C# models:
 - The orchestrator relies on deterministic `JobId` values for idempotency, but without duplicate detection at the broker level, duplicate messages from retries can cause double-dispatch
 - **Hard to change later**: Enabling duplicate detection requires **recreating the topic** (cannot be toggled on existing topics)
 - **Fix**: Set `requiresDuplicateDetection: true` and `duplicateDetectionHistoryTimeWindow: 'PT10M'` on all three topics
-- **File**: `infra/automation/shared/deploy.bicep:56-90`
+- **File**: `infra/shared/deploy.bicep:56-90`
 
 ### 2.4 WorkerDispatcher sets `SessionId` but sessions aren't enabled (misleading, not broken)
 - `WorkerDispatcher.cs:44,78` sets `SessionId = job.WorkerId` on messages
@@ -79,13 +79,13 @@ Update `schema.sql` to match the C# models:
 ### 2.5 Default public network access on Key Vault and Service Bus — **FIXED**
 - `disablePublicNetworkAccess` defaults to `false` — secrets and message bus are publicly accessible
 - **Fix**: Change default to `true` in production parameter files, or add a note that dev deployments are intentionally public
-- **File**: `infra/automation/shared/deploy.bicep:15`, `deploy.parameters.json:9`
+- **File**: `infra/shared/deploy.bicep:15`, `deploy.parameters.json:9`
 - **Resolution**: Split into per-service params: `disableKeyVaultPublicAccess` (defaults `true`, KV has private endpoint) and `disableServiceBusPublicAccess` (defaults `false`, Standard SKU has no PE support). KV also gets `networkAcls` with `defaultAction: 'Deny'` and `bypass: 'AzureServices'` for defense-in-depth.
 
 ### 2.6 ACR Basic SKU — no SLA, no geo-replication — **DEFERRED** (sandbox)
 - Cloud-worker image pulls will fail if ACR is unavailable (Basic has no SLA)
 - **Fix**: Use `Standard` SKU for any non-dev environment
-- **File**: `infra/automation/shared/deploy.bicep:118-128`
+- **File**: `infra/shared/deploy.bicep:118-128`
 - **Note**: Kept Basic for sandbox — no PE support without Premium ($$$), managed identity pulls use Azure backbone. Upgrade to Standard/Premium for production.
 
 ### 2.7 Application Insights retention inconsistent

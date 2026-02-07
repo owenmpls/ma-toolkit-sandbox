@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Creates a virtual network with dedicated subnets for each automation
 // component, plus private endpoints and DNS zones for SQL, Key Vault,
-// and Service Bus.
+// Service Bus, and Storage (blob, queue, table).
 // ---------------------------------------------------------------------------
 
 @description('Azure region for all resources.')

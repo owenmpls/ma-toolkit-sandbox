@@ -143,8 +143,8 @@ Deploy in four stages. The network template must come after component templates 
 # 1. Deploy shared infrastructure (Service Bus, Key Vault, Log Analytics, ACR)
 az deployment group create \
   --resource-group your-rg \
-  --template-file infra/automation/shared/deploy.bicep \
-  --parameters infra/automation/shared/deploy.parameters.json
+  --template-file infra/shared/deploy.bicep \
+  --parameters infra/shared/deploy.parameters.json
 
 # 2. Deploy components (creates SQL, storage accounts, Function Apps, ACA)
 # These can run in parallel with each other:
@@ -180,7 +180,7 @@ az deployment group create \
 az deployment group create \
   --resource-group your-rg \
   --template-file infra/shared/network.bicep \
-  --parameters infra/shared/deploy.parameters.json
+  --parameters infra/shared/network.parameters.json
 
 # 4. Re-deploy components with subnet IDs to enable VNet integration
 # Use the same commands as step 2, but with subnet IDs populated in parameter files

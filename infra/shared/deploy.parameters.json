@@ -5,25 +5,15 @@
     "baseName": {
       "value": "matoolkit"
     },
-    "sqlServerName": {
-      "value": "sql-scheduler-dev"
+    "disableKeyVaultPublicAccess": {
+      "value": true
     },
-    "keyVaultName": {
-      "value": "matoolkit-kv"
-    },
-    "serviceBusNamespaceName": {
-      "value": "matoolkit-sb"
-    },
-    "storageAccountNames": {
-      "value": [
-        "stschedulerdev",
-        "storchestratordev",
-        "matoolkitadminapist"
-      ]
+    "disableServiceBusPublicAccess": {
+      "value": false
     },
     "tags": {
       "value": {
-        "component": "shared-network",
+        "component": "shared",
         "project": "ma-toolkit",
         "environment": "dev"
       }
