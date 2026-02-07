@@ -202,9 +202,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ## Medium Priority Issues
 
-### 15. Overly Permissive Firewall/Access Rules (Infra) ✅ PARTIALLY FIXED
+### 15. Overly Permissive Firewall/Access Rules (Infra) ✅ FIXED
 
-> **Partially fixed in:** `2b4f982` (tier 1) — Disabled SQL public network access and removed permissive firewall rule. Reduced KEDA scaler auth from Manage+Listen+Send to Listen only. Disabled ACR admin user. Added shared VNet module with private endpoints for SQL, Key Vault, Service Bus, and VNet integration for all Function Apps and ACA.
+> **Fixed in:** Completed network hardening — added conditional `networkAcls` with `defaultAction: 'Deny'` to all three storage accounts, `publicNetworkAccess: 'Disabled'` to Key Vault and Service Bus (conditional on VNet), `enablePurgeProtection` on Key Vault, and blob storage private endpoints in the shared VNet module.
 
 - `infra/automation/scheduler/deploy.bicep:200-207` — SQL firewall `0.0.0.0` allows any Azure service
 - `infra/automation/cloud-worker/deploy.bicep:168-178` — KEDA SAS policy has `Manage` rights (only needs `Listen`)

@@ -84,6 +84,13 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
+    networkAcls: !empty(schedulerSubnetId) ? {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+      virtualNetworkRules: [
+        { id: schedulerSubnetId, action: 'Allow' }
+      ]
+    } : null
   }
 }
 

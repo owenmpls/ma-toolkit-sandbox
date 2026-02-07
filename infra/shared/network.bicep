@@ -21,6 +21,9 @@ param keyVaultName string
 @description('Name of the existing Service Bus namespace.')
 param serviceBusNamespaceName string
 
+@description('Names of the storage accounts to create private endpoints for.')
+param storageAccountNames array = []
+
 // ---------------------------------------------------------------------------
 // Existing resource references
 // ---------------------------------------------------------------------------
@@ -128,6 +131,11 @@ resource sbDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   location: 'global'
 }
 
+resource stDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: 'privatelink.blob.${environment().suffixes.storage}'
+  location: 'global'
+}
+
 // ---------------------------------------------------------------------------
 // VNet links for DNS zones
 // ---------------------------------------------------------------------------
@@ -159,6 +167,18 @@ resource kvDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@20
 resource sbDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
   parent: sbDnsZone
   name: '${baseName}-sb-link'
+  location: 'global'
+  properties: {
+    virtualNetwork: {
+      id: vnet.id
+    }
+    registrationEnabled: false
+  }
+}
+
+resource stDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: stDnsZone
+  name: '${baseName}-st-link'
   location: 'global'
   properties: {
     virtualNetwork: {
@@ -236,6 +256,31 @@ resource sbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
 }
 
 // ---------------------------------------------------------------------------
+// Storage Account Private Endpoints
+// ---------------------------------------------------------------------------
+
+resource stPrivateEndpoints 'Microsoft.Network/privateEndpoints@2023-11-01' = [for (name, i) in storageAccountNames: {
+  name: '${baseName}-pe-st-${i}'
+  location: location
+  properties: {
+    subnet: {
+      id: vnet.properties.subnets[4].id // snet-private-endpoints
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${baseName}-plsc-st-${i}'
+        properties: {
+          privateLinkServiceId: resourceId('Microsoft.Storage/storageAccounts', name)
+          groupIds: [
+            'blob'
+          ]
+        }
+      }
+    ]
+  }
+}]
+
+// ---------------------------------------------------------------------------
 // DNS Zone Groups (auto-register A records)
 // ---------------------------------------------------------------------------
 
@@ -283,6 +328,21 @@ resource sbDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@202
     ]
   }
 }
+
+resource stDnsGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = [for (name, i) in storageAccountNames: {
+  parent: stPrivateEndpoints[i]
+  name: 'st-dns-group-${i}'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-config-${i}'
+        properties: {
+          privateDnsZoneId: stDnsZone.id
+        }
+      }
+    ]
+  }
+}]
 
 // ---------------------------------------------------------------------------
 // Outputs

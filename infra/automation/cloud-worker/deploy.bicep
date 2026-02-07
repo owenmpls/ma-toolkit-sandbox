@@ -71,6 +71,9 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
     name: 'Standard'
     tier: 'Standard'
   }
+  properties: {
+    publicNetworkAccess: !empty(cloudWorkerSubnetId) ? 'Disabled' : null
+  }
 }
 
 // --- Service Bus Topics ---
@@ -138,6 +141,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
+    enablePurgeProtection: true
+    publicNetworkAccess: !empty(cloudWorkerSubnetId) ? 'Disabled' : null
   }
 }
 
