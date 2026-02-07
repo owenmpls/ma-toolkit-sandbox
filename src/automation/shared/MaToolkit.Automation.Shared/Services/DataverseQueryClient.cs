@@ -18,6 +18,9 @@ public class DataverseQueryClient : IDataverseQueryClient
 
     public async Task<DataTable> ExecuteQueryAsync(string connectionEnvVar, string query)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionEnvVar);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
         var connectionString = _config[connectionEnvVar]
             ?? throw new InvalidOperationException($"Connection string '{connectionEnvVar}' not found in configuration");
 

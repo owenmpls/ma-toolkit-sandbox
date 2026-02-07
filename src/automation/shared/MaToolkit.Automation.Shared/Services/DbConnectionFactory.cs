@@ -9,6 +9,7 @@ public class DbConnectionFactory : IDbConnectionFactory
 
     public DbConnectionFactory(string connectionString)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         _connectionString = connectionString;
     }
 

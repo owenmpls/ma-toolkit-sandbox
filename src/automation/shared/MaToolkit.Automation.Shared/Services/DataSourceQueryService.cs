@@ -22,6 +22,11 @@ public class DataSourceQueryService : IDataSourceQueryService
 
     public async Task<DataTable> ExecuteAsync(DataSourceConfig config)
     {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentException.ThrowIfNullOrWhiteSpace(config.Type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(config.Connection);
+        ArgumentException.ThrowIfNullOrWhiteSpace(config.Query);
+
         _logger.LogInformation("Executing data source query (type: {Type})", config.Type);
 
         return config.Type.ToLowerInvariant() switch

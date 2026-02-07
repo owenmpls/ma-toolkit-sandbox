@@ -24,6 +24,10 @@ public class DatabricksQueryClient : IDatabricksQueryClient
 
     public async Task<DataTable> ExecuteQueryAsync(string connectionEnvVar, string warehouseIdEnvVar, string query)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionEnvVar);
+        ArgumentException.ThrowIfNullOrWhiteSpace(warehouseIdEnvVar);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
         var workspaceUrl = _config[connectionEnvVar]
             ?? throw new InvalidOperationException($"Configuration '{connectionEnvVar}' not found");
         var warehouseId = _config[warehouseIdEnvVar]

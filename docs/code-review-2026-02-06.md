@@ -223,12 +223,12 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 17. Missing Input Validation Throughout
+### 17. ~~Missing Input Validation Throughout~~ FIXED
 
-- `DataSourceQueryService.cs:23-36` — No null checks on `config` or `config.Type`
-- `DataverseQueryClient.cs:19-22` — No validation on `query` parameter
-- `DbConnectionFactory.cs:10-13` — No validation that connection string is non-empty
-- Admin API request DTOs have no validation attributes
+- ~~`DataSourceQueryService.cs:23-36` — No null checks on `config` or `config.Type`~~
+- ~~`DataverseQueryClient.cs:19-22` — No validation on `query` parameter~~
+- ~~`DbConnectionFactory.cs:10-13` — No validation that connection string is non-empty~~
+- Admin API request DTOs — not applicable (Azure Functions isolated worker doesn't enforce data annotations; endpoints already validate inline)
 
 ---
 
