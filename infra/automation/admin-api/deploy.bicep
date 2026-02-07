@@ -23,6 +23,9 @@ param keyVaultName string
 @description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
 param adminApiSubnetId string = ''
 
+@description('Resource ID of the existing Log Analytics workspace (from shared deployment). Leave empty to skip workspace linkage.')
+param logAnalyticsWorkspaceId string = ''
+
 @description('Tags to apply to all resources')
 param tags object = {
   component: 'admin-api'
@@ -90,6 +93,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
     Application_Type: 'web'
     Request_Source: 'rest'
     RetentionInDays: 30
+    WorkspaceResourceId: !empty(logAnalyticsWorkspaceId) ? logAnalyticsWorkspaceId : null
   }
 }
 

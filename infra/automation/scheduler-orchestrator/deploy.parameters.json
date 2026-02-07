@@ -8,27 +8,26 @@
     "serviceBusNamespaceName": {
       "value": "matoolkit-sb"
     },
-    "sqlServerName": {
-      "value": "sql-scheduler-dev"
-    },
-    "sqlDatabaseName": {
-      "value": "sqldb-scheduler-dev"
-    },
-    "sqlConnectionString": {
-      "value": ""
-    },
     "keyVaultName": {
       "value": "matoolkit-kv"
     },
     "logAnalyticsWorkspaceId": {
       "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.OperationalInsights/workspaces/<WORKSPACE_NAME>"
     },
+    "sqlAdminLogin": {
+      "value": "schedulerAdmin"
+    },
+    "sqlAdminPassword": {
+      "value": "<REPLACE_WITH_SECURE_PASSWORD>"
+    },
+    "schedulerSubnetId": {
+      "value": ""
+    },
     "orchestratorSubnetId": {
       "value": ""
     },
     "tags": {
       "value": {
-        "component": "orchestrator",
         "project": "ma-toolkit",
         "environment": "dev"
       }

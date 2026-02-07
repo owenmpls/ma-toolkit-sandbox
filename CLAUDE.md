@@ -137,8 +137,29 @@ docker-compose up
 
 ### Deploy infrastructure (Azure)
 
+Deploy in order — shared infrastructure first, then the rest in parallel:
+
 ```bash
-# Deploy admin-api
+# 1. Deploy shared infrastructure (Service Bus, Key Vault, Log Analytics, ACR)
+az deployment group create \
+  --resource-group your-rg \
+  --template-file infra/automation/shared/deploy.bicep \
+  --parameters infra/automation/shared/deploy.parameters.json
+
+# 2a. Deploy scheduler + orchestrator (can run in parallel with 2b, 2c)
+az deployment group create \
+  --resource-group your-rg \
+  --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
+  --parameters infra/automation/scheduler-orchestrator/deploy.parameters.json \
+  --parameters sqlAdminPassword="your-password"
+
+# 2b. Deploy cloud-worker (can run in parallel with 2a, 2c)
+az deployment group create \
+  --resource-group your-rg \
+  --template-file infra/automation/cloud-worker/deploy.bicep \
+  --parameters infra/automation/cloud-worker/deploy.parameters.json
+
+# 2c. Deploy admin-api (can run in parallel with 2a, 2b)
 az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/admin-api/deploy.bicep \
@@ -147,12 +168,6 @@ az deployment group create \
   --parameters entraIdTenantId="your-tenant-id" \
   --parameters entraIdClientId="your-client-id" \
   --parameters entraIdAudience="api://your-client-id"
-
-# Deploy cloud-worker
-az deployment group create \
-  --resource-group your-rg \
-  --template-file infra/automation/cloud-worker/deploy.bicep \
-  --parameters infra/automation/cloud-worker/deploy.parameters.json
 ```
 
 ## Architecture

@@ -1,5 +1,6 @@
 // Cloud Worker - Azure Infrastructure
-// Deploys: Container App Environment, Container App, Service Bus, Key Vault, Application Insights, Container Registry
+// Deploys: Container App Environment, Container App, Application Insights
+// Requires: shared infrastructure (Service Bus, Key Vault, Log Analytics, ACR) deployed first
 
 @description('Base name for all resources')
 param baseName string
@@ -37,6 +38,18 @@ param idleTimeoutSeconds int = 300
 @description('Subnet resource ID for the Container App Environment. Leave empty to skip VNet integration.')
 param cloudWorkerSubnetId string = ''
 
+@description('Name of the existing Service Bus namespace (from shared deployment).')
+param serviceBusNamespaceName string
+
+@description('Name of the existing Key Vault (from shared deployment).')
+param keyVaultName string
+
+@description('Name of the existing Container Registry (from shared deployment).')
+param containerRegistryName string
+
+@description('Name of the existing Log Analytics workspace (from shared deployment).')
+param logAnalyticsWorkspaceName string
+
 @description('Tags to apply to all resources')
 param tags object = {
   component: 'cloud-worker'
@@ -46,17 +59,29 @@ param tags object = {
 // Built-in role definition IDs
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
 
-// --- Log Analytics Workspace ---
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: '${baseName}-logs'
-  location: location
-  tags: tags
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-  }
+// ---------------------------------------------------------------------------
+// Existing resources (from shared deployment)
+// ---------------------------------------------------------------------------
+
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
+  name: logAnalyticsWorkspaceName
+}
+
+resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
+  name: serviceBusNamespaceName
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: containerRegistryName
+}
+
+resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' existing = {
+  parent: serviceBus
+  name: 'worker-jobs'
 }
 
 // --- Application Insights ---
@@ -71,38 +96,23 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-// --- Service Bus Namespace ---
-resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
-  name: '${baseName}-sb'
+// --- Container App Environment ---
+resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
+  name: '${baseName}-env'
   location: location
   tags: tags
-  sku: {
-    name: 'Standard'
-    tier: 'Standard'
-  }
   properties: {
-    publicNetworkAccess: !empty(cloudWorkerSubnetId) ? 'Disabled' : null
-  }
-}
-
-// --- Service Bus Topics ---
-resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
-  parent: serviceBus
-  name: 'worker-jobs'
-  tags: tags
-  properties: {
-    maxSizeInMegabytes: 1024
-    defaultMessageTimeToLive: 'P7D'
-  }
-}
-
-resource resultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
-  parent: serviceBus
-  name: 'worker-results'
-  tags: tags
-  properties: {
-    maxSizeInMegabytes: 1024
-    defaultMessageTimeToLive: 'P7D'
+    vnetConfiguration: !empty(cloudWorkerSubnetId) ? {
+      infrastructureSubnetId: cloudWorkerSubnetId
+      internal: false
+    } : null
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
   }
 }
 
@@ -124,69 +134,6 @@ resource workerSubscriptionRule 'Microsoft.ServiceBus/namespaces/topics/subscrip
     filterType: 'SqlFilter'
     sqlFilter: {
       sqlExpression: 'WorkerId = \'${workerId}\''
-    }
-  }
-}
-
-// --- Orchestrator Subscription (all results) ---
-resource orchestratorSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
-  parent: resultsTopic
-  name: 'orchestrator'
-  properties: {
-    maxDeliveryCount: 5
-    lockDuration: 'PT5M'
-    defaultMessageTimeToLive: 'P7D'
-  }
-}
-
-// --- Key Vault ---
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: '${baseName}-kv'
-  location: location
-  tags: tags
-  properties: {
-    sku: {
-      family: 'A'
-      name: 'standard'
-    }
-    tenantId: subscription().tenantId
-    enableRbacAuthorization: true
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 7
-    enablePurgeProtection: true
-    publicNetworkAccess: !empty(cloudWorkerSubnetId) ? 'Disabled' : null
-  }
-}
-
-// --- Container Registry (managed identity for image pull, no admin user) ---
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: '${baseName}acr'
-  location: location
-  tags: tags
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: false
-  }
-}
-
-// --- Container App Environment ---
-resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
-  name: '${baseName}-env'
-  location: location
-  tags: tags
-  properties: {
-    vnetConfiguration: !empty(cloudWorkerSubnetId) ? {
-      infrastructureSubnetId: cloudWorkerSubnetId
-      internal: false
-    } : null
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalytics.properties.customerId
-        sharedKey: logAnalytics.listKeys().primarySharedKey
-      }
     }
   }
 }
@@ -339,8 +286,5 @@ resource sbDataSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 // --- Outputs ---
 output containerAppName string = workerApp.name
 output containerAppFqdn string = workerApp.properties.configuration.?ingress.?fqdn ?? 'N/A (no ingress)'
-output serviceBusNamespace string = '${serviceBus.name}.servicebus.windows.net'
-output keyVaultName string = keyVault.name
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
-output containerRegistryLoginServer string = containerRegistry.properties.loginServer
 output workerPrincipalId string = workerApp.identity.principalId

@@ -23,6 +23,9 @@
     "adminApiSubnetId": {
       "value": ""
     },
+    "logAnalyticsWorkspaceId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.OperationalInsights/workspaces/<WORKSPACE_NAME>"
+    },
     "tags": {
       "value": {
         "component": "admin-api",

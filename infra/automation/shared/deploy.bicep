@@ -1,0 +1,139 @@
+// ---------------------------------------------------------------------------
+// Shared Infrastructure — Log Analytics, Service Bus, Key Vault, Container Registry
+// ---------------------------------------------------------------------------
+// Deploy this template first. Other templates reference these resources via
+// existing resource lookups using the output names.
+// ---------------------------------------------------------------------------
+
+@description('Base name for all resources (e.g. "matoolkit").')
+param baseName string
+
+@description('Azure region for deployment.')
+param location string = resourceGroup().location
+
+@description('Disable public network access on Service Bus and Key Vault (for VNet-only deployments).')
+param disablePublicNetworkAccess bool = false
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  component: 'shared'
+  project: 'ma-toolkit'
+}
+
+// ---------------------------------------------------------------------------
+// Log Analytics Workspace
+// ---------------------------------------------------------------------------
+
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: '${baseName}-logs'
+  location: location
+  tags: tags
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Service Bus Namespace + Topics
+// ---------------------------------------------------------------------------
+
+resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
+  name: '${baseName}-sb'
+  location: location
+  tags: tags
+  sku: {
+    name: 'Standard'
+    tier: 'Standard'
+  }
+  properties: {
+    publicNetworkAccess: disablePublicNetworkAccess ? 'Disabled' : null
+  }
+}
+
+resource orchestratorEventsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
+  parent: serviceBus
+  name: 'orchestrator-events'
+  tags: tags
+  properties: {
+    maxSizeInMegabytes: 1024
+    defaultMessageTimeToLive: 'P7D'
+    requiresDuplicateDetection: false
+    enablePartitioning: false
+  }
+}
+
+resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
+  parent: serviceBus
+  name: 'worker-jobs'
+  tags: tags
+  properties: {
+    maxSizeInMegabytes: 1024
+    defaultMessageTimeToLive: 'P7D'
+    requiresDuplicateDetection: false
+    enablePartitioning: false
+  }
+}
+
+resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
+  parent: serviceBus
+  name: 'worker-results'
+  tags: tags
+  properties: {
+    maxSizeInMegabytes: 1024
+    defaultMessageTimeToLive: 'P7D'
+    requiresDuplicateDetection: false
+    enablePartitioning: false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Key Vault
+// ---------------------------------------------------------------------------
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+  name: '${baseName}-kv'
+  location: location
+  tags: tags
+  properties: {
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    tenantId: subscription().tenantId
+    enableRbacAuthorization: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 7
+    enablePurgeProtection: true
+    publicNetworkAccess: disablePublicNetworkAccess ? 'Disabled' : null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Container Registry
+// ---------------------------------------------------------------------------
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: '${baseName}acr'
+  location: location
+  tags: tags
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Outputs
+// ---------------------------------------------------------------------------
+
+output logAnalyticsWorkspaceId string = logAnalytics.id
+output logAnalyticsWorkspaceName string = logAnalytics.name
+output serviceBusNamespaceName string = serviceBus.name
+output keyVaultName string = keyVault.name
+output containerRegistryName string = containerRegistry.name
+output containerRegistryLoginServer string = containerRegistry.properties.loginServer

@@ -5,9 +5,6 @@
     "baseName": {
       "value": "matoolkit"
     },
-    "location": {
-      "value": "eastus"
-    },
     "targetTenantId": {
       "value": "<TARGET-TENANT-ID>"
     },
@@ -34,6 +31,18 @@
     },
     "cloudWorkerSubnetId": {
       "value": ""
+    },
+    "serviceBusNamespaceName": {
+      "value": "matoolkit-sb"
+    },
+    "keyVaultName": {
+      "value": "matoolkit-kv"
+    },
+    "containerRegistryName": {
+      "value": "matoolkitacr"
+    },
+    "logAnalyticsWorkspaceName": {
+      "value": "matoolkit-logs"
     },
     "tags": {
       "value": {
