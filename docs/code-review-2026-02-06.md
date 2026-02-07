@@ -6,7 +6,9 @@ Full review of `src/automation/` (cloud-worker, scheduler, admin-api, orchestrat
 
 ## Critical Issues
 
-### 1. SQL Injection via String Interpolation (Orchestrator)
+### 1. SQL Injection via String Interpolation (Orchestrator) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — All ~30 interpolated status constants replaced with Dapper `@Parameters`.
 
 **Impact:** All four orchestrator repositories interpolate status constants directly into SQL strings. While the values come from C# constants today, this is fragile and violates secure coding standards.
 
@@ -31,7 +33,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 2. Unbounded Polling Loop (Shared Library)
+### 2. Unbounded Polling Loop (Shared Library) ✅ FIXED
+
+> **Fixed in:** `2b4f982` (tier 1) — Added 5-minute timeout (150 iterations × 2s) with `TimeoutException` and proper resource disposal.
 
 **Impact:** `DatabricksQueryClient.PollForCompletionAsync` uses `while(true)` with no max iteration limit. A stuck Databricks query polls forever.
 
@@ -41,7 +45,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 3. Unvalidated Function Invocation (Cloud Worker)
+### 3. Unvalidated Function Invocation (Cloud Worker) ✅ FIXED
+
+> **Fixed in:** `2b4f982` (tier 1) — Added function name whitelist validation against exported StandardFunctions/CustomFunctions modules before invocation.
 
 **Impact:** `job-dispatcher.ps1` invokes PowerShell functions by name from Service Bus messages without whitelist validation. A compromised message could invoke any function loaded in the runspace.
 
@@ -51,7 +57,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 4. Credentials in Plain Text in Infrastructure (Bicep)
+### 4. Credentials in Plain Text in Infrastructure (Bicep) ✅ FIXED
+
+> **Fixed in:** `2b4f982` (tier 1) — Migrated SQL connection strings to Key Vault references, disabled ACR admin user (uses managed identity AcrPull), added shared VNet module with private endpoints. Also reduced KEDA scaler auth rule from Manage+Listen+Send to Listen only.
 
 **Impact:** SQL credentials, storage account keys, and Service Bus connection strings embedded directly in app settings across all Bicep templates.
 
@@ -67,7 +75,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ## High Priority Issues
 
-### 5. No Timer Overlap Detection (Scheduler)
+### 5. No Timer Overlap Detection (Scheduler) ✅ FIXED
+
+> **Fixed in:** `2b4f982` (tier 1) — Added blob lease distributed lock (`BlobLeaseDistributedLock`) that acquires a lease before processing and releases on completion.
 
 **Impact:** If a scheduler run exceeds 5 minutes, the next trigger fires concurrently. Concurrent batch detection can create duplicates, member sync can race.
 
@@ -77,7 +87,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 6. Race Condition in Step Progression (Orchestrator)
+### 6. Race Condition in Step Progression (Orchestrator) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — All status-transition UPDATEs now include `AND status = @ExpectedStatus`. Methods return `bool`; `ResultProcessor` checks return value and skips if another handler already processed the transition.
 
 **Impact:** Between reading step statuses and dispatching jobs, another concurrent handler could modify the same step. No optimistic locking.
 
@@ -87,7 +99,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 7. Idempotency Not Enforced for Job Dispatching (Orchestrator)
+### 7. Idempotency Not Enforced for Job Dispatching (Orchestrator) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — All job IDs are now deterministic (`init-{id}`, `step-{id}`, `step-{id}-poll-{count}`, etc.). `WorkerDispatcher` throws `ArgumentException` on empty JobId instead of falling back to `Guid.NewGuid()`.
 
 **Impact:** If a handler crashes after dispatching a job but before updating the database, duplicate jobs can be sent. Service Bus deduplication window may not cover all cases.
 
@@ -97,7 +111,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 8. Service Bus Resources Leaked on Startup Failure (Cloud Worker)
+### 8. Service Bus Resources Leaked on Startup Failure (Cloud Worker) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Added `$sbReceiver`, `$sbSender`, `$sbClient` disposal in Phase 6 catch block.
 
 **Impact:** If runspace pool initialization fails, Service Bus client/receiver/sender created earlier are never disposed.
 
@@ -107,7 +123,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 9. N+1 Query Pattern (Scheduler & Admin API)
+### 9. N+1 Query Pattern (Scheduler & Admin API) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Hoisted `GetActiveByBatchAsync` and `LoadMemberDataAsync` above the phase loop. Added `RunbookRepository.GetByIdAsync()` and replaced `GetActiveRunbooksAsync()` + LINQ in both `AdvanceAsync` and `AddAsync`.
 
 **Impact:** `PhaseDispatcher` calls `GetActiveByBatchAsync()` and `LoadMemberDataAsync()` per phase instead of once per batch. `BatchManagementFunction.AdvanceAsync` fetches ALL active runbooks instead of one by ID.
 
@@ -119,7 +137,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 10. No Dead-Letter Queue Handling (Orchestrator)
+### 10. No Dead-Letter Queue Handling (Orchestrator) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Null deserialization now dead-letters the message instead of silently completing. New `WorkerResultDlqFunction` logs dead-lettered messages at Error severity and completes them.
 
 **Impact:** Messages that exceed max retry count go to DLQ with no alerting, monitoring, or recovery. Silently lost.
 
@@ -129,7 +149,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 11. Missing File Size Validation on CSV Uploads (Admin API)
+### 11. Missing File Size Validation on CSV Uploads (Admin API) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Added 50MB file size limit check in both `BatchManagementFunction.CreateAsync` and `MemberManagementFunction.AddAsync`.
 
 **Impact:** No file size limit on CSV uploads. `CsvUploadService` reads the entire file into memory. A large upload causes OOM.
 
@@ -142,7 +164,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 12. Blocking Async in DynamicTableReader (Orchestrator)
+### 12. Blocking Async in DynamicTableReader (Orchestrator) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Replaced synchronous `conn.Open()` and `SqlDataAdapter.Fill()` with Dapper `QueryAsync`. Removed explicit `conn.Open()` and `SqlConnection` cast in `GetMembersDataAsync`.
 
 **Impact:** Methods marked `async` use synchronous `conn.Open()` and `SqlDataAdapter.Fill()`, blocking thread pool threads.
 
@@ -152,7 +176,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 13. Bare Exception Catches (Shared Library)
+### 13. Bare Exception Catches (Shared Library) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Replaced bare `catch` with `catch (InvalidOperationException)` in both `IsPollingInProgress()` and `GetPollingResultData()`.
 
 **Impact:** Catches all exceptions including `OutOfMemoryException`, `StackOverflowException`. Makes debugging difficult.
 
@@ -162,7 +188,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ---
 
-### 14. Fire-and-Forget Publishing (Scheduler)
+### 14. Fire-and-Forget Publishing (Scheduler) ✅ FIXED
+
+> **Fixed in:** `3cf018e` (tier 2) — Wrapped publish calls in try/catch so failures don't crash the loop. Added `RetryUndispatchedAdditionsAsync` and `RetryUndispatchedRemovalsAsync` sweep at start of each sync cycle to re-publish for members missing dispatch timestamps.
 
 **Impact:** In `MemberSynchronizer`, if `PublishMemberAddedAsync` fails after DB insert, the member is marked active but the orchestrator never receives the event. Member is orphaned.
 
@@ -174,7 +202,9 @@ new { Id = id, Status = BatchStatus.Completed }
 
 ## Medium Priority Issues
 
-### 15. Overly Permissive Firewall/Access Rules (Infra)
+### 15. Overly Permissive Firewall/Access Rules (Infra) ✅ PARTIALLY FIXED
+
+> **Partially fixed in:** `2b4f982` (tier 1) — Disabled SQL public network access and removed permissive firewall rule. Reduced KEDA scaler auth from Manage+Listen+Send to Listen only. Disabled ACR admin user. Added shared VNet module with private endpoints for SQL, Key Vault, Service Bus, and VNet integration for all Function Apps and ACA.
 
 - `infra/automation/scheduler/deploy.bicep:200-207` — SQL firewall `0.0.0.0` allows any Azure service
 - `infra/automation/cloud-worker/deploy.bicep:168-178` — KEDA SAS policy has `Manage` rights (only needs `Listen`)
