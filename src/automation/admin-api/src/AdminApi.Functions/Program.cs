@@ -1,6 +1,7 @@
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
 using MaToolkit.Automation.Shared.Services;
+using MaToolkit.Automation.Shared.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,9 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.Configure<AdminApiSettings>(
     builder.Configuration.GetSection(AdminApiSettings.SectionName));
+
+builder.Services.Configure<QueryClientSettings>(
+    builder.Configuration.GetSection(QueryClientSettings.SectionName));
 
 builder.Services.AddSingleton<IDbConnectionFactory, AdminApiDbConnectionFactory>();
 

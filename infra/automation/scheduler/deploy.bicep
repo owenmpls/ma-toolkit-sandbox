@@ -201,7 +201,7 @@ resource serviceBusTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-prev
   tags: tags
   properties: {
     maxSizeInMegabytes: 1024
-    defaultMessageTimeToLive: 'P14D'
+    defaultMessageTimeToLive: 'P7D'
   }
 }
 
@@ -212,7 +212,7 @@ resource serviceBusSubscription 'Microsoft.ServiceBus/namespaces/topics/subscrip
   properties: {
     maxDeliveryCount: 10
     lockDuration: 'PT1M'
-    defaultMessageTimeToLive: 'P14D'
+    defaultMessageTimeToLive: 'P7D'
     deadLetteringOnMessageExpiration: true
   }
 }

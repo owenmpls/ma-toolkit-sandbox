@@ -6,20 +6,27 @@ using System.Text.Json;
 using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MaToolkit.Automation.Shared.Settings;
 
 namespace MaToolkit.Automation.Shared.Services;
 
 public class DatabricksQueryClient : IDatabricksQueryClient
 {
+    // Microsoft's well-known Entra ID app registration for Azure Databricks
+    private const string DatabricksEntraIdAppId = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d";
+
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _config;
     private readonly ILogger<DatabricksQueryClient> _logger;
+    private readonly QueryClientSettings _settings;
 
-    public DatabricksQueryClient(HttpClient httpClient, IConfiguration config, ILogger<DatabricksQueryClient> logger)
+    public DatabricksQueryClient(HttpClient httpClient, IConfiguration config, ILogger<DatabricksQueryClient> logger, IOptions<QueryClientSettings> settings)
     {
         _httpClient = httpClient;
         _config = config;
         _logger = logger;
+        _settings = settings.Value;
     }
 
     public async Task<DataTable> ExecuteQueryAsync(string connectionEnvVar, string warehouseIdEnvVar, string query)
@@ -37,7 +44,7 @@ public class DatabricksQueryClient : IDatabricksQueryClient
 
         var credential = new DefaultAzureCredential();
         var token = await credential.GetTokenAsync(
-            new Azure.Core.TokenRequestContext(new[] { "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default" }));
+            new Azure.Core.TokenRequestContext(new[] { $"{DatabricksEntraIdAppId}/.default" }));
 
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
 
@@ -45,7 +52,7 @@ public class DatabricksQueryClient : IDatabricksQueryClient
         {
             warehouse_id = warehouseId,
             statement = query,
-            wait_timeout = "120s",
+            wait_timeout = $"{_settings.DatabricksWaitTimeoutSeconds}s",
             disposition = "INLINE"
         };
 
@@ -73,7 +80,7 @@ public class DatabricksQueryClient : IDatabricksQueryClient
 
     private async Task<JsonDocument> PollForCompletionAsync(string workspaceUrl, string statementId)
     {
-        var maxDuration = TimeSpan.FromMinutes(5);
+        var maxDuration = TimeSpan.FromMinutes(_settings.DatabricksPollingTimeoutMinutes);
         var sw = Stopwatch.StartNew();
 
         while (sw.Elapsed < maxDuration)

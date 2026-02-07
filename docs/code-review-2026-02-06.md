@@ -270,7 +270,9 @@ Cloud worker, scheduler, and orchestrator Bicep templates define no `tags` param
 
 ---
 
-### 22. Hardcoded Timeouts and Config Values
+### 22. Hardcoded Timeouts and Config Values ✅ FIXED
+
+> **Fixed in:** issue #22 — Extracted timeouts to `QueryClientSettings` (configurable via app settings), named the Databricks app ID constant, standardized Service Bus TTL to `P7D`.
 
 - `DataverseQueryClient.cs:32` and `DatabricksQueryClient.cs:43` — 120s timeout hardcoded
 - `DatabricksQueryClient.cs:35` — Databricks Entra ID app ID hardcoded as GUID with no comment

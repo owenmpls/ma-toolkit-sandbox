@@ -1,6 +1,7 @@
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
 using MaToolkit.Automation.Shared.Services;
+using MaToolkit.Automation.Shared.Settings;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +16,9 @@ builder.ConfigureFunctionsWebApplication();
 
 builder.Services.Configure<SchedulerSettings>(
     builder.Configuration.GetSection(SchedulerSettings.SectionName));
+
+builder.Services.Configure<QueryClientSettings>(
+    builder.Configuration.GetSection(QueryClientSettings.SectionName));
 
 builder.Services.AddSingleton<IDbConnectionFactory, SchedulerDbConnectionFactory>();
 

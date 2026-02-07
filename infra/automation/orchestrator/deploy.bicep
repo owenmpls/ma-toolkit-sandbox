@@ -233,7 +233,7 @@ resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-prev
   tags: tags
   properties: {
     maxSizeInMegabytes: 1024
-    defaultMessageTimeToLive: 'P1D'
+    defaultMessageTimeToLive: 'P7D'
     requiresDuplicateDetection: false
     enablePartitioning: false
   }
@@ -246,7 +246,7 @@ resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-p
   tags: tags
   properties: {
     maxSizeInMegabytes: 1024
-    defaultMessageTimeToLive: 'P1D'
+    defaultMessageTimeToLive: 'P7D'
     requiresDuplicateDetection: false
     enablePartitioning: false
   }
@@ -260,7 +260,7 @@ resource workerResultsSubscription 'Microsoft.ServiceBus/namespaces/topics/subsc
   properties: {
     maxDeliveryCount: 10
     lockDuration: 'PT1M'
-    defaultMessageTimeToLive: 'P1D'
+    defaultMessageTimeToLive: 'P7D'
     deadLetteringOnMessageExpiration: true
   }
 }
