@@ -34,6 +34,12 @@ param containerMemory string = '2.0Gi'
 @minValue(0)
 param idleTimeoutSeconds int = 300
 
+@description('Subnet resource ID for the Container App Environment. Leave empty to skip VNet integration.')
+param cloudWorkerSubnetId string = ''
+
+// Built-in role definition IDs
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+
 // --- Log Analytics Workspace ---
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: '${baseName}-logs'
@@ -135,7 +141,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-// --- Container Registry ---
+// --- Container Registry (managed identity for image pull, no admin user) ---
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: '${baseName}acr'
   location: location
@@ -143,7 +149,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
     name: 'Basic'
   }
   properties: {
-    adminUserEnabled: true
+    adminUserEnabled: false
   }
 }
 
@@ -152,6 +158,10 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: '${baseName}-env'
   location: location
   properties: {
+    vnetConfiguration: !empty(cloudWorkerSubnetId) ? {
+      infrastructureSubnetId: cloudWorkerSubnetId
+      internal: false
+    } : null
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -163,17 +173,24 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
 }
 
 // --- Service Bus connection string secret (used by KEDA scaler for auth) ---
-// The scaler needs a connection string to check subscription message count.
-// We use a shared access policy with Manage rights on the worker-jobs topic.
+// KEDA requires a connection string — this cannot use managed identity today.
+// The auth rule is scoped to Listen only (KEDA only needs to read message count).
 resource jobsTopicAuthRule 'Microsoft.ServiceBus/namespaces/topics/authorizationRules@2022-10-01-preview' = {
   parent: jobsTopic
   name: 'keda-monitor'
   properties: {
     rights: [
-      'Manage'
       'Listen'
-      'Send'
     ]
+  }
+}
+
+// Store SB connection string in Key Vault for the KEDA scaler
+resource sbConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'keda-sb-connection-string'
+  properties: {
+    value: jobsTopicAuthRule.listKeys().primaryConnectionString
   }
 }
 
@@ -190,18 +207,14 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: containerRegistry.properties.loginServer
-          username: containerRegistry.listCredentials().username
-          passwordSecretRef: 'acr-password'
+          identity: 'system'
         }
       ]
       secrets: [
         {
-          name: 'acr-password'
-          value: containerRegistry.listCredentials().passwords[0].value
-        }
-        {
           name: 'sb-connection-string'
-          value: jobsTopicAuthRule.listKeys().primaryConnectionString
+          keyVaultUrl: sbConnectionStringSecret.properties.secretUri
+          identity: 'system'
         }
       ]
       // No ingress needed - this is a background worker
@@ -258,6 +271,17 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
 }
 
 // --- Role Assignments ---
+
+// Worker managed identity -> AcrPull on Container Registry
+resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: containerRegistry
+  name: guid(containerRegistry.id, workerApp.id, acrPullRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: workerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 // Worker managed identity -> Key Vault Secrets User
 resource kvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -44,7 +45,7 @@ public class DatabricksQueryClient : IDatabricksQueryClient
             disposition = "INLINE"
         };
 
-        var response = await _httpClient.PostAsync(
+        using var response = await _httpClient.PostAsync(
             $"{workspaceUrl.TrimEnd('/')}/api/2.0/sql/statements",
             new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"));
 
@@ -59,6 +60,7 @@ public class DatabricksQueryClient : IDatabricksQueryClient
         if (status == "PENDING" || status == "RUNNING")
         {
             var statementId = result.RootElement.GetProperty("statement_id").GetString();
+            result.Dispose();
             result = await PollForCompletionAsync(workspaceUrl, statementId!);
         }
 
@@ -67,11 +69,14 @@ public class DatabricksQueryClient : IDatabricksQueryClient
 
     private async Task<JsonDocument> PollForCompletionAsync(string workspaceUrl, string statementId)
     {
-        while (true)
+        var maxDuration = TimeSpan.FromMinutes(5);
+        var sw = Stopwatch.StartNew();
+
+        while (sw.Elapsed < maxDuration)
         {
             await Task.Delay(TimeSpan.FromSeconds(2));
 
-            var response = await _httpClient.GetAsync(
+            using var response = await _httpClient.GetAsync(
                 $"{workspaceUrl.TrimEnd('/')}/api/2.0/sql/statements/{statementId}");
             response.EnsureSuccessStatusCode();
 
@@ -89,12 +94,16 @@ public class DatabricksQueryClient : IDatabricksQueryClient
                 case "CLOSED":
                     var error = result.RootElement.GetProperty("status")
                         .TryGetProperty("error", out var errProp) ? errProp.ToString() : "Unknown error";
+                    result.Dispose();
                     throw new InvalidOperationException($"Databricks query {status}: {error}");
                 default:
+                    result.Dispose();
                     _logger.LogDebug("Databricks statement {StatementId} status: {Status}", statementId, status);
                     continue;
             }
         }
+
+        throw new TimeoutException($"Databricks statement {statementId} did not complete within {maxDuration.TotalMinutes} minutes");
     }
 
     private static DataTable BuildDataTable(JsonDocument result)

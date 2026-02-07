@@ -19,6 +19,9 @@
     },
     "logAnalyticsWorkspaceId": {
       "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.OperationalInsights/workspaces/<WORKSPACE_NAME>"
+    },
+    "schedulerSubnetId": {
+      "value": ""
     }
   }
 }

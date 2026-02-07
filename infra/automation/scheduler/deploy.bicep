@@ -24,6 +24,9 @@ param keyVaultName string
 @description('Resource ID of the existing Log Analytics workspace.')
 param logAnalyticsWorkspaceId string
 
+@description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
+param schedulerSubnetId string = ''
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -52,6 +55,18 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
+}
+
+// ---------------------------------------------------------------------------
+// Key Vault Secret — SQL connection string
+// ---------------------------------------------------------------------------
+
+resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'scheduler-sql-connection-string'
+  properties: {
+    value: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${sqlDatabase.name};Persist Security Info=False;User ID=${sqlAdminLogin};Password=${sqlAdminPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -117,8 +132,10 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: appServicePlan.id
     httpsOnly: true
+    virtualNetworkSubnetId: !empty(schedulerSubnetId) ? schedulerSubnetId : null
     siteConfig: {
       linuxFxVersion: 'DOTNET-ISOLATED|8.0'
+      vnetRouteAllEnabled: !empty(schedulerSubnetId)
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
@@ -142,7 +159,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'Scheduler__SqlConnectionString'
-          value: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${sqlDatabase.name};Persist Security Info=False;User ID=${sqlAdminLogin};Password=${sqlAdminPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+          value: '@Microsoft.KeyVault(SecretUri=${sqlConnectionStringSecret.properties.secretUri})'
         }
         {
           name: 'Scheduler__ServiceBusNamespace'
@@ -192,17 +209,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
     administratorLogin: sqlAdminLogin
     administratorLoginPassword: sqlAdminPassword
     minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
-  }
-}
-
-// Allow Azure services to access the SQL server
-resource sqlFirewallAllowAzure 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
-  parent: sqlServer
-  name: 'AllowAllWindowsAzureIps'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
+    publicNetworkAccess: 'Disabled'
   }
 }
 

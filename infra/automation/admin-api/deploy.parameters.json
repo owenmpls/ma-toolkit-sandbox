@@ -17,6 +17,12 @@
     "entraIdAudience": {
       "value": ""
     },
+    "keyVaultName": {
+      "value": "matoolkit-kv"
+    },
+    "adminApiSubnetId": {
+      "value": ""
+    },
     "tags": {
       "value": {
         "component": "admin-api",

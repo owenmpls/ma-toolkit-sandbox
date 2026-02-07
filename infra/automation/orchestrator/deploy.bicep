@@ -31,6 +31,9 @@ param keyVaultName string
 @description('Resource ID of the existing Log Analytics workspace.')
 param logAnalyticsWorkspaceId string
 
+@description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
+param orchestratorSubnetId string = ''
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -63,6 +66,18 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
+}
+
+// ---------------------------------------------------------------------------
+// Key Vault Secret — SQL connection string
+// ---------------------------------------------------------------------------
+
+resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'orchestrator-sql-connection-string'
+  properties: {
+    value: sqlConnectionString
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -128,8 +143,10 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: appServicePlan.id
     httpsOnly: true
+    virtualNetworkSubnetId: !empty(orchestratorSubnetId) ? orchestratorSubnetId : null
     siteConfig: {
       linuxFxVersion: 'DOTNET-ISOLATED|8.0'
+      vnetRouteAllEnabled: !empty(orchestratorSubnetId)
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
@@ -157,7 +174,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'Orchestrator__SqlConnectionString'
-          value: sqlConnectionString
+          value: '@Microsoft.KeyVault(SecretUri=${sqlConnectionStringSecret.properties.secretUri})'
         }
         {
           name: 'Orchestrator__ServiceBusNamespace'

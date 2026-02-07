@@ -54,6 +54,8 @@ builder.Services.AddScoped<IPhaseDispatcher, PhaseDispatcher>();
 builder.Services.AddScoped<IVersionTransitionHandler, VersionTransitionHandler>();
 builder.Services.AddScoped<IPollingManager, PollingManager>();
 
+builder.Services.AddSingleton<IDistributedLock, BlobLeaseDistributedLock>();
+
 builder.Services.AddApplicationInsightsTelemetryWorkerService();
 
 builder.Build().Run();

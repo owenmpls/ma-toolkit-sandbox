@@ -17,6 +17,12 @@ param entraIdClientId string = ''
 @description('Entra ID audience URI for authentication')
 param entraIdAudience string = ''
 
+@description('Name of the existing Key Vault.')
+param keyVaultName string
+
+@description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
+param adminApiSubnetId string = ''
+
 @description('Tags to apply to all resources')
 param tags object = {
   component: 'admin-api'
@@ -27,6 +33,29 @@ var storageAccountName = replace('${baseName}st', '-', '')
 var appInsightsName = '${baseName}-ai'
 var functionAppName = '${baseName}-func'
 var hostingPlanName = '${baseName}-plan'
+
+// Built-in role definition IDs
+var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key Vault Secrets User
+
+// ---------------------------------------------------------------------------
+// Existing resources
+// ---------------------------------------------------------------------------
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
+
+// ---------------------------------------------------------------------------
+// Key Vault Secret — SQL connection string
+// ---------------------------------------------------------------------------
+
+resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'admin-api-sql-connection-string'
+  properties: {
+    value: sqlConnectionString
+  }
+}
 
 // Storage Account for Azure Functions
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
@@ -84,8 +113,10 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   properties: {
     serverFarmId: hostingPlan.id
     httpsOnly: true
+    virtualNetworkSubnetId: !empty(adminApiSubnetId) ? adminApiSubnetId : null
     siteConfig: {
       linuxFxVersion: 'DOTNET-ISOLATED|8.0'
+      vnetRouteAllEnabled: !empty(adminApiSubnetId)
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
@@ -105,7 +136,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'AdminApi__SqlConnectionString'
-          value: sqlConnectionString
+          value: '@Microsoft.KeyVault(SecretUri=${sqlConnectionStringSecret.properties.secretUri})'
         }
         {
           name: 'AzureAd__Instance'
@@ -127,6 +158,21 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Role Assignments
+// ---------------------------------------------------------------------------
+
+// Key Vault Secrets User on the vault
+resource keyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, functionApp.id, keyVaultSecretsUserRoleId)
+  scope: keyVault
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
   }
 }
 

@@ -121,6 +121,61 @@ function New-JobResult {
     }
 }
 
+function Get-AllowedFunctions {
+    <#
+    .SYNOPSIS
+        Builds a set of allowed function names from loaded module manifests.
+    .DESCRIPTION
+        Reads FunctionsToExport from StandardFunctions.psd1 and any CustomFunctions
+        module manifests to build the whitelist of functions that can be invoked.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [PSCustomObject]$Config
+    )
+
+    $allowed = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+
+    # Read StandardFunctions manifest
+    $standardManifest = Join-Path $Config.StandardModulePath 'StandardFunctions.psd1'
+    if (Test-Path $standardManifest) {
+        $manifest = Import-PowerShellDataFile -Path $standardManifest
+        if ($manifest.FunctionsToExport) {
+            foreach ($fn in $manifest.FunctionsToExport) {
+                [void]$allowed.Add($fn)
+            }
+        }
+    }
+    else {
+        Write-WorkerLog -Message "StandardFunctions manifest not found at $standardManifest" -Severity Warning
+    }
+
+    # Read CustomFunctions manifests
+    $customPath = $Config.CustomModulesPath
+    if (Test-Path $customPath) {
+        $customModuleDirs = Get-ChildItem -Path $customPath -Directory -ErrorAction SilentlyContinue
+        foreach ($moduleDir in $customModuleDirs) {
+            $psd1Files = Get-ChildItem -Path $moduleDir.FullName -Filter '*.psd1' -ErrorAction SilentlyContinue
+            foreach ($psd1 in $psd1Files) {
+                try {
+                    $manifest = Import-PowerShellDataFile -Path $psd1.FullName
+                    if ($manifest.FunctionsToExport) {
+                        foreach ($fn in $manifest.FunctionsToExport) {
+                            [void]$allowed.Add($fn)
+                        }
+                    }
+                }
+                catch {
+                    Write-WorkerLog -Message "Failed to read custom module manifest '$($psd1.FullName)': $($_.Exception.Message)" -Severity Warning
+                }
+            }
+        }
+    }
+
+    return $allowed
+}
+
 function Start-JobDispatcher {
     <#
     .SYNOPSIS
@@ -143,6 +198,12 @@ function Start-JobDispatcher {
         [Parameter(Mandatory)]
         [ref]$Running
     )
+
+    # Build allowed function whitelist from module manifests
+    $script:AllowedFunctions = Get-AllowedFunctions -Config $Config
+    Write-WorkerLog -Message "Function whitelist loaded: $($script:AllowedFunctions.Count) functions allowed." -Properties @{
+        AllowedFunctions = ($script:AllowedFunctions -join ', ')
+    }
 
     Write-WorkerLog -Message 'Job dispatcher started. Listening for messages...'
     Write-WorkerEvent -EventName 'DispatcherStarted'
@@ -273,6 +334,23 @@ function Start-JobDispatcher {
                         }) -WorkerId $Config.WorkerId -Status 'Failure' -ErrorInfo ([PSCustomObject]@{
                             Message     = "Invalid job: $($validation.Error)"
                             Type        = 'ValidationError'
+                            IsThrottled = $false
+                            Attempts    = 0
+                        })
+                        Send-ServiceBusResult -Sender $Sender -Result $errorResult
+                        Complete-ServiceBusMessage -Receiver $Receiver -Message $message
+                        continue
+                    }
+
+                    # Validate function name against whitelist
+                    if ($job.FunctionName -notin $script:AllowedFunctions) {
+                        Write-WorkerLog -Message "Rejected job '$($job.JobId)': function '$($job.FunctionName)' is not in the allowed functions list." -Severity Warning -Properties @{
+                            JobId        = $job.JobId
+                            FunctionName = $job.FunctionName
+                        }
+                        $errorResult = New-JobResult -Job $job -WorkerId $Config.WorkerId -Status 'Failure' -ErrorInfo ([PSCustomObject]@{
+                            Message     = "Function '$($job.FunctionName)' is not allowed. Only exported module functions can be invoked."
+                            Type        = 'SecurityValidationError'
                             IsThrottled = $false
                             Attempts    = 0
                         })

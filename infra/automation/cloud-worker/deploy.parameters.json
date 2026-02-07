@@ -31,6 +31,9 @@
     },
     "idleTimeoutSeconds": {
       "value": 300
+    },
+    "cloudWorkerSubnetId": {
+      "value": ""
     }
   }
 }
