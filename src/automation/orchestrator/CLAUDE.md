@@ -10,7 +10,7 @@ C# Azure Functions project using the **isolated worker model** (.NET 8, Function
 # Build
 dotnet build src/automation/orchestrator/src/Orchestrator.Functions/
 
-# Run tests (33 tests)
+# Run tests (43 tests)
 dotnet test src/automation/orchestrator/tests/Orchestrator.Functions.Tests/
 
 # Run locally (requires Azure Functions Core Tools v4)
@@ -51,8 +51,9 @@ orchestrator/
           RunbookDefinition.cs        # Top-level YAML model (copied from scheduler)
           DataSourceConfig.cs         # data_source section
           PhaseDefinition.cs          # Phase with name, offset, steps
-          StepDefinition.cs           # Step with name, worker_id, function, params, on_failure, poll
+          StepDefinition.cs           # Step with name, worker_id, function, params, on_failure, poll, retry
           PollConfig.cs               # Poll interval and timeout
+          RetryConfig.cs              # Retry max_retries and interval
           RollbackSequence.cs         # Named rollback sequence
           MultiValuedColumnConfig.cs  # Column name + format
         Messages/
@@ -61,6 +62,7 @@ orchestrator/
           MemberAddedMessage.cs       # member-added event (from scheduler)
           MemberRemovedMessage.cs     # member-removed event (from scheduler)
           PollCheckMessage.cs         # poll-check event (from scheduler)
+          RetryCheckMessage.cs        # retry-check event (self-scheduled)
           WorkerJobMessage.cs         # Job dispatch to worker-jobs topic
           WorkerResultMessage.cs      # Result from worker-results topic
       Services/
@@ -70,6 +72,7 @@ orchestrator/
         PhaseEvaluator.cs             # Parses offsets, calculates due_at
         DynamicTableReader.cs         # Reads member data from runbook dynamic tables
         WorkerDispatcher.cs           # Sends jobs to worker-jobs Service Bus topic
+        RetryScheduler.cs             # Sends scheduled retry-check messages to orchestrator-events topic
         RollbackExecutor.cs           # Executes rollback sequences on failure
         Repositories/
           RunbookRepository.cs        # Read runbook YAML for rollbacks
@@ -85,14 +88,16 @@ orchestrator/
           MemberAddedHandler.cs       # Process member-added: create catch-up steps
           MemberRemovedHandler.cs     # Process member-removed: cancel pending, run cleanup
           PollCheckHandler.cs         # Process poll-check: timeout check, re-dispatch, member failure
-          ResultProcessor.cs          # Process worker results: update status, advance member progression
+          RetryCheckHandler.cs        # Process retry-check: re-dispatch step/init after retry interval
+          ResultProcessor.cs          # Process worker results: update status, retry or advance/fail
   tests/
     Orchestrator.Functions.Tests/
       Orchestrator.Functions.Tests.csproj
       Services/
         PhaseProgressionServiceTests.cs   # 20 tests: member progression, failure, phase/batch completion
         Handlers/
-          ResultProcessorTests.cs         # 5 tests: success/failure routing, terminal guard
+          ResultProcessorTests.cs         # 12 tests: success/failure routing, terminal guard, retry scenarios
+          RetryCheckHandlerTests.cs       # 4 tests: step/init retry dispatch, cancelled skip, not found
           PhaseDueHandlerTests.cs         # 7 tests: per-member dispatch, mixed progress, edge cases
 ```
 
@@ -121,6 +126,7 @@ orchestrator/
    - `member-added`: New member joined active batch
    - `member-removed`: Member left batch
    - `poll-check`: Time to re-poll a polling step
+   - `retry-check`: Scheduled by orchestrator itself — time to re-dispatch a failed step/init after retry interval
 
 2. **Orchestrator → Worker** via `worker-jobs` topic:
    - `WorkerJobMessage`: Job ID, worker pool, function, parameters, correlation data
@@ -139,7 +145,7 @@ orchestrator/
 The `PhaseProgressionService` centralizes all progression logic, used by `ResultProcessor`, `PhaseDueHandler`, and `PollCheckHandler`:
 
 - **`CheckMemberProgressionAsync`** — After a step succeeds, walks that member's steps in order and dispatches their next pending step. Each member progresses independently.
-- **`HandleMemberFailureAsync`** — After a step fails or poll times out, marks the member as `failed` and cancels all their non-terminal steps across ALL phases. Then checks if the phase is complete.
+- **`HandleMemberFailureAsync`** — After a step fails (with retries exhausted or no retries configured) or poll times out, marks the member as `failed` and cancels all their non-terminal steps across ALL phases. Then checks if the phase is complete.
 - **`CheckPhaseCompletionAsync`** — When all steps in a phase are terminal: marks phase `Completed` if at least one member fully succeeded, or `Failed` if no member did.
 - **`CheckBatchCompletionAsync`** — When all phases are terminal: marks batch `Completed` if at least one phase completed, or `Failed` if none did.
 
@@ -157,6 +163,44 @@ Orchestrator checks `Result.complete` to determine if step is still polling.
 - Rollback sequences are defined in runbook YAML under `rollbacks`
 - Rollback steps execute fire-and-forget (no status tracking)
 
+### Step Retry
+
+Configurable retry logic for transient failures. Runbooks can specify a global `retry` config (applies to all steps including init) and individual steps can override it.
+
+**YAML config:**
+```yaml
+retry:              # Global — applies to all steps
+  max_retries: 2
+  interval: 1m
+
+phases:
+  - name: example
+    steps:
+      - name: flaky-step
+        retry:            # Step-level override (replaces global entirely)
+          max_retries: 3
+          interval: 30s
+      - name: polling-step
+        poll: { ... }
+        retry:
+          max_retries: 0  # Explicitly disables global retry
+```
+
+**Resolution:** Step-level `retry` overrides global `retry` entirely (not merged). Effective retry config is resolved once at step creation time and stored on the execution record (`max_retries`, `retry_interval_sec`, `retry_count`, `retry_after`).
+
+**Retry flow:**
+1. Step fails → `ResultProcessor` marks it `failed` via `SetFailedAsync`
+2. If `max_retries` is set and `retry_count < max_retries`: `SetRetryPendingAsync` resets status to `pending`, increments `retry_count`, clears `job_id`/`completed_at`
+3. `RetryScheduler` sends a scheduled `retry-check` message to the orchestrator-events topic with `ScheduledEnqueueTime` set to the retry interval
+4. When the message arrives, `RetryCheckHandler` verifies the step is still `pending` (could have been cancelled), then re-dispatches via `WorkerDispatcher`
+
+**What does NOT retry:**
+- **Poll timeout** — polling steps already manage their own duration via `poll.timeout`; retrying would silently extend the configured timeout
+- **Steps with `max_retries: 0`** — explicit opt-out even when global retry is configured
+- **Steps with no retry config** (and no global config) — behave as before (immediate failure → rollback → member failure)
+
+**Job ID format for retries:** `step-{id}-retry-{retryCount}` / `init-{id}-retry-{retryCount}` — ensures uniqueness for Service Bus deduplication.
+
 ### Status Transitions
 
 **Batch statuses:**
@@ -170,6 +214,7 @@ Orchestrator checks `Result.complete` to determine if step is still polling.
 
 **Step execution statuses:**
 - `pending` → `dispatched` → `succeeded` / `failed` / `polling` → `poll_timeout` / `cancelled`
+- Retry loop: `failed` → `pending` (via `SetRetryPendingAsync`) → `dispatched` → ...
 
 ### Race Condition Safety
 
@@ -177,6 +222,8 @@ Orchestrator checks `Result.complete` to determine if step is still polling.
 - **Member failure + step success for same member:** `SetFailedAsync` on member uses `WHERE status = 'active'` — idempotent. `SetCancelledAsync` on steps uses status guards — won't cancel already-succeeded steps.
 - **Duplicate phase-due messages:** `PhaseDueHandler` is idempotent — step creation checks for existing steps, dispatch only targets `pending` steps.
 - **Result for already-cancelled step:** `ResultProcessor` has a terminal-state guard — ignores results for steps already in terminal status.
+- **Retry-check arrives after step cancelled:** `RetryCheckHandler` checks `status == pending` before dispatching — if the step was cancelled between scheduling and arrival, the retry is silently skipped.
+- **SetRetryPendingAsync guard:** Uses `WHERE status IN ('failed', 'poll_timeout')` — only transitions from expected states, returns false if step was already moved by another handler.
 
 ## Configuration
 
@@ -199,7 +246,7 @@ Service Bus connection uses DefaultAzureCredential:
 - `batches.status` (active, completed, failed)
 - `batch_members.status` (failed), `batch_members.failed_at`
 - `phase_executions.status`, `completed_at`
-- `step_executions.*` (status, job_id, result_json, error_message, timestamps, polling fields)
+- `step_executions.*` (status, job_id, result_json, error_message, timestamps, polling fields, retry fields)
 - `init_executions.*` (same fields)
 
 **Orchestrator reads from:**
