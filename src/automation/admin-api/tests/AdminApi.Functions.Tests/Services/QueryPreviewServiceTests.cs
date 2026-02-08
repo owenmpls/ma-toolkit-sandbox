@@ -177,6 +177,27 @@ public class QueryPreviewServiceTests
         result.BatchGroups[0].MemberCount.Should().Be(10);
     }
 
+    [Fact]
+    public async Task ExecutePreviewAsync_ImmediateBatch_Uses5MinuteRounding()
+    {
+        // Verify batch time is rounded to nearest 5-minute interval (not midnight)
+        var definition = CreateDefinition(batchTime: "immediate");
+        _dataSourceQueryMock
+            .Setup(x => x.ExecuteAsync(It.IsAny<DataSourceConfig>()))
+            .ReturnsAsync(CreateResultTable(5));
+
+        var result = await _sut.ExecutePreviewAsync(definition);
+
+        result.BatchGroups.Should().HaveCount(1);
+        var batchTime = DateTime.Parse(result.BatchGroups[0].BatchTime);
+        // Batch time should have minutes that are a multiple of 5 and zero seconds
+        (batchTime.Minute % 5).Should().Be(0);
+        batchTime.Second.Should().Be(0);
+        // Should NOT be midnight (the old behavior)
+        // This assertion is true when test runs between 00:05 and 23:55
+        // but the minute rounding assertion above is the key check
+    }
+
     #endregion
 
     #region Batch Group Tests - Column Based

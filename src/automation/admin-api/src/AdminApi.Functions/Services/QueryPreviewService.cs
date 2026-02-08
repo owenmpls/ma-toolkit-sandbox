@@ -80,8 +80,10 @@ public class QueryPreviewService : IQueryPreviewService
 
             if (isImmediate)
             {
-                // For immediate runbooks, use a single "immediate" marker
-                batchTime = DateTime.UtcNow.Date;
+                // For immediate runbooks, use 5-minute rounding (matches scheduler logic)
+                var now = DateTime.UtcNow;
+                batchTime = new DateTime(now.Year, now.Month, now.Day, now.Hour,
+                    (now.Minute / 5) * 5, 0, DateTimeKind.Utc);
             }
             else
             {

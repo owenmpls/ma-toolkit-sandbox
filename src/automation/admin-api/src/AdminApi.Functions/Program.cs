@@ -14,6 +14,8 @@ using AdminApi.Functions.Services;
 using AdminApi.Functions.Settings;
 using MaToolkit.Automation.Shared.Services.Repositories;
 
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
@@ -70,6 +72,9 @@ builder.Services.AddScoped<IMemberRepository, MemberRepository>();
 builder.Services.AddScoped<IPhaseExecutionRepository, PhaseExecutionRepository>();
 builder.Services.AddScoped<IStepExecutionRepository, StepExecutionRepository>();
 builder.Services.AddScoped<IInitExecutionRepository, InitExecutionRepository>();
+
+// Service Bus publisher
+builder.Services.AddScoped<IServiceBusPublisher, ServiceBusPublisher>();
 
 // Admin services
 builder.Services.AddScoped<IQueryPreviewService, QueryPreviewService>();

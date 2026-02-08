@@ -10,6 +10,8 @@ using Scheduler.Functions.Services;
 using Scheduler.Functions.Settings;
 using MaToolkit.Automation.Shared.Services.Repositories;
 
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();

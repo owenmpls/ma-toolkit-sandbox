@@ -1,6 +1,4 @@
 using System.Data;
-using System.Text.Json;
-using Azure.Messaging.ServiceBus;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
@@ -52,7 +50,7 @@ public class ManualBatchService : IManualBatchService
     private readonly IInitExecutionRepository _initRepo;
     private readonly IPhaseEvaluator _phaseEvaluator;
     private readonly IDbConnectionFactory _db;
-    private readonly ServiceBusClient _serviceBusClient;
+    private readonly IServiceBusPublisher _publisher;
     private readonly ILogger<ManualBatchService> _logger;
 
     public ManualBatchService(
@@ -63,7 +61,7 @@ public class ManualBatchService : IManualBatchService
         IPhaseEvaluator phaseEvaluator,
         IDbConnectionFactory db,
         ILogger<ManualBatchService> logger,
-        ServiceBusClient serviceBusClient)
+        IServiceBusPublisher publisher)
     {
         _batchRepo = batchRepo;
         _memberRepo = memberRepo;
@@ -71,7 +69,7 @@ public class ManualBatchService : IManualBatchService
         _initRepo = initRepo;
         _phaseEvaluator = phaseEvaluator;
         _db = db;
-        _serviceBusClient = serviceBusClient;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -97,12 +95,12 @@ public class ManualBatchService : IManualBatchService
             {
                 var hasInitSteps = definition.Init.Count > 0;
 
-                // Create batch record
+                // Create batch record — always start as Detected (consistent with scheduler)
                 var batch = new BatchRecord
                 {
                     RunbookId = runbook.Id,
                     BatchStartTime = null, // Manual batches don't use batch_start_time for scheduling
-                    Status = hasInitSteps ? BatchStatus.Detected : BatchStatus.Active,
+                    Status = BatchStatus.Detected,
                     IsManual = true,
                     CreatedBy = createdBy,
                     CurrentPhase = null
@@ -143,6 +141,12 @@ public class ManualBatchService : IManualBatchService
                 // the batch-init message — no need to pre-create them here
 
                 transaction.Commit();
+
+                // No init steps — transition to Active (consistent with scheduler)
+                if (!hasInitSteps)
+                {
+                    await _batchRepo.UpdateStatusAsync(batchId, BatchStatus.Active);
+                }
 
                 result.Success = true;
                 result.BatchId = batchId;
@@ -284,31 +288,26 @@ public class ManualBatchService : IManualBatchService
 
     private async Task PublishBatchInitAsync(BatchRecord batch, RunbookRecord runbook, int memberCount)
     {
-        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
-        var message = new BatchInitMessage
+        var dispatchTime = DateTime.UtcNow;
+
+        // Persist batch_start_time so {{_batch_start_time}} resolves consistently
+        await _batchRepo.UpdateBatchStartTimeAsync(batch.Id, dispatchTime);
+
+        await _publisher.PublishBatchInitAsync(new BatchInitMessage
         {
             RunbookName = runbook.Name,
             RunbookVersion = runbook.Version,
             BatchId = batch.Id,
-            BatchStartTime = DateTime.UtcNow, // Use current time for manual batches
+            BatchStartTime = dispatchTime,
             MemberCount = memberCount
-        };
-
-        var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))
-        {
-            ContentType = "application/json"
-        };
-        sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
-
-        await sender.SendMessageAsync(sbMessage);
+        });
     }
 
     private async Task PublishPhaseDueAsync(
         PhaseExecutionRecord phase, BatchRecord batch, RunbookRecord runbook,
         List<BatchMemberRecord> members)
     {
-        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
-        var message = new PhaseDueMessage
+        await _publisher.PublishPhaseDueAsync(new PhaseDueMessage
         {
             PhaseExecutionId = phase.Id,
             PhaseName = phase.PhaseName,
@@ -318,14 +317,6 @@ public class ManualBatchService : IManualBatchService
             OffsetMinutes = phase.OffsetMinutes,
             DueAt = phase.DueAt,
             MemberIds = members.Select(m => m.Id).ToList()
-        };
-
-        var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))
-        {
-            ContentType = "application/json"
-        };
-        sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
-
-        await sender.SendMessageAsync(sbMessage);
+        });
     }
 }

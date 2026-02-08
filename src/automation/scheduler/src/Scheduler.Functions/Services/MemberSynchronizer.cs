@@ -145,7 +145,7 @@ public class MemberSynchronizer : IMemberSynchronizer
         RunbookRecord runbook, BatchRecord batch, List<BatchMemberRecord> existingMembers)
     {
         var undispatched = existingMembers
-            .Where(m => m.Status == "active" && m.AddDispatchedAt == null)
+            .Where(m => m.Status == MemberStatus.Active && m.AddDispatchedAt == null)
             .ToList();
 
         foreach (var member in undispatched)
@@ -174,7 +174,7 @@ public class MemberSynchronizer : IMemberSynchronizer
         RunbookRecord runbook, BatchRecord batch, List<BatchMemberRecord> existingMembers)
     {
         var undispatched = existingMembers
-            .Where(m => m.Status == "removed" && m.RemoveDispatchedAt == null)
+            .Where(m => m.Status == MemberStatus.Removed && m.RemoveDispatchedAt == null)
             .ToList();
 
         foreach (var member in undispatched)

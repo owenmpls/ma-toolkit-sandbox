@@ -1,10 +1,10 @@
 using System.Data;
-using Azure.Messaging.ServiceBus;
 using FluentAssertions;
 using AdminApi.Functions.Functions;
 using AdminApi.Functions.Services;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Models.Yaml;
 using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
@@ -24,8 +24,7 @@ public class MemberManagementFunctionTests
     private readonly Mock<IRunbookRepository> _runbookRepoMock;
     private readonly Mock<IRunbookParser> _parserMock;
     private readonly Mock<ICsvUploadService> _csvUploadMock;
-    private readonly Mock<ServiceBusClient> _serviceBusClientMock;
-    private readonly Mock<ServiceBusSender> _senderMock;
+    private readonly Mock<IServiceBusPublisher> _publisherMock;
     private readonly Mock<ILogger<MemberManagementFunction>> _loggerMock;
 
     public MemberManagementFunctionTests()
@@ -36,13 +35,7 @@ public class MemberManagementFunctionTests
         _parserMock = new Mock<IRunbookParser>();
         _csvUploadMock = new Mock<ICsvUploadService>();
         _loggerMock = new Mock<ILogger<MemberManagementFunction>>();
-
-        _serviceBusClientMock = new Mock<ServiceBusClient>();
-        _senderMock = new Mock<ServiceBusSender>();
-        _senderMock.Setup(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default))
-            .Returns(Task.CompletedTask);
-        _serviceBusClientMock.Setup(x => x.CreateSender(It.IsAny<string>()))
-            .Returns(_senderMock.Object);
+        _publisherMock = new Mock<IServiceBusPublisher>();
 
         _sut = new MemberManagementFunction(
             _batchRepoMock.Object,
@@ -50,7 +43,7 @@ public class MemberManagementFunctionTests
             _runbookRepoMock.Object,
             _parserMock.Object,
             _csvUploadMock.Object,
-            _serviceBusClientMock.Object,
+            _publisherMock.Object,
             _loggerMock.Object);
     }
 
@@ -127,6 +120,46 @@ public class MemberManagementFunctionTests
         return request.Object;
     }
 
+    #region AddAsync - State Guard Tests
+
+    [Theory]
+    [InlineData(BatchStatus.InitDispatched)]
+    [InlineData(BatchStatus.Completed)]
+    [InlineData(BatchStatus.Failed)]
+    public async Task AddAsync_RejectsNonActiveNonDetectedBatch(string batchStatus)
+    {
+        var batch = new BatchRecord { Id = 1, RunbookId = 1, IsManual = true, Status = batchStatus };
+        _batchRepoMock.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(batch);
+
+        var result = await _sut.AddAsync(CreateFormRequest(), 1);
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Theory]
+    [InlineData(BatchStatus.Active)]
+    [InlineData(BatchStatus.Detected)]
+    public async Task AddAsync_AllowsActiveAndDetectedBatch(string batchStatus)
+    {
+        var batch = new BatchRecord { Id = 1, RunbookId = 1, IsManual = true, Status = batchStatus };
+        var runbook = CreateRunbook();
+        var definition = CreateDefinition();
+        var csvResult = CreateCsvResult("user1");
+
+        _batchRepoMock.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(batch);
+        _runbookRepoMock.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(runbook);
+        _parserMock.Setup(x => x.Parse(It.IsAny<string>())).Returns(definition);
+        _csvUploadMock.Setup(x => x.ParseCsvAsync(It.IsAny<Stream>(), definition)).ReturnsAsync(csvResult);
+        _memberRepoMock.Setup(x => x.GetByBatchAsync(1)).ReturnsAsync(new List<BatchMemberRecord>());
+        _memberRepoMock.Setup(x => x.InsertAsync(It.IsAny<BatchMemberRecord>(), null)).ReturnsAsync(100);
+
+        var result = await _sut.AddAsync(CreateFormRequest(), 1);
+
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    #endregion
+
     #region AddAsync - Service Bus Dispatch Tests
 
     [Fact]
@@ -150,8 +183,7 @@ public class MemberManagementFunctionTests
         var result = await _sut.AddAsync(CreateFormRequest(), 1);
 
         result.Should().BeOfType<OkObjectResult>();
-        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Exactly(2));
-        _serviceBusClientMock.Verify(x => x.CreateSender("orchestrator-events"), Times.Exactly(2));
+        _publisherMock.Verify(x => x.PublishMemberAddedAsync(It.IsAny<MemberAddedMessage>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -179,7 +211,7 @@ public class MemberManagementFunctionTests
         result.Should().BeOfType<OkObjectResult>();
         // Only user2 should be inserted and dispatched (user1 is duplicate)
         _memberRepoMock.Verify(x => x.InsertAsync(It.IsAny<BatchMemberRecord>(), null), Times.Once);
-        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Once);
+        _publisherMock.Verify(x => x.PublishMemberAddedAsync(It.IsAny<MemberAddedMessage>()), Times.Once);
     }
 
     [Fact]
@@ -197,8 +229,8 @@ public class MemberManagementFunctionTests
         _memberRepoMock.Setup(x => x.GetByBatchAsync(1)).ReturnsAsync(new List<BatchMemberRecord>());
         _memberRepoMock.Setup(x => x.InsertAsync(It.IsAny<BatchMemberRecord>(), null)).ReturnsAsync(100);
 
-        _senderMock.Setup(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default))
-            .ThrowsAsync(new ServiceBusException("Connection failed", ServiceBusFailureReason.ServiceCommunicationProblem));
+        _publisherMock.Setup(x => x.PublishMemberAddedAsync(It.IsAny<MemberAddedMessage>()))
+            .ThrowsAsync(new InvalidOperationException("Connection failed"));
 
         var result = await _sut.AddAsync(CreateFormRequest(), 1);
 
@@ -245,8 +277,7 @@ public class MemberManagementFunctionTests
         var result = await _sut.RemoveAsync(CreateFormRequest(), 1, 10);
 
         result.Should().BeOfType<OkObjectResult>();
-        _serviceBusClientMock.Verify(x => x.CreateSender("orchestrator-events"), Times.Once);
-        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Once);
+        _publisherMock.Verify(x => x.PublishMemberRemovedAsync(It.IsAny<MemberRemovedMessage>()), Times.Once);
     }
 
     [Fact]
@@ -276,8 +307,8 @@ public class MemberManagementFunctionTests
         _memberRepoMock.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(member);
         _runbookRepoMock.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(runbook);
 
-        _senderMock.Setup(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default))
-            .ThrowsAsync(new ServiceBusException("Connection failed", ServiceBusFailureReason.ServiceCommunicationProblem));
+        _publisherMock.Setup(x => x.PublishMemberRemovedAsync(It.IsAny<MemberRemovedMessage>()))
+            .ThrowsAsync(new InvalidOperationException("Connection failed"));
 
         var result = await _sut.RemoveAsync(CreateFormRequest(), 1, 10);
 

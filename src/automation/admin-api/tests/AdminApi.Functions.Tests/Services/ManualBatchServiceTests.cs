@@ -1,10 +1,10 @@
 using System.Data;
-using Azure.Messaging.ServiceBus;
 using FluentAssertions;
 using AdminApi.Functions.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Models.Yaml;
 using MaToolkit.Automation.Shared.Services;
 using Microsoft.Extensions.Logging;
@@ -23,8 +23,7 @@ public class ManualBatchServiceTests
     private readonly Mock<IPhaseEvaluator> _phaseEvaluatorMock;
     private readonly Mock<IDbConnectionFactory> _dbMock;
     private readonly Mock<ILogger<ManualBatchService>> _loggerMock;
-    private readonly Mock<ServiceBusClient> _serviceBusClientMock;
-    private readonly Mock<ServiceBusSender> _senderMock;
+    private readonly Mock<IServiceBusPublisher> _publisherMock;
 
     public ManualBatchServiceTests()
     {
@@ -35,14 +34,7 @@ public class ManualBatchServiceTests
         _phaseEvaluatorMock = new Mock<IPhaseEvaluator>();
         _dbMock = new Mock<IDbConnectionFactory>();
         _loggerMock = new Mock<ILogger<ManualBatchService>>();
-
-        // Setup Service Bus mock
-        _serviceBusClientMock = new Mock<ServiceBusClient>();
-        _senderMock = new Mock<ServiceBusSender>();
-        _senderMock.Setup(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default))
-            .Returns(Task.CompletedTask);
-        _serviceBusClientMock.Setup(x => x.CreateSender(It.IsAny<string>()))
-            .Returns(_senderMock.Object);
+        _publisherMock = new Mock<IServiceBusPublisher>();
 
         // Setup phase evaluator defaults
         _phaseEvaluatorMock.Setup(x => x.ParseOffsetMinutes(It.IsAny<string>())).Returns(0);
@@ -56,7 +48,7 @@ public class ManualBatchServiceTests
             _phaseEvaluatorMock.Object,
             _dbMock.Object,
             _loggerMock.Object,
-            _serviceBusClientMock.Object);
+            _publisherMock.Object);
     }
 
     private static RunbookRecord CreateRunbook()
@@ -450,8 +442,7 @@ public class ManualBatchServiceTests
 
         await _sut.AdvanceBatchAsync(batch, runbook, definition);
 
-        _serviceBusClientMock.Verify(x => x.CreateSender("orchestrator-events"), Times.Once);
-        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Once);
+        _publisherMock.Verify(x => x.PublishPhaseDueAsync(It.IsAny<PhaseDueMessage>()), Times.Once);
     }
 
     [Fact]
@@ -470,8 +461,7 @@ public class ManualBatchServiceTests
 
         await _sut.AdvanceBatchAsync(batch, runbook, definition);
 
-        _serviceBusClientMock.Verify(x => x.CreateSender("orchestrator-events"), Times.Once);
-        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Once);
+        _publisherMock.Verify(x => x.PublishBatchInitAsync(It.IsAny<BatchInitMessage>()), Times.Once);
     }
 
     #endregion

@@ -120,6 +120,14 @@ public class BatchRepository : IBatchRepository
             new { Id = id, Status = status });
     }
 
+    public async Task UpdateBatchStartTimeAsync(int id, DateTime batchStartTime)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE batches SET batch_start_time = @BatchStartTime WHERE id = @Id",
+            new { Id = id, BatchStartTime = batchStartTime });
+    }
+
     public async Task UpdateCurrentPhaseAsync(int id, string? phaseName)
     {
         using var conn = _db.CreateConnection();

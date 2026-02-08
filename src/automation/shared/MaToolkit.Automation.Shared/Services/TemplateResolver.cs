@@ -73,6 +73,8 @@ public class TemplateResolver : ITemplateResolver
 
         foreach (var (key, template) in paramTemplates)
         {
+            var unresolvedVariables = new List<string>();
+
             resolved[key] = TemplatePattern.Replace(template, match =>
             {
                 var variableName = match.Groups[1].Value;
@@ -82,9 +84,12 @@ public class TemplateResolver : ITemplateResolver
                 if (variableName == "_batch_start_time")
                     return (batchStartTime ?? DateTime.UtcNow).ToString("o");
 
-                _logger.LogWarning("Unresolved init template variable: {Variable}", variableName);
+                unresolvedVariables.Add(variableName);
                 return match.Value;
             });
+
+            if (unresolvedVariables.Count > 0)
+                throw new TemplateResolutionException(template, unresolvedVariables);
         }
 
         return resolved;

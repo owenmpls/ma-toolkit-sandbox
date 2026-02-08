@@ -126,11 +126,34 @@ public class BatchDetector : IBatchDetector
                 Status = BatchStatus.Detected
             }, transaction);
 
+            // For immediate batches, filter out members already in an active batch
+            bool isImmediate = string.Equals(definition.DataSource.BatchTime, "immediate", StringComparison.OrdinalIgnoreCase);
+            var filteredRows = rows;
+            if (isImmediate)
+            {
+                filteredRows = new List<DataRow>();
+                foreach (var row in rows)
+                {
+                    var key = row[definition.DataSource.PrimaryKey]?.ToString() ?? string.Empty;
+                    if (!await _memberRepo.IsMemberInActiveBatchAsync(runbook.Id, key))
+                        filteredRows.Add(row);
+                }
+
+                if (filteredRows.Count == 0)
+                {
+                    _logger.LogInformation(
+                        "All members for runbook {RunbookName} batch {BatchTime} are already in active batches, skipping",
+                        runbook.Name, batchTime);
+                    transaction.Rollback();
+                    return;
+                }
+            }
+
             // Insert members with point-in-time data snapshot
             var memberIds = new List<int>();
             var mvCols = definition.DataSource.MultiValuedColumns
                 .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
-            foreach (var row in rows)
+            foreach (var row in filteredRows)
             {
                 var memberKey = row[definition.DataSource.PrimaryKey]?.ToString() ?? string.Empty;
                 var memberId = await _memberRepo.InsertAsync(new BatchMemberRecord
@@ -162,7 +185,7 @@ public class BatchDetector : IBatchDetector
                     RunbookVersion = runbook.Version,
                     BatchId = batchId,
                     BatchStartTime = batchTime,
-                    MemberCount = rows.Count
+                    MemberCount = filteredRows.Count
                 });
                 await _batchRepo.SetInitDispatchedAsync(batchId);
             }

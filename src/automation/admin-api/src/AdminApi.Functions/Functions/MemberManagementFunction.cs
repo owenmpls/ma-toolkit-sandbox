@@ -1,5 +1,3 @@
-using System.Text.Json;
-using Azure.Messaging.ServiceBus;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
@@ -22,7 +20,7 @@ public class MemberManagementFunction
     private readonly IRunbookRepository _runbookRepo;
     private readonly IRunbookParser _parser;
     private readonly ICsvUploadService _csvUpload;
-    private readonly ServiceBusClient _serviceBusClient;
+    private readonly IServiceBusPublisher _publisher;
     private readonly ILogger<MemberManagementFunction> _logger;
 
     public MemberManagementFunction(
@@ -31,7 +29,7 @@ public class MemberManagementFunction
         IRunbookRepository runbookRepo,
         IRunbookParser parser,
         ICsvUploadService csvUpload,
-        ServiceBusClient serviceBusClient,
+        IServiceBusPublisher publisher,
         ILogger<MemberManagementFunction> logger)
     {
         _batchRepo = batchRepo;
@@ -39,7 +37,7 @@ public class MemberManagementFunction
         _runbookRepo = runbookRepo;
         _parser = parser;
         _csvUpload = csvUpload;
-        _serviceBusClient = serviceBusClient;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -94,7 +92,7 @@ public class MemberManagementFunction
         if (!batch.IsManual)
             return new ConflictObjectResult(new { error = "Members can only be added to manual batches via API" });
 
-        if (batch.Status is BatchStatus.Completed or BatchStatus.Failed)
+        if (batch.Status is not (BatchStatus.Active or BatchStatus.Detected))
             return new ConflictObjectResult(new { error = $"Cannot add members to a batch with status '{batch.Status}'" });
 
         // Get runbook
@@ -171,7 +169,14 @@ public class MemberManagementFunction
         {
             try
             {
-                await PublishMemberAddedAsync(batch, runbook, newMemberId, memberKey);
+                await _publisher.PublishMemberAddedAsync(new MemberAddedMessage
+                {
+                    RunbookName = runbook.Name,
+                    RunbookVersion = runbook.Version,
+                    BatchId = batch.Id,
+                    BatchMemberId = newMemberId,
+                    MemberKey = memberKey
+                });
                 await _memberRepo.SetAddDispatchedAsync(newMemberId);
             }
             catch (Exception ex)
@@ -231,7 +236,14 @@ public class MemberManagementFunction
         {
             try
             {
-                await PublishMemberRemovedAsync(batch, runbook, memberId, member.MemberKey);
+                await _publisher.PublishMemberRemovedAsync(new MemberRemovedMessage
+                {
+                    RunbookName = runbook.Name,
+                    RunbookVersion = runbook.Version,
+                    BatchId = batch.Id,
+                    BatchMemberId = memberId,
+                    MemberKey = member.MemberKey
+                });
                 await _memberRepo.SetRemoveDispatchedAsync(memberId);
             }
             catch (Exception ex)
@@ -250,43 +262,4 @@ public class MemberManagementFunction
         });
     }
 
-    private async Task PublishMemberAddedAsync(
-        BatchRecord batch, RunbookRecord runbook, int batchMemberId, string memberKey)
-    {
-        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
-        var message = new MemberAddedMessage
-        {
-            RunbookName = runbook.Name,
-            RunbookVersion = runbook.Version,
-            BatchId = batch.Id,
-            BatchMemberId = batchMemberId,
-            MemberKey = memberKey
-        };
-        var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))
-        {
-            ContentType = "application/json"
-        };
-        sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
-        await sender.SendMessageAsync(sbMessage);
-    }
-
-    private async Task PublishMemberRemovedAsync(
-        BatchRecord batch, RunbookRecord runbook, int batchMemberId, string memberKey)
-    {
-        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
-        var message = new MemberRemovedMessage
-        {
-            RunbookName = runbook.Name,
-            RunbookVersion = runbook.Version,
-            BatchId = batch.Id,
-            BatchMemberId = batchMemberId,
-            MemberKey = memberKey
-        };
-        var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))
-        {
-            ContentType = "application/json"
-        };
-        sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
-        await sender.SendMessageAsync(sbMessage);
-    }
 }

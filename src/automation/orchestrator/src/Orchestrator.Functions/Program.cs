@@ -10,6 +10,8 @@ using Orchestrator.Functions.Services.Handlers;
 using Orchestrator.Functions.Settings;
 using MaToolkit.Automation.Shared.Services.Repositories;
 
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();

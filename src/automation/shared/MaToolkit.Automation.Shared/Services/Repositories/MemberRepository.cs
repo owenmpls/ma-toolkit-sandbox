@@ -106,9 +106,23 @@ public class MemberRepository : IMemberRepository
             "SELECT worker_data_json FROM batch_members WHERE id = @Id",
             new { Id = id });
 
-        var merged = string.IsNullOrEmpty(existing)
-            ? new Dictionary<string, string>()
-            : JsonSerializer.Deserialize<Dictionary<string, string>>(existing) ?? new();
+        Dictionary<string, string> merged;
+        if (string.IsNullOrEmpty(existing))
+        {
+            merged = new Dictionary<string, string>();
+        }
+        else
+        {
+            try
+            {
+                merged = JsonSerializer.Deserialize<Dictionary<string, string>>(existing) ?? new();
+            }
+            catch (JsonException)
+            {
+                // Corrupted worker_data_json — start fresh rather than blocking progress
+                merged = new Dictionary<string, string>();
+            }
+        }
 
         foreach (var (key, value) in outputData)
             merged[key] = value;
