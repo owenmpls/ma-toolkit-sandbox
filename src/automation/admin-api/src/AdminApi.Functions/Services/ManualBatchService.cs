@@ -95,12 +95,13 @@ public class ManualBatchService : IManualBatchService
             {
                 var hasInitSteps = definition.Init.Count > 0;
 
-                // Create batch record — always start as Detected (consistent with scheduler)
+                // Set initial status: Detected if init steps exist (advance will dispatch them),
+                // Active if no init steps (ready for phase advancement immediately)
                 var batch = new BatchRecord
                 {
                     RunbookId = runbook.Id,
                     BatchStartTime = null, // Manual batches don't use batch_start_time for scheduling
-                    Status = BatchStatus.Detected,
+                    Status = hasInitSteps ? BatchStatus.Detected : BatchStatus.Active,
                     IsManual = true,
                     CreatedBy = createdBy,
                     CurrentPhase = null
@@ -141,12 +142,6 @@ public class ManualBatchService : IManualBatchService
                 // the batch-init message — no need to pre-create them here
 
                 transaction.Commit();
-
-                // No init steps — transition to Active (consistent with scheduler)
-                if (!hasInitSteps)
-                {
-                    await _batchRepo.UpdateStatusAsync(batchId, BatchStatus.Active);
-                }
 
                 result.Success = true;
                 result.BatchId = batchId;
