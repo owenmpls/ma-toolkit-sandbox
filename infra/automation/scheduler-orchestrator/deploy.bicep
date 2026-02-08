@@ -56,6 +56,8 @@ var orchestratorTags = union(tags, { component: 'orchestrator' })
 var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'  // Azure Service Bus Data Sender
 var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0' // Azure Service Bus Data Receiver
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key Vault Secrets User
+var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'  // Storage Blob Data Owner
+var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aafa' // Storage Table Data Contributor
 
 // ---------------------------------------------------------------------------
 // Existing resources (from shared deployment)
@@ -234,8 +236,8 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
       vnetRouteAllEnabled: !empty(schedulerSubnetId)
       appSettings: [
         {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${schedulerStorage.name};AccountKey=${schedulerStorage.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+          name: 'AzureWebJobsStorage__accountName'
+          value: schedulerStorage.name
         }
         {
           name: 'WEBSITE_USE_PLACEHOLDER_DOTNETISOLATED'
@@ -342,8 +344,8 @@ resource orchestratorFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
       vnetRouteAllEnabled: !empty(orchestratorSubnetId)
       appSettings: [
         {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${orchestratorStorage.name};AccountKey=${orchestratorStorage.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+          name: 'AzureWebJobsStorage__accountName'
+          value: orchestratorStorage.name
         }
         {
           name: 'WEBSITE_USE_PLACEHOLDER_DOTNETISOLATED'
@@ -488,6 +490,54 @@ resource orchestratorKvAssignment 'Microsoft.Authorization/roleAssignments@2022-
     principalId: orchestratorFunctionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Role Assignments — Storage (identity-based AzureWebJobsStorage)
+// ---------------------------------------------------------------------------
+
+// Scheduler → Storage Blob Data Owner on scheduler storage
+resource schedulerStorageBlobOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(schedulerStorage.id, schedulerFunctionApp.id, storageBlobDataOwnerRoleId)
+  scope: schedulerStorage
+  properties: {
+    principalId: schedulerFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataOwnerRoleId)
+  }
+}
+
+// Scheduler → Storage Table Data Contributor on scheduler storage
+resource schedulerStorageTableContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(schedulerStorage.id, schedulerFunctionApp.id, storageTableDataContributorRoleId)
+  scope: schedulerStorage
+  properties: {
+    principalId: schedulerFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRoleId)
+  }
+}
+
+// Orchestrator → Storage Blob Data Owner on orchestrator storage
+resource orchestratorStorageBlobOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(orchestratorStorage.id, orchestratorFunctionApp.id, storageBlobDataOwnerRoleId)
+  scope: orchestratorStorage
+  properties: {
+    principalId: orchestratorFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataOwnerRoleId)
+  }
+}
+
+// Orchestrator → Storage Table Data Contributor on orchestrator storage
+resource orchestratorStorageTableContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(orchestratorStorage.id, orchestratorFunctionApp.id, storageTableDataContributorRoleId)
+  scope: orchestratorStorage
+  properties: {
+    principalId: orchestratorFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRoleId)
   }
 }
 

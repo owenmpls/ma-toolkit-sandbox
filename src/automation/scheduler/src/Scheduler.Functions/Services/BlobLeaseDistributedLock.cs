@@ -1,3 +1,4 @@
+using Azure.Identity;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Extensions.Configuration;
@@ -16,9 +17,9 @@ public class BlobLeaseDistributedLock : IDistributedLock
 
     public BlobLeaseDistributedLock(IConfiguration configuration, ILogger<BlobLeaseDistributedLock> logger)
     {
-        var connectionString = configuration["AzureWebJobsStorage"]
-            ?? throw new InvalidOperationException("AzureWebJobsStorage configuration is required for distributed locking");
-        _blobServiceClient = new BlobServiceClient(connectionString);
+        var accountName = configuration["AzureWebJobsStorage__accountName"]
+            ?? throw new InvalidOperationException("AzureWebJobsStorage__accountName configuration is required for distributed locking");
+        _blobServiceClient = new BlobServiceClient(new Uri($"https://{accountName}.blob.core.windows.net"), new DefaultAzureCredential());
         _logger = logger;
     }
 
