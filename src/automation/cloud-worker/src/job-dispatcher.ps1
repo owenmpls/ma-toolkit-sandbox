@@ -194,6 +194,12 @@ function Start-JobDispatcher {
         $Sender,
 
         [Parameter(Mandatory)]
+        [Azure.Messaging.ServiceBus.ServiceBusClient]$Client,
+
+        [Parameter(Mandatory)]
+        [string]$JobsTopicName,
+
+        [Parameter(Mandatory)]
         [System.Management.Automation.Runspaces.RunspacePool]$Pool,
 
         [Parameter(Mandatory)]
@@ -315,8 +321,10 @@ function Start-JobDispatcher {
                 continue
             }
 
-            # Receive new messages
-            $messages = Receive-ServiceBusMessages -Receiver $Receiver -MaxMessages $availableSlots -WaitTimeSeconds 2
+            # Receive new messages (Receiver is passed by ref for transient reconnection)
+            $receiverRef = [ref]$Receiver
+            $messages = Receive-ServiceBusMessages -ReceiverRef $receiverRef -Client $Client -TopicName $JobsTopicName -WorkerId $Config.WorkerId -MaxMessages $availableSlots -WaitTimeSeconds 2
+            $Receiver = $receiverRef.Value
 
             if (-not $messages -or $messages.Count -eq 0) {
                 continue

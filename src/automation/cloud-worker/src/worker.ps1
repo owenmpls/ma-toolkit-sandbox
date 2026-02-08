@@ -166,7 +166,7 @@ Write-Host "Worker '$($config.WorkerId)' is READY and listening for jobs." -Fore
 Write-Host ''
 
 try {
-    Start-JobDispatcher -Config $config -Receiver $sbReceiver -Sender $sbSender -Pool $runspacePool -Running ([ref]$script:WorkerRunning)
+    Start-JobDispatcher -Config $config -Receiver $sbReceiver -Sender $sbSender -Client $sbClient -JobsTopicName $config.JobsTopicName -Pool $runspacePool -Running ([ref]$script:WorkerRunning)
 }
 catch {
     Write-WorkerLog -Message "Job dispatcher fatal error: $($_.Exception.Message)" -Severity Critical

@@ -11,7 +11,7 @@ public interface IPhaseExecutionRepository
     Task<PhaseExecutionRecord?> GetFirstPendingAsync(int batchId);
     Task<IEnumerable<PhaseExecutionRecord>> GetPendingDueAsync(int batchId, DateTime now);
     Task<int> InsertAsync(PhaseExecutionRecord record, IDbTransaction? transaction = null);
-    Task SetDispatchedAsync(int id);
+    Task<bool> SetDispatchedAsync(int id);
     Task UpdateStatusAsync(int id, string status);
     Task<bool> SetCompletedAsync(int id);
     Task<bool> SetFailedAsync(int id);

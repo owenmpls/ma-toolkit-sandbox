@@ -20,11 +20,14 @@ public class AdminApiClient
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private const int MaxRetries = 3;
+    private static readonly TimeSpan[] RetryDelays = { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4) };
+
     public AdminApiClient(IConfiguration configuration, AuthService? authService = null)
     {
         _configuration = configuration;
         _authService = authService;
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
     }
 
     public string? GetApiUrl(string? overrideUrl = null)
@@ -244,6 +247,42 @@ public class AdminApiClient
     }
 
     #endregion
+
+    private async Task<HttpResponseMessage> SendWithRetryAsync(Func<HttpClient, Task<HttpResponseMessage>> requestFunc, string? apiUrl = null)
+    {
+        var client = await GetConfiguredClientAsync(apiUrl);
+
+        for (int attempt = 0; ; attempt++)
+        {
+            HttpResponseMessage? response = null;
+            try
+            {
+                response = await requestFunc(client);
+                var statusCode = (int)response.StatusCode;
+
+                // Retry on 502, 503, 504 (transient server errors)
+                if (attempt < MaxRetries && statusCode is 502 or 503 or 504)
+                {
+                    response.Dispose();
+                    await Task.Delay(RetryDelays[attempt]);
+                    continue;
+                }
+
+                await EnsureSuccessAsync(response);
+                return response;
+            }
+            catch (HttpRequestException) when (attempt < MaxRetries && response is null)
+            {
+                // Connection-level failure (DNS, TCP reset, etc.) — retry
+                await Task.Delay(RetryDelays[attempt]);
+            }
+            catch (TaskCanceledException) when (attempt < MaxRetries)
+            {
+                // Timeout — retry
+                await Task.Delay(RetryDelays[attempt]);
+            }
+        }
+    }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {

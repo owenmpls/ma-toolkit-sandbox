@@ -55,7 +55,13 @@ builder.Services.AddScoped<IInitExecutionRepository, InitExecutionRepository>();
 // Scheduler-specific services
 builder.Services.AddScoped<IMemberDiffService, MemberDiffService>();
 builder.Services.AddScoped<ITemplateResolver, TemplateResolver>();
-builder.Services.AddScoped<IServiceBusPublisher, ServiceBusPublisher>();
+builder.Services.AddScoped<IServiceBusPublisher>(sp =>
+{
+    var client = sp.GetRequiredService<ServiceBusClient>();
+    var settings = sp.GetRequiredService<IOptions<SchedulerSettings>>().Value;
+    var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MaToolkit.Automation.Shared.Services.ServiceBusPublisher>>();
+    return new MaToolkit.Automation.Shared.Services.ServiceBusPublisher(client, settings.OrchestratorTopicName, logger);
+});
 
 // Scheduler orchestration services
 builder.Services.AddScoped<IMemberSynchronizer, MemberSynchronizer>();

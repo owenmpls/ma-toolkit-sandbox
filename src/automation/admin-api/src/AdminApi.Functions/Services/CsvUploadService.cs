@@ -22,6 +22,9 @@ public class CsvUploadResult
 
 public class CsvUploadService : ICsvUploadService
 {
+    private const int MaxCsvSizeBytes = 10 * 1024 * 1024; // 10 MB
+    private const int MaxRowCount = 50_000;
+
     private readonly ILogger<CsvUploadService> _logger;
 
     public CsvUploadService(ILogger<CsvUploadService> logger)
@@ -35,8 +38,20 @@ public class CsvUploadService : ICsvUploadService
 
         try
         {
+            if (csvStream.CanSeek && csvStream.Length > MaxCsvSizeBytes)
+            {
+                result.Errors.Add($"CSV file exceeds maximum size of {MaxCsvSizeBytes / (1024 * 1024)} MB");
+                return result;
+            }
+
             using var reader = new StreamReader(csvStream);
             var content = await reader.ReadToEndAsync();
+
+            if (content.Length > MaxCsvSizeBytes)
+            {
+                result.Errors.Add($"CSV content exceeds maximum size of {MaxCsvSizeBytes / (1024 * 1024)} MB");
+                return result;
+            }
             var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
                 .Where(l => !string.IsNullOrWhiteSpace(l))
                 .ToList();
@@ -44,6 +59,12 @@ public class CsvUploadService : ICsvUploadService
             if (lines.Count == 0)
             {
                 result.Errors.Add("CSV file is empty");
+                return result;
+            }
+
+            if (lines.Count - 1 > MaxRowCount)
+            {
+                result.Errors.Add($"CSV file exceeds maximum of {MaxRowCount:N0} data rows (found {lines.Count - 1:N0})");
                 return result;
             }
 

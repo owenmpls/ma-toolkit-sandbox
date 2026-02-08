@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
@@ -128,6 +129,12 @@ public static class ConfigCommands
             // Save config
             var options = new JsonSerializerOptions { WriteIndented = true };
             await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(config, options));
+
+            // Set restrictive file permissions on Unix/macOS
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                File.SetUnixFileMode(configPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
 
             AnsiConsole.MarkupLine($"[green]Set[/] {key} = {value}");
             AnsiConsole.MarkupLine($"[dim]Saved to {configPath}[/]");

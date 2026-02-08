@@ -13,7 +13,7 @@ public interface IMemberRepository
     Task SetAddDispatchedAsync(int id);
     Task SetRemoveDispatchedAsync(int id);
     Task<bool> SetFailedAsync(int id);
-    Task UpdateDataJsonAsync(int id, string dataJson);
+    Task<int> UpdateDataJsonAsync(int id, string dataJson);
     Task MergeWorkerDataAsync(int id, Dictionary<string, string> outputData);
     Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey);
 }

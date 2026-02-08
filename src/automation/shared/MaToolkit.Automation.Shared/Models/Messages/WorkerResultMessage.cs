@@ -44,16 +44,13 @@ public class WorkerResultMessage
         if (Status != "Success" || Result is null)
             return false;
 
-        try
+        if (Result.Value.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (TryGetPropertyCaseInsensitive(Result.Value, "complete", out var complete) &&
+            complete.ValueKind is JsonValueKind.True or JsonValueKind.False)
         {
-            if (TryGetPropertyCaseInsensitive(Result.Value, "complete", out var complete))
-            {
-                return !complete.GetBoolean();
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Not a polling result format
+            return !complete.GetBoolean();
         }
 
         return false;
@@ -68,16 +65,10 @@ public class WorkerResultMessage
         if (Result is null)
             return null;
 
-        try
+        if (Result.Value.ValueKind == JsonValueKind.Object &&
+            TryGetPropertyCaseInsensitive(Result.Value, "data", out var data))
         {
-            if (TryGetPropertyCaseInsensitive(Result.Value, "data", out var data))
-            {
-                return data;
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Not a polling result format
+            return data;
         }
 
         return Result;

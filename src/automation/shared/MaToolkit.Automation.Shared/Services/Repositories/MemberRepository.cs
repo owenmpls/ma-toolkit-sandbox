@@ -3,16 +3,19 @@ using System.Text.Json;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
+using Microsoft.Extensions.Logging;
 
 namespace MaToolkit.Automation.Shared.Services.Repositories;
 
 public class MemberRepository : IMemberRepository
 {
     private readonly IDbConnectionFactory _db;
+    private readonly ILogger<MemberRepository> _logger;
 
-    public MemberRepository(IDbConnectionFactory db)
+    public MemberRepository(IDbConnectionFactory db, ILogger<MemberRepository> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<BatchMemberRecord?> GetByIdAsync(int id)
@@ -91,10 +94,10 @@ public class MemberRepository : IMemberRepository
         return rows > 0;
     }
 
-    public async Task UpdateDataJsonAsync(int id, string dataJson)
+    public async Task<int> UpdateDataJsonAsync(int id, string dataJson)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(
+        return await conn.ExecuteAsync(
             "UPDATE batch_members SET data_json = @DataJson WHERE id = @Id AND status = @Status",
             new { Id = id, DataJson = dataJson, Status = MemberStatus.Active });
     }
@@ -102,9 +105,12 @@ public class MemberRepository : IMemberRepository
     public async Task MergeWorkerDataAsync(int id, Dictionary<string, string> outputData)
     {
         using var conn = _db.CreateConnection();
+        conn.Open();
+        using var transaction = conn.BeginTransaction();
+
         var existing = await conn.QuerySingleOrDefaultAsync<string?>(
-            "SELECT worker_data_json FROM batch_members WHERE id = @Id",
-            new { Id = id });
+            "SELECT worker_data_json FROM batch_members WITH (UPDLOCK, HOLDLOCK) WHERE id = @Id",
+            new { Id = id }, transaction);
 
         Dictionary<string, string> merged;
         if (string.IsNullOrEmpty(existing))
@@ -117,9 +123,9 @@ public class MemberRepository : IMemberRepository
             {
                 merged = JsonSerializer.Deserialize<Dictionary<string, string>>(existing) ?? new();
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // Corrupted worker_data_json — start fresh rather than blocking progress
+                _logger.LogWarning(ex, "Failed to deserialize worker_data_json for member {MemberId}, starting fresh", id);
                 merged = new Dictionary<string, string>();
             }
         }
@@ -129,7 +135,9 @@ public class MemberRepository : IMemberRepository
 
         await conn.ExecuteAsync(
             "UPDATE batch_members SET worker_data_json = @WorkerDataJson WHERE id = @Id",
-            new { Id = id, WorkerDataJson = JsonSerializer.Serialize(merged) });
+            new { Id = id, WorkerDataJson = JsonSerializer.Serialize(merged) }, transaction);
+
+        transaction.Commit();
     }
 
     public async Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey)

@@ -162,8 +162,9 @@ public class BatchRepository : IBatchRepository
     {
         using var conn = _db.CreateConnection();
         var rows = await conn.ExecuteAsync(
-            "UPDATE batches SET status = @Status WHERE id = @Id AND status NOT IN (@Completed, @Failed)",
-            new { Id = id, Status = BatchStatus.Failed, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
+            "UPDATE batches SET status = @Status WHERE id = @Id AND status IN (@Active, @InitDispatched, @Detected)",
+            new { Id = id, Status = BatchStatus.Failed, Active = BatchStatus.Active,
+                  InitDispatched = BatchStatus.InitDispatched, Detected = BatchStatus.Detected });
         return rows > 0;
     }
 }

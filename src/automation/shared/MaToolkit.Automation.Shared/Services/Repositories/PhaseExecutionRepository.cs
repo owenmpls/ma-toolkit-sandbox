@@ -72,12 +72,13 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
         }
     }
 
-    public async Task SetDispatchedAsync(int id)
+    public async Task<bool> SetDispatchedAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        await conn.ExecuteAsync(
-            "UPDATE phase_executions SET status = @Status, dispatched_at = SYSUTCDATETIME() WHERE id = @Id",
-            new { Id = id, Status = PhaseStatus.Dispatched });
+        var rows = await conn.ExecuteAsync(
+            "UPDATE phase_executions SET status = @Status, dispatched_at = SYSUTCDATETIME() WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = PhaseStatus.Dispatched, ExpectedStatus = PhaseStatus.Pending });
+        return rows > 0;
     }
 
     public async Task UpdateStatusAsync(int id, string status)

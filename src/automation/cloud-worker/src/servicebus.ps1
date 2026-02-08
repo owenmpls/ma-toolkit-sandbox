@@ -136,11 +136,21 @@ function Receive-ServiceBusMessages {
         Receives a batch of messages from the Service Bus subscription.
     .DESCRIPTION
         Non-blocking receive with configurable timeout. Returns available messages.
+        On transient connection errors, recreates the receiver and retries.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        $Receiver,
+        [ref]$ReceiverRef,
+
+        [Parameter(Mandatory)]
+        [Azure.Messaging.ServiceBus.ServiceBusClient]$Client,
+
+        [Parameter(Mandatory)]
+        [string]$TopicName,
+
+        [Parameter(Mandatory)]
+        [string]$WorkerId,
 
         [int]$MaxMessages = 10,
 
@@ -150,8 +160,23 @@ function Receive-ServiceBusMessages {
     $waitTime = [TimeSpan]::FromSeconds($WaitTimeSeconds)
 
     try {
-        $task = $Receiver.ReceiveMessagesAsync($MaxMessages, $waitTime)
+        $task = $ReceiverRef.Value.ReceiveMessagesAsync($MaxMessages, $waitTime)
         $task.GetAwaiter().GetResult()
+    }
+    catch [Azure.Messaging.ServiceBus.ServiceBusException] {
+        if ($_.Exception.IsTransient -or $ReceiverRef.Value.IsClosed) {
+            Write-WorkerLog -Message "Transient Service Bus error, recreating receiver: $($_.Exception.Message)" -Severity Warning
+            try {
+                $ReceiverRef.Value = New-ServiceBusReceiver -Client $Client -TopicName $TopicName -WorkerId $WorkerId
+            }
+            catch {
+                Write-WorkerLog -Message "Failed to recreate receiver: $($_.Exception.Message)" -Severity Error
+            }
+        }
+        else {
+            Write-WorkerLog -Message "Service Bus error: $($_.Exception.Message)" -Severity Error
+        }
+        return @()
     }
     catch {
         Write-WorkerLog -Message "Error receiving messages: $($_.Exception.Message)" -Severity Error

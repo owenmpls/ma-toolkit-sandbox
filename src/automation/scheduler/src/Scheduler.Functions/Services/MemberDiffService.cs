@@ -33,8 +33,8 @@ public class MemberDiffService : IMemberDiffService
         var result = new MemberDiffResult();
         var existingByKey = existingMembers
             .Where(m => m.Status == MemberStatus.Active)
-            .ToDictionary(m => m.MemberKey);
-        var currentSet = new HashSet<string>(currentMemberKeys);
+            .ToDictionary(m => m.MemberKey, StringComparer.OrdinalIgnoreCase);
+        var currentSet = new HashSet<string>(currentMemberKeys, StringComparer.OrdinalIgnoreCase);
 
         // Find added members
         foreach (var key in currentSet)

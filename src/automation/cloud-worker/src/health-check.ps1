@@ -136,15 +136,26 @@ function Start-HealthCheckServer {
 
         while ($script:HealthCheckRunning) {
             try {
-                # Use async to allow checking the running flag
+                # Use async with timeout to allow checking the running flag
+                # and avoid blocking indefinitely if GetContextAsync hangs
                 $contextTask = $script:Listener.GetContextAsync()
+                $waitStart = [DateTime]::UtcNow
+                $maxWaitSeconds = 30
 
                 while (-not $contextTask.IsCompleted -and $script:HealthCheckRunning) {
-                    Start-Sleep -Milliseconds 100
+                    Start-Sleep -Milliseconds 250
+                    if (([DateTime]::UtcNow - $waitStart).TotalSeconds -ge $maxWaitSeconds) {
+                        # Timed out waiting for a request — loop back and try again
+                        break
+                    }
                 }
 
                 if (-not $script:HealthCheckRunning) {
                     break
+                }
+
+                if (-not $contextTask.IsCompleted) {
+                    continue
                 }
 
                 $context = $contextTask.GetAwaiter().GetResult()

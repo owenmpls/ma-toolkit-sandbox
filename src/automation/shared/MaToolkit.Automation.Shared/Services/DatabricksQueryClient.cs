@@ -75,7 +75,14 @@ public class DatabricksQueryClient : IDatabricksQueryClient
             result = await PollForCompletionAsync(workspaceUrl, statementId!);
         }
 
-        return BuildDataTable(result);
+        try
+        {
+            return BuildDataTable(result);
+        }
+        finally
+        {
+            result.Dispose();
+        }
     }
 
     private async Task<JsonDocument> PollForCompletionAsync(string workspaceUrl, string statementId)

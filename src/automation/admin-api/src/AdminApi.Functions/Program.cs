@@ -73,8 +73,13 @@ builder.Services.AddScoped<IPhaseExecutionRepository, PhaseExecutionRepository>(
 builder.Services.AddScoped<IStepExecutionRepository, StepExecutionRepository>();
 builder.Services.AddScoped<IInitExecutionRepository, InitExecutionRepository>();
 
-// Service Bus publisher
-builder.Services.AddScoped<IServiceBusPublisher, ServiceBusPublisher>();
+// Service Bus publisher (shared implementation)
+builder.Services.AddScoped<MaToolkit.Automation.Shared.Services.IServiceBusPublisher>(sp =>
+{
+    var client = sp.GetRequiredService<ServiceBusClient>();
+    var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MaToolkit.Automation.Shared.Services.ServiceBusPublisher>>();
+    return new MaToolkit.Automation.Shared.Services.ServiceBusPublisher(client, "orchestrator-events", logger);
+});
 
 // Admin services
 builder.Services.AddScoped<IQueryPreviewService, QueryPreviewService>();

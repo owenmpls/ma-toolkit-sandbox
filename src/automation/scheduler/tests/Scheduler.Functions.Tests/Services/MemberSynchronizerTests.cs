@@ -3,6 +3,7 @@ using FluentAssertions;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Yaml;
+using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
 using Microsoft.Extensions.Logging;
 using Moq;

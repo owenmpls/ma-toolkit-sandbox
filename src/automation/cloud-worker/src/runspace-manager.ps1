@@ -39,14 +39,15 @@ function Initialize-RunspacePool {
         $initialState.ImportPSModule($moduleName)
     }
 
-    # Import StandardFunctions module
+    # Import StandardFunctions module (fatal if missing — worker cannot process jobs without it)
     $standardModulePath = Join-Path $Config.StandardModulePath 'StandardFunctions.psd1'
     if (Test-Path $standardModulePath) {
         $initialState.ImportPSModule($standardModulePath)
         Write-WorkerLog -Message "Standard functions module loaded from '$standardModulePath'."
     }
     else {
-        Write-WorkerLog -Message "Standard functions module not found at '$standardModulePath'." -Severity Warning
+        Write-WorkerLog -Message "FATAL: Standard functions module not found at '$standardModulePath'. Cannot start worker." -Severity Error
+        throw "StandardFunctions module not found at '$standardModulePath'. Worker cannot process jobs without it."
     }
 
     # Import custom function modules
@@ -127,6 +128,9 @@ function Initialize-RunspacePool {
         $pool.Dispose()
         throw "All runspaces failed to authenticate. Cannot start worker."
     }
+
+    # Zero the certificate byte array now that all runspaces have been initialized
+    [Array]::Clear($certBytes, 0, $certBytes.Length)
 
     if ($failedRunspaces.Count -gt 0) {
         Write-WorkerLog -Message "$($failedRunspaces.Count) runspace(s) failed auth. Worker running with reduced parallelism." -Severity Warning
@@ -214,7 +218,12 @@ function Invoke-InRunspace {
                 }
 
                 if ($isAuthError -and $global:WorkerAuthConfig -and $attempt -lt $MaxRetries) {
-                    try { Reconnect-WorkerAuth } catch { }
+                    try {
+                        Reconnect-WorkerAuth
+                    }
+                    catch {
+                        Write-Warning "Failed to reconnect auth (attempt $attempt): $($_.Exception.Message)"
+                    }
                     continue
                 }
 

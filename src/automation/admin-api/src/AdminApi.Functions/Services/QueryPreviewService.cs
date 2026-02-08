@@ -16,6 +16,7 @@ public class QueryPreviewService : IQueryPreviewService
     private readonly IDataSourceQueryService _dataSourceQuery;
     private readonly ILogger<QueryPreviewService> _logger;
     private const int MaxSampleRows = 100;
+    private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(60);
 
     public QueryPreviewService(
         IDataSourceQueryService dataSourceQuery,
@@ -29,7 +30,16 @@ public class QueryPreviewService : IQueryPreviewService
     {
         _logger.LogInformation("Executing query preview for runbook {RunbookName}", definition.Name);
 
-        var results = await _dataSourceQuery.ExecuteAsync(definition.DataSource);
+        using var cts = new CancellationTokenSource(QueryTimeout);
+        DataTable results;
+        try
+        {
+            results = await _dataSourceQuery.ExecuteAsync(definition.DataSource).WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException($"Query preview timed out after {QueryTimeout.TotalSeconds} seconds");
+        }
 
         var response = new QueryPreviewResponse
         {
