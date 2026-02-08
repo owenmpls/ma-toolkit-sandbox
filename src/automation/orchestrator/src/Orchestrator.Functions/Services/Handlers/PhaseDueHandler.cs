@@ -269,7 +269,10 @@ public class PhaseDueHandler : IPhaseDueHandler
     private async Task CheckBatchCompletionAsync(int batchId)
     {
         var phases = await _phaseRepo.GetByBatchAsync(batchId);
-        var allCompleted = phases.All(p => p.Status == PhaseStatus.Completed || p.Status == PhaseStatus.Skipped);
+        var allCompleted = phases.All(p =>
+            p.Status == PhaseStatus.Completed ||
+            p.Status == PhaseStatus.Skipped ||
+            p.Status == PhaseStatus.Superseded);
         var anyFailed = phases.Any(p => p.Status == PhaseStatus.Failed);
 
         if (anyFailed)

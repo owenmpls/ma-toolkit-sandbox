@@ -158,7 +158,7 @@ public class SchedulerTimerFunction
     private async Task ProcessExistingBatchesAsync(RunbookRecord runbook, RunbookDefinition definition, DateTime now)
     {
         // Evaluate pending phases and handle version transitions for all active batches
-        var activeBatches = await _batchRepo.GetActiveByRunbookAsync(runbook.Id);
+        var activeBatches = await _batchRepo.GetActiveByRunbookNameAsync(runbook.Name);
         foreach (var batch in activeBatches)
         {
             await _phaseDispatcher.EvaluatePendingPhasesAsync(runbook, definition, batch, now);

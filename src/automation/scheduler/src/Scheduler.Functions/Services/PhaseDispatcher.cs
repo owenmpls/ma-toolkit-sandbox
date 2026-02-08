@@ -54,7 +54,7 @@ public class PhaseDispatcher : IPhaseDispatcher
             await _publisher.PublishPhaseDueAsync(new PhaseDueMessage
             {
                 RunbookName = runbook.Name,
-                RunbookVersion = runbook.Version,
+                RunbookVersion = phase.RunbookVersion,
                 BatchId = batch.Id,
                 PhaseExecutionId = phase.Id,
                 PhaseName = phase.PhaseName,

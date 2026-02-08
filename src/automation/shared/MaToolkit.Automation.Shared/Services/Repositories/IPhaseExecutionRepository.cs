@@ -15,4 +15,5 @@ public interface IPhaseExecutionRepository
     Task UpdateStatusAsync(int id, string status);
     Task<bool> SetCompletedAsync(int id);
     Task<bool> SetFailedAsync(int id);
+    Task<int> SupersedeOldVersionPendingAsync(int batchId, int currentVersion);
 }

@@ -72,7 +72,7 @@ CREATE TABLE phase_executions (
     completed_at        DATETIME2,
     CONSTRAINT UQ_phase_exec UNIQUE (batch_id, phase_name, runbook_version),
     CONSTRAINT CK_phase_status CHECK (status IN (
-        'pending', 'dispatched', 'completed', 'failed', 'skipped'))
+        'pending', 'dispatched', 'completed', 'failed', 'skipped', 'superseded'))
 );
 
 -- Per-member step execution tracking

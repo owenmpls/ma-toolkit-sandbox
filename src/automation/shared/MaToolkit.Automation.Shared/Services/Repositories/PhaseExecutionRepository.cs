@@ -105,4 +105,14 @@ public class PhaseExecutionRepository : IPhaseExecutionRepository
             new { Id = id, Status = PhaseStatus.Failed, ExpectedStatus = PhaseStatus.Dispatched });
         return rows > 0;
     }
+
+    public async Task<int> SupersedeOldVersionPendingAsync(int batchId, int currentVersion)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.ExecuteAsync(
+            @"UPDATE phase_executions SET status = @Superseded
+              WHERE batch_id = @BatchId AND runbook_version < @CurrentVersion AND status = @Pending",
+            new { BatchId = batchId, CurrentVersion = currentVersion,
+                  Superseded = PhaseStatus.Superseded, Pending = PhaseStatus.Pending });
+    }
 }

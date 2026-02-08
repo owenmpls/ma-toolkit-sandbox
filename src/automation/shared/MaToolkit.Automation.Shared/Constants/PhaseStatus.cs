@@ -10,4 +10,5 @@ public static class PhaseStatus
     public const string Completed = "completed";
     public const string Skipped = "skipped";
     public const string Failed = "failed";
+    public const string Superseded = "superseded";
 }

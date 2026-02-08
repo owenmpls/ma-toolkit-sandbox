@@ -96,7 +96,7 @@ public class BatchDetector : IBatchDetector
         RunbookRecord runbook, RunbookDefinition definition,
         DateTime batchTime, List<DataRow> rows, DateTime now)
     {
-        var existingBatch = await _batchRepo.GetByRunbookAndTimeAsync(runbook.Id, batchTime);
+        var existingBatch = await _batchRepo.GetByRunbookNameAndTimeAsync(runbook.Name, batchTime);
 
         if (existingBatch is null)
         {

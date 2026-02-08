@@ -30,6 +30,18 @@ public class BatchRepository : IBatchRepository
             new { RunbookId = runbookId, BatchStartTime = batchStartTime });
     }
 
+    public async Task<BatchRecord?> GetByRunbookNameAndTimeAsync(string runbookName, DateTime batchStartTime)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<BatchRecord>(
+            @"SELECT TOP 1 b.* FROM batches b
+              INNER JOIN runbooks r ON b.runbook_id = r.id
+              WHERE r.name = @RunbookName AND b.batch_start_time = @BatchStartTime
+              AND b.status NOT IN (@Completed, @Failed)",
+            new { RunbookName = runbookName, BatchStartTime = batchStartTime,
+                  Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
+    }
+
     public async Task<IEnumerable<BatchRecord>> GetActiveByRunbookAsync(int runbookId)
     {
         using var conn = _db.CreateConnection();
@@ -37,6 +49,17 @@ public class BatchRepository : IBatchRepository
             @"SELECT * FROM batches WHERE runbook_id = @RunbookId
               AND status NOT IN (@Completed, @Failed)",
             new { RunbookId = runbookId, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
+    }
+
+    public async Task<IEnumerable<BatchRecord>> GetActiveByRunbookNameAsync(string runbookName)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<BatchRecord>(
+            @"SELECT b.* FROM batches b
+              INNER JOIN runbooks r ON b.runbook_id = r.id
+              WHERE r.name = @RunbookName
+              AND b.status NOT IN (@Completed, @Failed)",
+            new { RunbookName = runbookName, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
     }
 
     public async Task<IEnumerable<BatchRecord>> ListAsync(int? runbookId = null, string? status = null, bool? isManual = null, int limit = 100)

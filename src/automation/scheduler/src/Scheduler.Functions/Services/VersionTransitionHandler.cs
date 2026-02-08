@@ -69,6 +69,12 @@ public class VersionTransitionHandler : IVersionTransitionHandler
             await _phaseRepo.InsertAsync(phase);
         }
 
+        // Supersede old-version pending phases to prevent double execution
+        var superseded = await _phaseRepo.SupersedeOldVersionPendingAsync(batch.Id, runbook.Version);
+        if (superseded > 0)
+            _logger.LogInformation("Superseded {Count} old-version pending phases for batch {BatchId}",
+                superseded, batch.Id);
+
         if (runbook.OverdueBehavior == OverdueBehavior.Ignore && !runbook.IgnoreOverdueApplied)
         {
             await _runbookRepo.SetIgnoreOverdueAppliedAsync(runbook.Id);

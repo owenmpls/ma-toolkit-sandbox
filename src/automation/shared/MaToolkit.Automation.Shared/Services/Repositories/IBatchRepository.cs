@@ -7,7 +7,9 @@ public interface IBatchRepository
 {
     Task<BatchRecord?> GetByIdAsync(int id);
     Task<BatchRecord?> GetByRunbookAndTimeAsync(int runbookId, DateTime batchStartTime);
+    Task<BatchRecord?> GetByRunbookNameAndTimeAsync(string runbookName, DateTime batchStartTime);
     Task<IEnumerable<BatchRecord>> GetActiveByRunbookAsync(int runbookId);
+    Task<IEnumerable<BatchRecord>> GetActiveByRunbookNameAsync(string runbookName);
     Task<IEnumerable<BatchRecord>> ListAsync(int? runbookId = null, string? status = null, bool? isManual = null, int limit = 100);
     Task<int> InsertAsync(BatchRecord record, IDbTransaction? transaction = null);
     Task UpdateStatusAsync(int id, string status);

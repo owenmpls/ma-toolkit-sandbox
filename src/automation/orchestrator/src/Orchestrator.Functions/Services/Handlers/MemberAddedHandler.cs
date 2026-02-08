@@ -110,13 +110,29 @@ public class MemberAddedHandler : IMemberAddedHandler
             "Creating catch-up step executions for {PhaseCount} overdue phases for member {MemberKey}",
             overduePhases.Count, message.MemberKey);
 
-        // For each overdue phase, create step executions for this new member
+        // For each overdue phase, create step executions for this new member.
+        // Each phase may belong to a different runbook version after a version transition,
+        // so load the runbook at the phase's version for step definitions.
+        // Member data is loaded once from the message version's dynamic table (above).
         foreach (var phaseExec in overduePhases)
         {
-            var phaseDefinition = definition.Phases.FirstOrDefault(p => p.Name == phaseExec.PhaseName);
+            // Load runbook at the PHASE's version for step definitions
+            var phaseRunbook = phaseExec.RunbookVersion == message.RunbookVersion
+                ? runbook
+                : await _runbookRepo.GetByNameAndVersionAsync(message.RunbookName, phaseExec.RunbookVersion);
+            if (phaseRunbook == null)
+            {
+                _logger.LogWarning("Runbook {Name} v{Version} not found, skipping catch-up for phase {Phase}",
+                    message.RunbookName, phaseExec.RunbookVersion, phaseExec.PhaseName);
+                continue;
+            }
+
+            var phaseDefinition = _runbookParser.Parse(phaseRunbook.YamlContent)
+                .Phases.FirstOrDefault(p => p.Name == phaseExec.PhaseName);
             if (phaseDefinition == null)
             {
-                _logger.LogWarning("Phase definition '{PhaseName}' not found in runbook", phaseExec.PhaseName);
+                _logger.LogWarning("Phase definition '{PhaseName}' not found in runbook v{Version}",
+                    phaseExec.PhaseName, phaseExec.RunbookVersion);
                 continue;
             }
 
@@ -172,7 +188,7 @@ public class MemberAddedHandler : IMemberAddedHandler
                         StepExecutionId = step.Id,
                         IsInitStep = false,
                         RunbookName = message.RunbookName,
-                        RunbookVersion = message.RunbookVersion
+                        RunbookVersion = phaseExec.RunbookVersion
                     }
                 };
 
