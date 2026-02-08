@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-C# Azure Functions project using the **isolated worker model** (.NET 8, Functions v4). The scheduler is the timing and detection engine for the M&A Toolkit migration pipeline. It runs on a 5-minute timer, reads YAML runbook definitions from SQL, queries external data sources to discover migration members, detects batches, evaluates phase timing, pre-creates step executions with resolved parameters, and dispatches events to the orchestrator via Azure Service Bus.
+C# Azure Functions project using the **isolated worker model** (.NET 8, Functions v4). The scheduler is the timing and detection engine for the M&A Toolkit migration pipeline. It runs on a 5-minute timer, reads YAML runbook definitions from SQL, queries external data sources to discover migration members, detects batches, evaluates phase timing, and dispatches events to the orchestrator via Azure Service Bus. The orchestrator handles on-demand creation of init_executions and step_executions.
 
 ## Build and Run
 

@@ -31,7 +31,7 @@ dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ --verbosity
 - `CsvUploadServiceTests` (20 tests) – CSV parsing, primary key validation, duplicate detection, quoted values
 - `CsvTemplateServiceTests` (19 tests) – Template generation, column extraction, multi-valued formats
 - `QueryPreviewServiceTests` (11 tests) – Query execution, sample rows, batch grouping
-- `ManualBatchServiceTests` (8 tests) – Init dispatch, phase advancement, error handling
+- `ManualBatchServiceTests` (12 tests) – Init dispatch, phase advancement, race condition guard, error handling
 - `UserContextExtensionsTests` (7 tests) – Claim extraction: preferred_username, name, oid fallback chain
 - `AuthorizationAttributeTests` (22 tests) – Reflection-based verification of [Authorize] attributes, auth levels, and policy assignments across all endpoints
 
@@ -195,13 +195,13 @@ The API uses Entra ID (Azure AD) JWT bearer authentication via `Microsoft.Identi
 2. Create batch with `is_manual = 1`, `batch_start_time = NULL`
 3. Insert batch_members for each row with `data_json` snapshot (via `MemberDataSerializer`)
 4. Create phase_executions with `status = 'pending'`, `due_at = NULL`
-5. If init steps exist, create init_executions
+5. Init_executions are created on demand by the orchestrator when it processes the `batch-init` message
 
 ### Manual Batch Advancement Flow
 1. Validate batch is manual (`is_manual = 1`)
 2. Check current state:
-   - If init steps pending → dispatch init steps
-   - If init in progress → return error (wait for completion)
+   - If init steps pending → dispatch init steps (orchestrator creates init_executions on demand)
+   - If init in progress or not yet created → return error (wait for completion)
    - If all phases complete → return success
 3. Find next pending phase, verify previous phases complete
 4. Dispatch phase to orchestrator via Service Bus

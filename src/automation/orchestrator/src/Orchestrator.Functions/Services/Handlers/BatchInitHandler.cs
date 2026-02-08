@@ -22,6 +22,7 @@ public class BatchInitHandler : IBatchInitHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
+    private readonly IDbConnectionFactory _db;
     private readonly ILogger<BatchInitHandler> _logger;
 
     public BatchInitHandler(
@@ -32,6 +33,7 @@ public class BatchInitHandler : IBatchInitHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
+        IDbConnectionFactory db,
         ILogger<BatchInitHandler> logger)
     {
         _batchRepo = batchRepo;
@@ -41,6 +43,7 @@ public class BatchInitHandler : IBatchInitHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
+        _db = db;
         _logger = logger;
     }
 
@@ -68,6 +71,9 @@ public class BatchInitHandler : IBatchInitHandler
 
         var definition = _runbookParser.Parse(runbook.YamlContent);
 
+        // Create init executions on demand (idempotent — skips if version already exists)
+        await CreateInitExecutionsAsync(message, definition);
+
         // Get pending init steps ordered by step_index
         var initSteps = (await _initRepo.GetPendingByBatchAsync(message.BatchId))
             .OrderBy(s => s.StepIndex)
@@ -84,6 +90,62 @@ public class BatchInitHandler : IBatchInitHandler
         // The ResultProcessor will advance to the next step on success
         var firstStep = initSteps.First();
         await DispatchInitStepAsync(firstStep, batch, definition);
+    }
+
+    private async Task CreateInitExecutionsAsync(BatchInitMessage message, RunbookDefinition definition)
+    {
+        // Version-aware idempotency check: a batch can have init_executions from multiple
+        // runbook versions (via version transitions), so check by version not just batch
+        var existingInits = await _initRepo.GetByBatchAsync(message.BatchId);
+        if (existingInits.Any(i => i.RunbookVersion == message.RunbookVersion))
+            return;
+
+        if (definition.Init.Count == 0)
+            return;
+
+        using var conn = _db.CreateConnection();
+        conn.Open();
+        using var transaction = conn.BeginTransaction();
+        try
+        {
+            for (int i = 0; i < definition.Init.Count; i++)
+            {
+                var initStep = definition.Init[i];
+                var effectiveRetry = initStep.Retry ?? definition.Retry;
+                await _initRepo.InsertAsync(new InitExecutionRecord
+                {
+                    BatchId = message.BatchId,
+                    StepName = initStep.Name,
+                    StepIndex = i,
+                    RunbookVersion = message.RunbookVersion,
+                    WorkerId = initStep.WorkerId,
+                    FunctionName = initStep.Function,
+                    ParamsJson = initStep.Params.Count > 0
+                        ? JsonSerializer.Serialize(
+                            _templateResolver.ResolveInitParams(initStep.Params, message.BatchId, message.BatchStartTime))
+                        : null,
+                    IsPollStep = initStep.Poll is not null,
+                    PollIntervalSec = initStep.Poll is not null
+                        ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Interval) : null,
+                    PollTimeoutSec = initStep.Poll is not null
+                        ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Timeout) : null,
+                    OnFailure = initStep.OnFailure,
+                    MaxRetries = effectiveRetry?.MaxRetries,
+                    RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
+                        ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
+                }, transaction);
+            }
+
+            transaction.Commit();
+            _logger.LogInformation(
+                "Created {Count} init executions for batch {BatchId} (v{Version})",
+                definition.Init.Count, message.BatchId, message.RunbookVersion);
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 
     private async Task DispatchInitStepAsync(InitExecutionRecord step, BatchRecord batch, RunbookDefinition definition)

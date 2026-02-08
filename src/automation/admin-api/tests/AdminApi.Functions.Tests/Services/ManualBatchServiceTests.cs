@@ -178,17 +178,12 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition(withInit: true);
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>
-            {
-                new() { Id = 1, BatchId = 1, Status = StepStatus.Pending }
-            });
-
+        // No GetByBatchAsync needed — hasInitSteps comes from definition.Init.Count
         var result = await _sut.AdvanceBatchAsync(batch, runbook, definition);
 
         result.Success.Should().BeTrue();
         result.Action.Should().Be("init_dispatched");
-        result.StepCount.Should().Be(1);
+        result.StepCount.Should().Be(1); // definition.Init.Count
     }
 
     [Fact]
@@ -208,6 +203,28 @@ public class ManualBatchServiceTests
             {
                 new() { Id = 1, BatchId = 1, Status = StepStatus.Dispatched }
             });
+
+        var result = await _sut.AdvanceBatchAsync(batch, runbook, definition);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Init steps not yet completed");
+    }
+
+    [Fact]
+    public async Task AdvanceBatchAsync_InitDispatched_NoExecutionsYet_ReturnsError()
+    {
+        // Race condition: orchestrator hasn't processed batch-init yet
+        var batch = new BatchRecord
+        {
+            Id = 1,
+            IsManual = true,
+            Status = BatchStatus.InitDispatched
+        };
+        var runbook = CreateRunbook();
+        var definition = CreateDefinition(withInit: true);
+
+        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
+            .ReturnsAsync(new List<InitExecutionRecord>());
 
         var result = await _sut.AdvanceBatchAsync(batch, runbook, definition);
 
@@ -267,9 +284,6 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition();
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>());
-
         _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
             .ReturnsAsync(new List<PhaseExecutionRecord>
             {
@@ -305,9 +319,6 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition();
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>());
-
         _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
             .ReturnsAsync(new List<PhaseExecutionRecord>
             {
@@ -334,9 +345,6 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition();
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>());
-
         _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
             .ReturnsAsync(new List<PhaseExecutionRecord>
             {
@@ -362,9 +370,6 @@ public class ManualBatchServiceTests
         };
         var runbook = CreateRunbook();
         var definition = CreateDefinition();
-
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>());
 
         _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
             .ReturnsAsync(new List<PhaseExecutionRecord>
@@ -400,9 +405,6 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition();
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>());
-
         _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
             .ReturnsAsync(new List<PhaseExecutionRecord>
             {
@@ -434,9 +436,6 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition();
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>());
-
         _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
             .ReturnsAsync(new List<PhaseExecutionRecord>
             {
@@ -467,11 +466,7 @@ public class ManualBatchServiceTests
         var runbook = CreateRunbook();
         var definition = CreateDefinition(withInit: true);
 
-        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
-            .ReturnsAsync(new List<InitExecutionRecord>
-            {
-                new() { Id = 1, BatchId = 1, Status = StepStatus.Pending }
-            });
+        // No init repo setup needed — Detected path uses definition.Init.Count
 
         await _sut.AdvanceBatchAsync(batch, runbook, definition);
 

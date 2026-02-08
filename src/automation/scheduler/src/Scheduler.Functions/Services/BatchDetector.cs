@@ -1,5 +1,4 @@
 using System.Data;
-using System.Text.Json;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
@@ -25,7 +24,6 @@ public class BatchDetector : IBatchDetector
     private readonly IBatchRepository _batchRepo;
     private readonly IMemberRepository _memberRepo;
     private readonly IPhaseExecutionRepository _phaseRepo;
-    private readonly IInitExecutionRepository _initRepo;
     private readonly IPhaseEvaluator _phaseEvaluator;
     private readonly IServiceBusPublisher _publisher;
     private readonly IDbConnectionFactory _db;
@@ -36,7 +34,6 @@ public class BatchDetector : IBatchDetector
         IBatchRepository batchRepo,
         IMemberRepository memberRepo,
         IPhaseExecutionRepository phaseRepo,
-        IInitExecutionRepository initRepo,
         IPhaseEvaluator phaseEvaluator,
         IServiceBusPublisher publisher,
         IDbConnectionFactory db,
@@ -46,7 +43,6 @@ public class BatchDetector : IBatchDetector
         _batchRepo = batchRepo;
         _memberRepo = memberRepo;
         _phaseRepo = phaseRepo;
-        _initRepo = initRepo;
         _phaseEvaluator = phaseEvaluator;
         _publisher = publisher;
         _db = db;
@@ -155,34 +151,6 @@ public class BatchDetector : IBatchDetector
                 await _phaseRepo.InsertAsync(phaseExec, transaction);
             }
 
-            // Create init executions
-            for (int i = 0; i < definition.Init.Count; i++)
-            {
-                var initStep = definition.Init[i];
-                var effectiveRetry = initStep.Retry ?? definition.Retry;
-                await _initRepo.InsertAsync(new InitExecutionRecord
-                {
-                    BatchId = batchId,
-                    StepName = initStep.Name,
-                    StepIndex = i,
-                    RunbookVersion = runbook.Version,
-                    WorkerId = initStep.WorkerId,
-                    FunctionName = initStep.Function,
-                    ParamsJson = initStep.Params.Count > 0
-                        ? JsonSerializer.Serialize(ResolveInitParams(initStep.Params, batchId, batchTime))
-                        : null,
-                    IsPollStep = initStep.Poll is not null,
-                    PollIntervalSec = initStep.Poll is not null
-                        ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Interval) : null,
-                    PollTimeoutSec = initStep.Poll is not null
-                        ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Timeout) : null,
-                    OnFailure = initStep.OnFailure,
-                    MaxRetries = effectiveRetry?.MaxRetries,
-                    RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
-                        ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
-                }, transaction);
-            }
-
             transaction.Commit();
 
             // Dispatch batch-init if there are init steps
@@ -209,19 +177,5 @@ public class BatchDetector : IBatchDetector
             transaction.Rollback();
             throw;
         }
-    }
-
-    private Dictionary<string, string> ResolveInitParams(
-        Dictionary<string, string> paramTemplates, int batchId, DateTime batchStartTime)
-    {
-        var resolved = new Dictionary<string, string>();
-        foreach (var (key, template) in paramTemplates)
-        {
-            var value = template
-                .Replace("{{_batch_id}}", batchId.ToString())
-                .Replace("{{_batch_start_time}}", batchStartTime.ToString("o"));
-            resolved[key] = value;
-        }
-        return resolved;
     }
 }

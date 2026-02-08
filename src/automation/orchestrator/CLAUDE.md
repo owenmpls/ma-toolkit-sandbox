@@ -10,7 +10,7 @@ C# Azure Functions project using the **isolated worker model** (.NET 8, Function
 # Build
 dotnet build src/automation/orchestrator/src/Orchestrator.Functions/
 
-# Run tests (43 tests)
+# Run tests (50 tests)
 dotnet test src/automation/orchestrator/tests/Orchestrator.Functions.Tests/
 
 # Run locally (requires Azure Functions Core Tools v4)
@@ -81,7 +81,7 @@ orchestrator/
           InitExecutionRepository.cs  # Full lifecycle for init steps
         PhaseProgressionService.cs    # Per-member step/phase/batch progression + failure handling
         Handlers/
-          BatchInitHandler.cs         # Process batch-init: dispatch init steps sequentially
+          BatchInitHandler.cs         # Process batch-init: create init_executions on demand, dispatch sequentially
           PhaseDueHandler.cs          # Process phase-due: per-member step dispatch
           MemberAddedHandler.cs       # Process member-added: create catch-up steps
           MemberRemovedHandler.cs     # Process member-removed: cancel pending, run cleanup
@@ -94,6 +94,7 @@ orchestrator/
       Services/
         PhaseProgressionServiceTests.cs   # 20 tests: member progression, failure, phase/batch completion
         Handlers/
+          BatchInitHandlerTests.cs        # 7 tests: init creation, idempotency, retry config, dispatch
           ResultProcessorTests.cs         # 12 tests: success/failure routing, terminal guard, retry scenarios
           RetryCheckHandlerTests.cs       # 4 tests: step/init retry dispatch, cancelled skip, not found
           PhaseDueHandlerTests.cs         # 7 tests: per-member dispatch, mixed progress, edge cases
@@ -119,7 +120,7 @@ orchestrator/
 ### Message Flow
 
 1. **Scheduler → Orchestrator** via `orchestrator-events` topic:
-   - `batch-init`: New batch ready for init step execution
+   - `batch-init`: New batch ready for init step execution (orchestrator creates init_executions on demand)
    - `phase-due`: Phase is due, dispatch step executions
    - `member-added`: New member joined active batch
    - `member-removed`: Member left batch
@@ -134,7 +135,7 @@ orchestrator/
 
 ### Step Execution Model
 
-- **Init steps**: Execute sequentially (one at a time) within a batch
+- **Init steps**: Created on demand by `BatchInitHandler` (like `PhaseDueHandler` for step_executions), then executed sequentially (one at a time) within a batch. Version-aware idempotency: checks `RunbookVersion` to avoid duplicates during version transitions.
 - **Phase steps**: Per-member independent progression — each member advances through steps at their own pace
 - **Member isolation**: A failed member is marked `failed`, all their remaining steps (across all phases) are cancelled, and healthy members continue unblocked
 

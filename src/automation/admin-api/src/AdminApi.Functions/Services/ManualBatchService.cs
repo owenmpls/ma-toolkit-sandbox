@@ -139,32 +139,8 @@ public class ManualBatchService : IManualBatchService
                     }, transaction);
                 }
 
-                // Create init executions if runbook has init steps
-                if (hasInitSteps)
-                {
-                    for (int i = 0; i < definition.Init.Count; i++)
-                    {
-                        var initStep = definition.Init[i];
-                        await _initRepo.InsertAsync(new InitExecutionRecord
-                        {
-                            BatchId = batchId,
-                            StepName = initStep.Name,
-                            StepIndex = i,
-                            RunbookVersion = runbook.Version,
-                            WorkerId = initStep.WorkerId,
-                            FunctionName = initStep.Function,
-                            ParamsJson = initStep.Params.Count > 0
-                                ? JsonSerializer.Serialize(ResolveInitParams(initStep.Params, batchId))
-                                : null,
-                            IsPollStep = initStep.Poll is not null,
-                            PollIntervalSec = initStep.Poll is not null
-                                ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Interval) : null,
-                            PollTimeoutSec = initStep.Poll is not null
-                                ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Timeout) : null,
-                            OnFailure = initStep.OnFailure
-                        }, transaction);
-                    }
-                }
+                // Init executions are created on demand by the orchestrator when it processes
+                // the batch-init message — no need to pre-create them here
 
                 transaction.Commit();
 
@@ -209,28 +185,30 @@ public class ManualBatchService : IManualBatchService
                 return result;
             }
 
-            // Get init executions status
-            var initExecs = await _initRepo.GetByBatchAsync(batch.Id);
-            var hasInitSteps = initExecs.Any();
+            var hasInitSteps = definition.Init.Count > 0;
 
             // Check if init steps need to be dispatched
             if (hasInitSteps && batch.Status == BatchStatus.Detected)
             {
-                // Dispatch init steps
-                await PublishBatchInitAsync(batch, runbook, initExecs.Count());
+                // Dispatch init steps — orchestrator will create init_executions on demand
+                await PublishBatchInitAsync(batch, runbook, definition.Init.Count);
                 await _batchRepo.SetInitDispatchedAsync(batch.Id);
 
                 result.Success = true;
                 result.Action = "init_dispatched";
-                result.StepCount = initExecs.Count();
+                result.StepCount = definition.Init.Count;
                 return result;
             }
 
             // Check if init steps are still in progress
             if (hasInitSteps && batch.Status == BatchStatus.InitDispatched)
             {
-                var pendingInits = initExecs.Where(i => i.Status is StepStatus.Pending or StepStatus.Dispatched or StepStatus.Polling);
-                if (pendingInits.Any())
+                var initExecs = (await _initRepo.GetByBatchAsync(batch.Id)).ToList();
+
+                // Race condition guard: if the orchestrator hasn't processed the batch-init
+                // message yet, no init_executions will exist in the DB — treat as "still in progress"
+                if (!initExecs.Any() || initExecs.Any(i =>
+                    i.Status is StepStatus.Pending or StepStatus.Dispatched or StepStatus.Polling))
                 {
                     result.ErrorMessage = "Init steps not yet completed";
                     return result;
@@ -349,19 +327,5 @@ public class ManualBatchService : IManualBatchService
         sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
 
         await sender.SendMessageAsync(sbMessage);
-    }
-
-    private static Dictionary<string, string> ResolveInitParams(
-        Dictionary<string, string> paramTemplates, int batchId)
-    {
-        var resolved = new Dictionary<string, string>();
-        foreach (var (key, template) in paramTemplates)
-        {
-            var value = template
-                .Replace("{{_batch_id}}", batchId.ToString())
-                .Replace("{{_batch_start_time}}", DateTime.UtcNow.ToString("o"));
-            resolved[key] = value;
-        }
-        return resolved;
     }
 }
