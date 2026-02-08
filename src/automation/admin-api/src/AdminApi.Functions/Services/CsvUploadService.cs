@@ -64,6 +64,19 @@ public class CsvUploadService : ICsvUploadService
                 return result;
             }
 
+            // Validate all required columns are present
+            var expectedColumns = GetExpectedColumns(definition);
+            var headerSet = new HashSet<string>(headers, StringComparer.OrdinalIgnoreCase);
+            var missingColumns = expectedColumns.Where(c => !headerSet.Contains(c)).ToList();
+            if (missingColumns.Count > 0)
+            {
+                foreach (var col in missingColumns)
+                {
+                    result.Errors.Add($"Required column '{col}' not found in CSV");
+                }
+                return result;
+            }
+
             // Create DataTable
             var dataTable = new DataTable();
             foreach (var header in headers)
@@ -109,7 +122,6 @@ public class CsvUploadService : ICsvUploadService
             }
 
             // Warn about unexpected columns (not errors, just warnings)
-            var expectedColumns = GetExpectedColumns(definition);
             foreach (var header in headers)
             {
                 if (!expectedColumns.Contains(header, StringComparer.OrdinalIgnoreCase))

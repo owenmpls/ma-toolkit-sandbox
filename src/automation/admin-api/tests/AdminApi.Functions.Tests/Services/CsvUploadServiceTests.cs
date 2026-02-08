@@ -169,6 +169,126 @@ public class CsvUploadServiceTests
 
     #endregion
 
+    #region Required Column Validation Tests
+
+    [Fact]
+    public async Task ParseCsvAsync_MissingRequiredColumn_ReturnsError()
+    {
+        // CSV has user_id but missing email (referenced in step template {{email}})
+        var csv = "user_id\nuser1";
+        var definition = CreateDefinition();
+
+        var result = await _sut.ParseCsvAsync(CreateCsvStream(csv), definition);
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.Contains("Required column") && e.Contains("email"));
+    }
+
+    [Fact]
+    public async Task ParseCsvAsync_MissingMultipleRequiredColumns_ReportsAll()
+    {
+        // CSV has only a non-PK column; both user_id-template and email columns are "required"
+        // but user_id is the PK so it passes PK check — we need a CSV with PK present but other columns missing
+        var definition = new RunbookDefinition
+        {
+            Name = "test-runbook",
+            DataSource = new DataSourceConfig
+            {
+                Type = "dataverse",
+                PrimaryKey = "user_id",
+                Query = "SELECT user_id, email, display_name FROM users"
+            },
+            Phases = new List<PhaseDefinition>
+            {
+                new()
+                {
+                    Name = "phase1",
+                    Offset = "T-0",
+                    Steps = new List<StepDefinition>
+                    {
+                        new()
+                        {
+                            Name = "step1",
+                            WorkerId = "worker1",
+                            Function = "DoWork",
+                            Params = new Dictionary<string, string>
+                            {
+                                ["email"] = "{{email}}",
+                                ["name"] = "{{display_name}}"
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        var csv = "user_id\nuser1";
+
+        var result = await _sut.ParseCsvAsync(CreateCsvStream(csv), definition);
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().HaveCountGreaterOrEqualTo(2);
+        result.Errors.Should().Contain(e => e.Contains("email"));
+        result.Errors.Should().Contain(e => e.Contains("display_name"));
+    }
+
+    [Fact]
+    public async Task ParseCsvAsync_CaseInsensitiveColumnMatch_Succeeds()
+    {
+        // CSV has EMAIL (uppercase), definition expects email (lowercase via template)
+        var csv = "USER_ID,EMAIL\nuser1,user1@example.com";
+        var definition = CreateDefinition();
+
+        var result = await _sut.ParseCsvAsync(CreateCsvStream(csv), definition);
+
+        result.Success.Should().BeTrue();
+        result.RowCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ParseCsvAsync_MissingBatchTimeColumn_ReturnsError()
+    {
+        var definition = new RunbookDefinition
+        {
+            Name = "test-runbook",
+            DataSource = new DataSourceConfig
+            {
+                Type = "dataverse",
+                PrimaryKey = "user_id",
+                BatchTimeColumn = "migration_date",
+                Query = "SELECT user_id, email, migration_date FROM users"
+            },
+            Phases = new List<PhaseDefinition>
+            {
+                new()
+                {
+                    Name = "phase1",
+                    Offset = "T-0",
+                    Steps = new List<StepDefinition>
+                    {
+                        new()
+                        {
+                            Name = "step1",
+                            WorkerId = "worker1",
+                            Function = "DoWork",
+                            Params = new Dictionary<string, string>
+                            {
+                                ["email"] = "{{email}}"
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        var csv = "user_id,email\nuser1,user1@example.com";
+
+        var result = await _sut.ParseCsvAsync(CreateCsvStream(csv), definition);
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.Contains("Required column") && e.Contains("migration_date"));
+    }
+
+    #endregion
+
     #region CSV Parsing Edge Cases
 
     [Fact]

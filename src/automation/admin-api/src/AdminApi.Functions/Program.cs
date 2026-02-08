@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
 using AdminApi.Functions.Auth;
+using AdminApi.Functions.Middleware;
 using AdminApi.Functions.Services;
 using AdminApi.Functions.Settings;
 using MaToolkit.Automation.Shared.Services.Repositories;
@@ -16,6 +17,8 @@ using MaToolkit.Automation.Shared.Services.Repositories;
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
+
+builder.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Entra ID authentication
 builder.Services

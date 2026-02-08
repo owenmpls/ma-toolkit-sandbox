@@ -133,16 +133,18 @@ Updated `schema.sql` to match the C# models:
 
 ## Tier 4: Application-Level Issues (fix before production load)
 
-### 4.1 Admin API: no global error handling
+### 4.1 Admin API: no global error handling — **FIXED**
 - Each function has its own try/catch; unhandled exceptions expose stack traces
 - **Fix**: Add exception-handling middleware in `Program.cs` that returns sanitized errors
 - **File**: `src/automation/admin-api/src/AdminApi.Functions/Program.cs`
+- **Resolution**: Added `ExceptionHandlingMiddleware` (`IFunctionsWorkerMiddleware`) that catches unhandled exceptions, logs at Error level (full exception to App Insights), and returns `{ "error": "An internal error occurred." }` with 500 status. Registered in `Program.cs` via `UseMiddleware`. Existing per-function try/catch blocks retained for expected input validation (400s).
 
-### 4.2 Admin API: CSV upload doesn't validate required columns present
+### 4.2 Admin API: CSV upload doesn't validate required columns present — **FIXED**
 - `CsvUploadService` checks for unexpected columns but does NOT verify all expected columns exist
 - A batch created with missing columns will fail at template resolution time
 - **Fix**: Add missing-column validation in `CsvUploadService.ParseCsvAsync()`
 - **File**: `src/automation/admin-api/src/AdminApi.Functions/Services/CsvUploadService.cs`
+- **Resolution**: Added required-column validation after primary key check — compares CSV headers against `GetExpectedColumns()` (primary key, batch time column, multi-valued columns, and template-referenced columns). Missing columns returned as errors with specific column names. Case-insensitive matching. 4 new tests added.
 
 ### 4.3 Admin API: Service Bus is optional — manual batch advancement silently skips publishing
 - `Program.cs`: `ServiceBusClient` is nullable; `ManualBatchService` skips publish if null
@@ -212,9 +214,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 12 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2)
+- **Fixed**: 14 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 4.1, 4.2)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 21 items (3.3, 4.1–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 19 items (3.3, 4.3–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 
