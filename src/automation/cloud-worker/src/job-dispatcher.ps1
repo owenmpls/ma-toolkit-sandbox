@@ -242,6 +242,10 @@ function Start-JobDispatcher {
                     break
                 }
             }
+            elseif ($activeJobs.Count -gt 0) {
+                # Defense-in-depth: keep idle timer fresh while jobs are running
+                $lastActivityTime = [DateTime]::UtcNow
+            }
 
             # Check for completed async jobs
             $completedIndexes = @()

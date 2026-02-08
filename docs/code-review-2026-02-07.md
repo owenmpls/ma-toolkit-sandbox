@@ -172,10 +172,10 @@ Updated `schema.sql` to match the C# models:
 - **File**: `src/automation/cloud-worker/src/auth.ps1`, `src/automation/cloud-worker/src/runspace-manager.ps1`
 - **Resolution**: Auth config stored in runspace globals (`$global:EXOAuthConfig`, `$global:EXOAuthTime`) during init. `Refresh-EXOConnection` inline function in execution script fetches a new OAuth token and reconnects EXO. Proactive refresh before each job (at 45 min threshold). Reactive refresh on auth errors (401/Unauthorized/expired) in the retry loop.
 
-### 4.7 Cloud-worker: idle timeout can fire mid-job
-- `job-dispatcher.ps1`: `lastActivityTime` resets on message receipt, but if a job runs longer than the idle timeout (300s default), the worker exits while the job is still in-flight
-- **Fix**: Reset `lastActivityTime` when checking active jobs, not just on message receipt
-- **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:229-244`
+### 4.7 Cloud-worker: idle timeout can fire mid-job — **FIXED**
+- `job-dispatcher.ps1`: `lastActivityTime` resets on message receipt, but if a job runs longer than the idle timeout (300s default), the worker could exit while the job is still in-flight
+- The existing `$activeJobs.Count -eq 0` guard already prevented the timeout from firing while jobs are running; added `elseif` to reset `lastActivityTime` when active jobs exist as defense-in-depth
+- **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:229-248`
 
 ### 4.8 Cloud-worker: unused `throttle-handler.ps1`
 - `Invoke-WithThrottleRetry` is loaded but never called — actual retry logic is inline in `runspace-manager.ps1`
@@ -250,9 +250,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 21 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.10, 4.11)
+- **Fixed**: 22 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.10, 4.11)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 12 items (4.7–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 11 items (4.8–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 
