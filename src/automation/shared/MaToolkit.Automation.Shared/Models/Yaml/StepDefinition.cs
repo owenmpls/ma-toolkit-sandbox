@@ -21,4 +21,7 @@ public class StepDefinition
 
     [YamlMember(Alias = "poll")]
     public PollConfig? Poll { get; set; }
+
+    [YamlMember(Alias = "retry")]
+    public RetryConfig? Retry { get; set; }
 }

@@ -14,6 +14,7 @@ public class OrchestratorEventFunction
     private readonly IMemberAddedHandler _memberAddedHandler;
     private readonly IMemberRemovedHandler _memberRemovedHandler;
     private readonly IPollCheckHandler _pollCheckHandler;
+    private readonly IRetryCheckHandler _retryCheckHandler;
     private readonly ILogger<OrchestratorEventFunction> _logger;
 
     public OrchestratorEventFunction(
@@ -22,6 +23,7 @@ public class OrchestratorEventFunction
         IMemberAddedHandler memberAddedHandler,
         IMemberRemovedHandler memberRemovedHandler,
         IPollCheckHandler pollCheckHandler,
+        IRetryCheckHandler retryCheckHandler,
         ILogger<OrchestratorEventFunction> logger)
     {
         _batchInitHandler = batchInitHandler;
@@ -29,6 +31,7 @@ public class OrchestratorEventFunction
         _memberAddedHandler = memberAddedHandler;
         _memberRemovedHandler = memberRemovedHandler;
         _pollCheckHandler = pollCheckHandler;
+        _retryCheckHandler = retryCheckHandler;
         _logger = logger;
     }
 
@@ -83,6 +86,12 @@ public class OrchestratorEventFunction
                     var pollCheckMessage = JsonSerializer.Deserialize<PollCheckMessage>(body);
                     if (pollCheckMessage != null)
                         await _pollCheckHandler.HandleAsync(pollCheckMessage);
+                    break;
+
+                case "retry-check":
+                    var retryCheckMessage = JsonSerializer.Deserialize<RetryCheckMessage>(body);
+                    if (retryCheckMessage != null)
+                        await _retryCheckHandler.HandleAsync(retryCheckMessage);
                     break;
 
                 default:

@@ -258,6 +258,7 @@ public class PhaseDueHandler : IPhaseDueHandler
                             step.Params, dataRow, message.BatchId, batch?.BatchStartTime);
                         var resolvedFunction = _templateResolver.ResolveString(
                             step.Function, dataRow, message.BatchId, batch?.BatchStartTime);
+                        var effectiveRetry = step.Retry ?? definition.Retry;
 
                         await _stepRepo.InsertAsync(new StepExecutionRecord
                         {
@@ -273,7 +274,10 @@ public class PhaseDueHandler : IPhaseDueHandler
                                 ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
                             PollTimeoutSec = step.Poll is not null
                                 ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
-                            OnFailure = step.OnFailure
+                            OnFailure = step.OnFailure,
+                            MaxRetries = effectiveRetry?.MaxRetries,
+                            RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
+                                ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
                         }, transaction);
                     }
                 }

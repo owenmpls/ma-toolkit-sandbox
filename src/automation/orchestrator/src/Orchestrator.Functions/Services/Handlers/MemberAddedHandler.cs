@@ -128,8 +128,8 @@ public class MemberAddedHandler : IMemberAddedHandler
                 continue;
             }
 
-            var phaseDefinition = _runbookParser.Parse(phaseRunbook.YamlContent)
-                .Phases.FirstOrDefault(p => p.Name == phaseExec.PhaseName);
+            var phaseRunbookDef = _runbookParser.Parse(phaseRunbook.YamlContent);
+            var phaseDefinition = phaseRunbookDef.Phases.FirstOrDefault(p => p.Name == phaseExec.PhaseName);
             if (phaseDefinition == null)
             {
                 _logger.LogWarning("Phase definition '{PhaseName}' not found in runbook v{Version}",
@@ -153,6 +153,8 @@ public class MemberAddedHandler : IMemberAddedHandler
                     var resolvedParams = _templateResolver.ResolveParams(
                         step.Params, memberData, batch.Id, batch.BatchStartTime);
 
+                    var effectiveRetry = step.Retry ?? phaseRunbookDef.Retry;
+
                     var stepRecord = new StepExecutionRecord
                     {
                         PhaseExecutionId = phaseExec.Id,
@@ -165,7 +167,10 @@ public class MemberAddedHandler : IMemberAddedHandler
                         IsPollStep = step.Poll != null,
                         PollIntervalSec = step.Poll != null ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
                         PollTimeoutSec = step.Poll != null ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
-                        OnFailure = step.OnFailure
+                        OnFailure = step.OnFailure,
+                        MaxRetries = effectiveRetry?.MaxRetries,
+                        RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
+                            ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
                     };
 
                     var stepId = await _stepRepo.InsertAsync(stepRecord);

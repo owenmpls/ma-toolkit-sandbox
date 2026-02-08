@@ -22,6 +22,9 @@ public class RunbookDefinition
     [YamlMember(Alias = "on_member_removed")]
     public List<StepDefinition> OnMemberRemoved { get; set; } = new();
 
+    [YamlMember(Alias = "retry")]
+    public RetryConfig? Retry { get; set; }
+
     [YamlMember(Alias = "rollbacks")]
     public Dictionary<string, List<StepDefinition>> Rollbacks { get; set; } = new();
 }

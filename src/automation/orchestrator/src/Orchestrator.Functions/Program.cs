@@ -46,6 +46,10 @@ builder.Services.AddScoped<IRollbackExecutor, RollbackExecutor>();
 // Progression service
 builder.Services.AddScoped<IPhaseProgressionService, PhaseProgressionService>();
 
+// Retry services
+builder.Services.AddScoped<IRetryScheduler, RetryScheduler>();
+builder.Services.AddScoped<IRetryCheckHandler, RetryCheckHandler>();
+
 // Message handlers
 builder.Services.AddScoped<IBatchInitHandler, BatchInitHandler>();
 builder.Services.AddScoped<IPhaseDueHandler, PhaseDueHandler>();

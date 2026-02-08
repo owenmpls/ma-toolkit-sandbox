@@ -156,6 +156,7 @@ public class BatchDetector : IBatchDetector
             for (int i = 0; i < definition.Init.Count; i++)
             {
                 var initStep = definition.Init[i];
+                var effectiveRetry = initStep.Retry ?? definition.Retry;
                 await _initRepo.InsertAsync(new InitExecutionRecord
                 {
                     BatchId = batchId,
@@ -172,7 +173,10 @@ public class BatchDetector : IBatchDetector
                         ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Interval) : null,
                     PollTimeoutSec = initStep.Poll is not null
                         ? _phaseEvaluator.ParseDurationSeconds(initStep.Poll.Timeout) : null,
-                    OnFailure = initStep.OnFailure
+                    OnFailure = initStep.OnFailure,
+                    MaxRetries = effectiveRetry?.MaxRetries,
+                    RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
+                        ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
                 }, transaction);
             }
 

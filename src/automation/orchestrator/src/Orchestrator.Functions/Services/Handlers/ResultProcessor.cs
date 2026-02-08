@@ -25,6 +25,7 @@ public class ResultProcessor : IResultProcessor
     private readonly IDynamicTableReader _dynamicTableReader;
     private readonly IMemberRepository _memberRepo;
     private readonly IPhaseProgressionService _progressionService;
+    private readonly IRetryScheduler _retryScheduler;
     private readonly ILogger<ResultProcessor> _logger;
 
     public ResultProcessor(
@@ -39,6 +40,7 @@ public class ResultProcessor : IResultProcessor
         IDynamicTableReader dynamicTableReader,
         IMemberRepository memberRepo,
         IPhaseProgressionService progressionService,
+        IRetryScheduler retryScheduler,
         ILogger<ResultProcessor> logger)
     {
         _stepRepo = stepRepo;
@@ -52,6 +54,7 @@ public class ResultProcessor : IResultProcessor
         _dynamicTableReader = dynamicTableReader;
         _memberRepo = memberRepo;
         _progressionService = progressionService;
+        _retryScheduler = retryScheduler;
         _logger = logger;
     }
 
@@ -142,6 +145,29 @@ public class ResultProcessor : IResultProcessor
                 "Init execution {InitExecutionId} failed for batch {BatchId}: {Error}",
                 initExec.Id, initExec.BatchId, errorMessage);
 
+            // Check if retries remain
+            if (initExec.MaxRetries.HasValue && initExec.RetryCount < initExec.MaxRetries.Value)
+            {
+                var retryAfter = DateTime.UtcNow.AddSeconds(initExec.RetryIntervalSec ?? 0);
+                if (await _initRepo.SetRetryPendingAsync(initExec.Id, retryAfter))
+                {
+                    _logger.LogWarning(
+                        "Init execution {InitExecutionId} failed, scheduling retry {RetryCount}/{MaxRetries} after {RetryAfter}",
+                        initExec.Id, initExec.RetryCount + 1, initExec.MaxRetries, retryAfter);
+
+                    await _retryScheduler.ScheduleRetryAsync(new RetryCheckMessage
+                    {
+                        StepExecutionId = initExec.Id,
+                        IsInitStep = true,
+                        RunbookName = correlation.RunbookName,
+                        RunbookVersion = correlation.RunbookVersion,
+                        BatchId = initExec.BatchId
+                    }, TimeSpan.FromSeconds(initExec.RetryIntervalSec ?? 0));
+
+                    return;
+                }
+            }
+
             // Mark batch as failed
             await _batchRepo.SetFailedAsync(initExec.BatchId);
 
@@ -228,6 +254,30 @@ public class ResultProcessor : IResultProcessor
             _logger.LogError(
                 "Step execution {StepExecutionId} failed: {Error}",
                 stepExec.Id, errorMessage);
+
+            // Check if retries remain
+            if (stepExec.MaxRetries.HasValue && stepExec.RetryCount < stepExec.MaxRetries.Value)
+            {
+                var retryAfter = DateTime.UtcNow.AddSeconds(stepExec.RetryIntervalSec ?? 0);
+                if (await _stepRepo.SetRetryPendingAsync(stepExec.Id, retryAfter))
+                {
+                    _logger.LogWarning(
+                        "Step execution {StepExecutionId} failed, scheduling retry {RetryCount}/{MaxRetries} after {RetryAfter}",
+                        stepExec.Id, stepExec.RetryCount + 1, stepExec.MaxRetries, retryAfter);
+
+                    var phaseExec = await _phaseRepo.GetByIdAsync(stepExec.PhaseExecutionId);
+                    await _retryScheduler.ScheduleRetryAsync(new RetryCheckMessage
+                    {
+                        StepExecutionId = stepExec.Id,
+                        IsInitStep = false,
+                        RunbookName = correlation.RunbookName,
+                        RunbookVersion = correlation.RunbookVersion,
+                        BatchId = phaseExec?.BatchId ?? 0
+                    }, TimeSpan.FromSeconds(stepExec.RetryIntervalSec ?? 0));
+
+                    return;
+                }
+            }
 
             // Trigger rollback if configured
             if (!string.IsNullOrEmpty(stepExec.OnFailure))

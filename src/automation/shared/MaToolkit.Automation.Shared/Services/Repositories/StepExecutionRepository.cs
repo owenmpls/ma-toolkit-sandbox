@@ -95,17 +95,20 @@ public class StepExecutionRepository : IStepExecutionRepository
                 INSERT INTO step_executions (
                     phase_execution_id, batch_member_id, step_name, step_index,
                     worker_id, function_name, params_json, status,
-                    is_poll_step, poll_interval_sec, poll_timeout_sec, on_failure)
+                    is_poll_step, poll_interval_sec, poll_timeout_sec, on_failure,
+                    max_retries, retry_interval_sec)
                 VALUES (
                     @PhaseExecutionId, @BatchMemberId, @StepName, @StepIndex,
                     @WorkerId, @FunctionName, @ParamsJson, @Status,
-                    @IsPollStep, @PollIntervalSec, @PollTimeoutSec, @OnFailure);
+                    @IsPollStep, @PollIntervalSec, @PollTimeoutSec, @OnFailure,
+                    @MaxRetries, @RetryIntervalSec);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
                 new
                 {
                     record.PhaseExecutionId, record.BatchMemberId, record.StepName, record.StepIndex,
                     record.WorkerId, record.FunctionName, record.ParamsJson, Status = StepStatus.Pending,
-                    record.IsPollStep, record.PollIntervalSec, record.PollTimeoutSec, record.OnFailure
+                    record.IsPollStep, record.PollIntervalSec, record.PollTimeoutSec, record.OnFailure,
+                    record.MaxRetries, record.RetryIntervalSec
                 }, transaction);
         }
         finally
@@ -180,6 +183,22 @@ public class StepExecutionRepository : IStepExecutionRepository
             SET status = @Status, completed_at = SYSUTCDATETIME()
             WHERE id = @Id AND status IN (@Pending, @Dispatched, @Polling)",
             new { Id = id, Status = StepStatus.Cancelled, Pending = StepStatus.Pending, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+        return rows > 0;
+    }
+
+    public async Task<bool> SetRetryPendingAsync(int id, DateTime retryAfter)
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.ExecuteAsync(@"
+            UPDATE step_executions
+            SET status = @Status,
+                retry_count = retry_count + 1,
+                retry_after = @RetryAfter,
+                completed_at = NULL,
+                job_id = NULL
+            WHERE id = @Id AND status IN (@Failed, @PollTimeout)",
+            new { Id = id, Status = StepStatus.Pending, RetryAfter = retryAfter,
+                  Failed = StepStatus.Failed, PollTimeout = StepStatus.PollTimeout });
         return rows > 0;
     }
 

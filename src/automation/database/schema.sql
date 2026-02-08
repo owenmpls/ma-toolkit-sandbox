@@ -101,6 +101,10 @@ CREATE TABLE step_executions (
     poll_started_at     DATETIME2,
     last_polled_at      DATETIME2,
     poll_count          INT NOT NULL DEFAULT 0,
+    retry_count         INT NOT NULL DEFAULT 0,
+    max_retries         INT,
+    retry_interval_sec  INT,
+    retry_after         DATETIME2,
     CONSTRAINT UQ_step_exec UNIQUE (phase_execution_id, batch_member_id, step_name),
     CONSTRAINT CK_step_status CHECK (status IN (
         'pending', 'dispatched', 'succeeded', 'failed',
@@ -130,6 +134,10 @@ CREATE TABLE init_executions (
     poll_started_at     DATETIME2,
     last_polled_at      DATETIME2,
     poll_count          INT NOT NULL DEFAULT 0,
+    retry_count         INT NOT NULL DEFAULT 0,
+    max_retries         INT,
+    retry_interval_sec  INT,
+    retry_after         DATETIME2,
     CONSTRAINT UQ_init_exec UNIQUE (batch_id, step_name, runbook_version),
     CONSTRAINT CK_init_status CHECK (status IN (
         'pending', 'dispatched', 'succeeded', 'failed', 'polling', 'poll_timeout'))

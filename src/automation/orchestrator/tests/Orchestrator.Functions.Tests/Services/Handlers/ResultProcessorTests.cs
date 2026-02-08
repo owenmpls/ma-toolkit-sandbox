@@ -26,6 +26,7 @@ public class ResultProcessorTests
     private readonly Mock<IDynamicTableReader> _dynamicTableReader = new();
     private readonly Mock<IMemberRepository> _memberRepo = new();
     private readonly Mock<IPhaseProgressionService> _progressionService = new();
+    private readonly Mock<IRetryScheduler> _retryScheduler = new();
     private readonly ResultProcessor _sut;
 
     public ResultProcessorTests()
@@ -42,6 +43,7 @@ public class ResultProcessorTests
             _dynamicTableReader.Object,
             _memberRepo.Object,
             _progressionService.Object,
+            _retryScheduler.Object,
             Mock.Of<ILogger<ResultProcessor>>());
     }
 
@@ -257,5 +259,190 @@ public class ResultProcessorTests
         _stepRepo.Verify(x => x.SetFailedAsync(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
         _progressionService.Verify(x => x.HandleMemberFailureAsync(
             It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessStepResult_Failure_WithRetries_SchedulesRetry()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            Status = StepStatus.Dispatched,
+            MaxRetries = 2,
+            RetryCount = 0,
+            RetryIntervalSec = 60
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetFailedAsync(1, It.IsAny<string>())).ReturnsAsync(true);
+        _stepRepo.Setup(x => x.SetRetryPendingAsync(1, It.IsAny<DateTime>())).ReturnsAsync(true);
+        _phaseRepo.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(new PhaseExecutionRecord { Id = 10, BatchId = 5 });
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Failure,
+            Error = new WorkerErrorInfo { Message = "Transient error" },
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _stepRepo.Verify(x => x.SetRetryPendingAsync(1, It.IsAny<DateTime>()), Times.Once);
+        _retryScheduler.Verify(x => x.ScheduleRetryAsync(
+            It.Is<RetryCheckMessage>(m => m.StepExecutionId == 1 && !m.IsInitStep && m.BatchId == 5),
+            It.Is<TimeSpan>(t => t == TimeSpan.FromSeconds(60))), Times.Once);
+        _progressionService.Verify(x => x.HandleMemberFailureAsync(
+            It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessStepResult_Failure_RetriesExhausted_TriggersFailure()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            Status = StepStatus.Dispatched,
+            MaxRetries = 2,
+            RetryCount = 2,
+            RetryIntervalSec = 60
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetFailedAsync(1, It.IsAny<string>())).ReturnsAsync(true);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Failure,
+            Error = new WorkerErrorInfo { Message = "Permanent error" },
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _stepRepo.Verify(x => x.SetRetryPendingAsync(It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
+        _retryScheduler.Verify(x => x.ScheduleRetryAsync(
+            It.IsAny<RetryCheckMessage>(), It.IsAny<TimeSpan>()), Times.Never);
+        _progressionService.Verify(x => x.HandleMemberFailureAsync(10, 100), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessStepResult_Failure_NoRetryConfig_TriggersFailure()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            Status = StepStatus.Dispatched,
+            MaxRetries = null
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetFailedAsync(1, It.IsAny<string>())).ReturnsAsync(true);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Failure,
+            Error = new WorkerErrorInfo { Message = "Error" },
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _stepRepo.Verify(x => x.SetRetryPendingAsync(It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
+        _progressionService.Verify(x => x.HandleMemberFailureAsync(10, 100), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessInitResult_Failure_WithRetries_SchedulesRetry()
+    {
+        var initExec = new InitExecutionRecord
+        {
+            Id = 5,
+            BatchId = 10,
+            Status = StepStatus.Dispatched,
+            MaxRetries = 3,
+            RetryCount = 1,
+            RetryIntervalSec = 30
+        };
+        _initRepo.Setup(x => x.GetByIdAsync(5)).ReturnsAsync(initExec);
+        _initRepo.Setup(x => x.SetFailedAsync(5, It.IsAny<string>())).ReturnsAsync(true);
+        _initRepo.Setup(x => x.SetRetryPendingAsync(5, It.IsAny<DateTime>())).ReturnsAsync(true);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "init-5",
+            Status = WorkerResultStatus.Failure,
+            Error = new WorkerErrorInfo { Message = "Init transient error" },
+            CorrelationData = new JobCorrelationData
+            {
+                InitExecutionId = 5,
+                IsInitStep = true,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _initRepo.Verify(x => x.SetRetryPendingAsync(5, It.IsAny<DateTime>()), Times.Once);
+        _retryScheduler.Verify(x => x.ScheduleRetryAsync(
+            It.Is<RetryCheckMessage>(m => m.StepExecutionId == 5 && m.IsInitStep && m.BatchId == 10),
+            It.Is<TimeSpan>(t => t == TimeSpan.FromSeconds(30))), Times.Once);
+        _batchRepo.Verify(x => x.SetFailedAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessInitResult_Failure_RetriesExhausted_MarksBatchFailed()
+    {
+        var initExec = new InitExecutionRecord
+        {
+            Id = 5,
+            BatchId = 10,
+            Status = StepStatus.Dispatched,
+            MaxRetries = 2,
+            RetryCount = 2,
+            RetryIntervalSec = 60
+        };
+        _initRepo.Setup(x => x.GetByIdAsync(5)).ReturnsAsync(initExec);
+        _initRepo.Setup(x => x.SetFailedAsync(5, It.IsAny<string>())).ReturnsAsync(true);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "init-5",
+            Status = WorkerResultStatus.Failure,
+            Error = new WorkerErrorInfo { Message = "Permanent init error" },
+            CorrelationData = new JobCorrelationData
+            {
+                InitExecutionId = 5,
+                IsInitStep = true,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _initRepo.Verify(x => x.SetRetryPendingAsync(It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
+        _batchRepo.Verify(x => x.SetFailedAsync(10), Times.Once);
     }
 }

@@ -20,5 +20,6 @@ public interface IStepExecutionRepository
     Task<bool> SetPollingAsync(int id);
     Task<bool> SetPollTimeoutAsync(int id);
     Task<bool> SetCancelledAsync(int id);
+    Task<bool> SetRetryPendingAsync(int id, DateTime retryAfter);
     Task UpdatePollStateAsync(int id);
 }

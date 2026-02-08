@@ -25,4 +25,8 @@ public class StepExecutionRecord
     public DateTime? LastPolledAt { get; set; }
     public int PollCount { get; set; }
     public string? OnFailure { get; set; }
+    public int RetryCount { get; set; }
+    public int? MaxRetries { get; set; }
+    public int? RetryIntervalSec { get; set; }
+    public DateTime? RetryAfter { get; set; }
 }

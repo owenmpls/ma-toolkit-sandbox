@@ -1,6 +1,10 @@
 name: user-migration
 description: Scheduled mailbox migration with T-minus phased execution
 
+retry:
+  max_retries: 2
+  interval: 1m
+
 data_source:
   type: dataverse
   connection: DATAVERSE_CONNECTION_STRING
@@ -49,6 +53,9 @@ phases:
         params:
           UserId: "{{TargetObjectId}}"
           ProxyAddresses: "{{ProxyAddresses}}"
+        retry:
+          max_retries: 3
+          interval: 30s
 
   - name: verify
     offset: T-1d
@@ -63,6 +70,8 @@ phases:
         poll:
           interval: 15m
           timeout: 24h
+        retry:
+          max_retries: 0
 
   - name: cutover
     offset: T-0

@@ -16,5 +16,6 @@ public interface IInitExecutionRepository
     Task<bool> SetFailedAsync(int id, string errorMessage);
     Task<bool> SetPollingAsync(int id);
     Task<bool> SetPollTimeoutAsync(int id);
+    Task<bool> SetRetryPendingAsync(int id, DateTime retryAfter);
     Task UpdatePollStateAsync(int id);
 }
