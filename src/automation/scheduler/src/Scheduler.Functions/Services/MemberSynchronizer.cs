@@ -1,4 +1,5 @@
 using System.Data;
+using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Models.Yaml;
@@ -69,6 +70,16 @@ public class MemberSynchronizer : IMemberSynchronizer
             StringComparer.OrdinalIgnoreCase);
         var mvCols = definition.DataSource.MultiValuedColumns
             .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+        // Refresh data_json for all existing active members still in query results
+        foreach (var member in existingMembers.Where(m => m.Status == MemberStatus.Active))
+        {
+            if (rowLookup.TryGetValue(member.MemberKey, out var freshRow))
+            {
+                var freshDataJson = MemberDataSerializer.Serialize(freshRow, mvCols);
+                await _memberRepo.UpdateDataJsonAsync(member.Id, freshDataJson);
+            }
+        }
 
         // Process added members
         foreach (var addedKey in diff.Added)

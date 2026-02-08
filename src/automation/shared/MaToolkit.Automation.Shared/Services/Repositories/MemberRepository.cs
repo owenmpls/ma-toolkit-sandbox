@@ -90,6 +90,14 @@ public class MemberRepository : IMemberRepository
         return rows > 0;
     }
 
+    public async Task UpdateDataJsonAsync(int id, string dataJson)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE batch_members SET data_json = @DataJson WHERE id = @Id AND status = @Status",
+            new { Id = id, DataJson = dataJson, Status = MemberStatus.Active });
+    }
+
     public async Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey)
     {
         using var conn = _db.CreateConnection();
