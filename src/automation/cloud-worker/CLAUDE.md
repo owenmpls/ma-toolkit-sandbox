@@ -20,8 +20,7 @@ cloud-worker/
 │   ├── servicebus.ps1                     # .NET SDK for send/receive (Azure.Messaging.ServiceBus)
 │   ├── runspace-manager.ps1               # RunspacePool creation, per-runspace auth, async dispatch
 │   ├── job-dispatcher.ps1                 # Main loop: receive → validate → dispatch → collect → send results
-│   ├── logging.ps1                        # App Insights TelemetryClient + console fallback
-│   └── throttle-handler.ps1               # Graph/EXO throttle detection, exponential backoff
+│   └── logging.ps1                        # App Insights TelemetryClient + console fallback
 ├── modules/
 │   ├── StandardFunctions/
 │   │   ├── StandardFunctions.psd1/psm1    # Module manifest + loader

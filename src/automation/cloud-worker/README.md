@@ -72,8 +72,7 @@ cloud-worker/
 │   ├── servicebus.ps1            # Service Bus client
 │   ├── runspace-manager.ps1      # Parallel execution pool
 │   ├── job-dispatcher.ps1        # Job processing loop
-│   ├── logging.ps1               # Application Insights logging
-│   └── throttle-handler.ps1      # Retry/backoff for throttling
+│   └── logging.ps1               # Application Insights logging
 ├── modules/
 │   ├── StandardFunctions/        # Built-in migration functions
 │   └── CustomFunctions/          # Customer extension modules

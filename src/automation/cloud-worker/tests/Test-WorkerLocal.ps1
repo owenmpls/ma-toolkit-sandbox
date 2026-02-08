@@ -53,7 +53,6 @@ $sourceFiles = @(
     'config.ps1',
     'logging.ps1',
     'auth.ps1',
-    'throttle-handler.ps1',
     'servicebus.ps1',
     'runspace-manager.ps1',
     'job-dispatcher.ps1'
@@ -159,15 +158,6 @@ Test-Step 'config.ps1 exports Get-WorkerConfiguration' {
 Test-Step 'logging.ps1 exports logging functions' {
     . (Join-Path $srcPath 'logging.ps1')
     $expected = @('Initialize-WorkerLogging', 'Write-WorkerLog', 'Write-WorkerException', 'Write-WorkerMetric', 'Write-WorkerEvent', 'Flush-WorkerTelemetry')
-    foreach ($fn in $expected) {
-        $cmd = Get-Command $fn -ErrorAction Stop
-        if ($cmd.CommandType -ne 'Function') { throw "$fn is not a function" }
-    }
-}
-
-Test-Step 'throttle-handler.ps1 exports throttle functions' {
-    . (Join-Path $srcPath 'throttle-handler.ps1')
-    $expected = @('Test-IsThrottledException', 'Invoke-WithThrottleRetry')
     foreach ($fn in $expected) {
         $cmd = Get-Command $fn -ErrorAction Stop
         if ($cmd.CommandType -ne 'Function') { throw "$fn is not a function" }

@@ -177,10 +177,10 @@ Updated `schema.sql` to match the C# models:
 - The existing `$activeJobs.Count -eq 0` guard already prevented the timeout from firing while jobs are running; added `elseif` to reset `lastActivityTime` when active jobs exist as defense-in-depth
 - **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:229-248`
 
-### 4.8 Cloud-worker: unused `throttle-handler.ps1`
-- `Invoke-WithThrottleRetry` is loaded but never called — actual retry logic is inline in `runspace-manager.ps1`
-- **Fix**: Remove `throttle-handler.ps1` or consolidate retry logic into it
-- **Files**: `src/automation/cloud-worker/src/throttle-handler.ps1`, `src/automation/cloud-worker/src/runspace-manager.ps1`
+### 4.8 Cloud-worker: unused `throttle-handler.ps1` — **FIXED**
+- `Invoke-WithThrottleRetry` was loaded but never called — actual retry logic lives inline in `runspace-manager.ps1` (must be inline because functions defined outside a runspace aren't available inside it)
+- Removed `throttle-handler.ps1` and all references (worker.ps1 dot-source, test file, CLAUDE.md, README.md)
+- **Files**: `src/automation/cloud-worker/src/throttle-handler.ps1` (deleted), `src/automation/cloud-worker/src/worker.ps1`, `src/automation/cloud-worker/tests/Test-WorkerLocal.ps1`
 
 ### 4.9 Cloud-worker: 30-second shutdown grace period is hard-coded
 - If EXO operations take longer, they get killed mid-execution
@@ -250,9 +250,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 22 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.10, 4.11)
+- **Fixed**: 23 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.10, 4.11)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 11 items (4.8–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 10 items (4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 
