@@ -22,6 +22,9 @@ param entraIdAudience string = ''
 @description('Name of the existing Key Vault.')
 param keyVaultName string
 
+@description('Name of the existing Service Bus namespace (from shared deployment).')
+param serviceBusNamespaceName string
+
 @description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
 param adminApiSubnetId string = ''
 
@@ -43,6 +46,7 @@ var hostingPlanName = '${baseName}-plan'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key Vault Secrets User
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'  // Storage Blob Data Owner
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aafa' // Storage Table Data Contributor
+var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'       // Azure Service Bus Data Sender
 
 // ---------------------------------------------------------------------------
 // Existing resources
@@ -50,6 +54,10 @@ var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aafa' /
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
+}
+
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
+  name: serviceBusNamespaceName
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +167,10 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           value: '@Microsoft.KeyVault(SecretUri=${sqlConnectionStringSecret.properties.secretUri})'
         }
         {
+          name: 'AdminApi__ServiceBusNamespace'
+          value: '${serviceBusNamespace.name}.servicebus.windows.net'
+        }
+        {
           name: 'AzureAd__Instance'
           value: 'https://login.microsoftonline.com/'
         }
@@ -215,6 +227,17 @@ resource storageTableContributorAssignment 'Microsoft.Authorization/roleAssignme
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRoleId)
+  }
+}
+
+// Service Bus Data Sender on the namespace
+resource serviceBusSenderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(serviceBusNamespace.id, functionApp.id, serviceBusDataSenderRoleId)
+  scope: serviceBusNamespace
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataSenderRoleId)
   }
 }
 
