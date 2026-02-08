@@ -123,10 +123,11 @@ Updated `schema.sql` to match the C# models:
 - **File**: `src/automation/orchestrator/src/Orchestrator.Functions/host.json:22`
 - **Resolution**: Set `prefetchCount` to `16` to match `maxConcurrentCalls`.
 
-### 3.3 Orchestrator: missing correlation data → silent message loss
+### 3.3 ~~Orchestrator: missing correlation data → silent message loss~~ FIXED
 - `ResultProcessor.cs:59-63`: If `CorrelationData` is null, logs warning and returns — message is completed (not dead-lettered)
 - **Fix**: Dead-letter the message instead of completing it, so operators can investigate
 - **File**: `src/automation/orchestrator/.../Handlers/ResultProcessor.cs:59-63`
+- **Resolution**: Moved null/invalid correlation checks into `WorkerResultFunction` — null correlation dead-letters with `MissingCorrelationData`, invalid correlation (present but missing both execution IDs) dead-letters with `InvalidCorrelationData`. `ProcessAsync` now returns `Task<bool>` to signal invalid correlation.
 
 ---
 

@@ -9,7 +9,7 @@ namespace Orchestrator.Functions.Services.Handlers;
 
 public interface IResultProcessor
 {
-    Task ProcessAsync(WorkerResultMessage result);
+    Task<bool> ProcessAsync(WorkerResultMessage result);
 }
 
 public class ResultProcessor : IResultProcessor
@@ -49,18 +49,13 @@ public class ResultProcessor : IResultProcessor
         _logger = logger;
     }
 
-    public async Task ProcessAsync(WorkerResultMessage result)
+    public async Task<bool> ProcessAsync(WorkerResultMessage result)
     {
         _logger.LogInformation(
             "Processing worker result for job {JobId}: Status={Status}, DurationMs={DurationMs}",
             result.JobId, result.Status, result.DurationMs);
 
-        var correlation = result.CorrelationData;
-        if (correlation == null)
-        {
-            _logger.LogWarning("No correlation data in result for job {JobId}", result.JobId);
-            return;
-        }
+        var correlation = result.CorrelationData!;
 
         if (correlation.IsInitStep && correlation.InitExecutionId.HasValue)
         {
@@ -72,8 +67,11 @@ public class ResultProcessor : IResultProcessor
         }
         else
         {
-            _logger.LogWarning("Invalid correlation data in result for job {JobId}", result.JobId);
+            _logger.LogWarning("Invalid correlation data in result for job {JobId}: missing both execution IDs", result.JobId);
+            return false;
         }
+
+        return true;
     }
 
     private async Task ProcessInitResultAsync(WorkerResultMessage result, JobCorrelationData correlation)

@@ -49,7 +49,28 @@ public class WorkerResultFunction
                 return;
             }
 
-            await _resultProcessor.ProcessAsync(result);
+            if (result.CorrelationData == null)
+            {
+                _logger.LogError("Worker result for job {JobId} has no correlation data", result.JobId);
+                await messageActions.DeadLetterMessageAsync(message, new Dictionary<string, object>
+                {
+                    ["DeadLetterReason"] = "MissingCorrelationData",
+                    ["DeadLetterErrorDescription"] = $"Result for job {result.JobId} has no correlation data"
+                });
+                return;
+            }
+
+            var processed = await _resultProcessor.ProcessAsync(result);
+            if (!processed)
+            {
+                await messageActions.DeadLetterMessageAsync(message, new Dictionary<string, object>
+                {
+                    ["DeadLetterReason"] = "InvalidCorrelationData",
+                    ["DeadLetterErrorDescription"] = $"Result for job {result.JobId} has correlation data but no valid execution ID"
+                });
+                return;
+            }
+
             await messageActions.CompleteMessageAsync(message);
         }
         catch (Exception ex)
