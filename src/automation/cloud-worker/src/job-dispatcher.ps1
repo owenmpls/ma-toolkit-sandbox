@@ -408,8 +408,8 @@ function Start-JobDispatcher {
 
     # Wait for remaining active jobs to complete
     if ($activeJobs.Count -gt 0) {
-        Write-WorkerLog -Message "Waiting for $($activeJobs.Count) active job(s) to complete..."
-        $timeout = [DateTime]::UtcNow.AddSeconds(30)
+        Write-WorkerLog -Message "Waiting for $($activeJobs.Count) active job(s) to complete ($($Config.ShutdownGraceSeconds)s grace period)..."
+        $timeout = [DateTime]::UtcNow.AddSeconds($Config.ShutdownGraceSeconds)
 
         while ($activeJobs.Count -gt 0 -and [DateTime]::UtcNow -lt $timeout) {
             $completedIndexes = @()

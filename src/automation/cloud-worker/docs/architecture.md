@@ -86,7 +86,7 @@ Shutdown is triggered by either a SIGTERM from the container orchestrator, or by
 
 1. Shutdown signal received (SIGTERM or idle timeout reached)
 2. Stop accepting new messages
-3. Wait for active jobs to complete (30s timeout)
+3. Wait for active jobs to complete (`SHUTDOWN_GRACE_SECONDS`, default 30s)
 4. Send remaining results
 5. Close runspace pool
 6. Dispose Service Bus resources

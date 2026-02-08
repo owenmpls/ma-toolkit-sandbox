@@ -182,10 +182,11 @@ Updated `schema.sql` to match the C# models:
 - Removed `throttle-handler.ps1` and all references (worker.ps1 dot-source, test file, CLAUDE.md, README.md)
 - **Files**: `src/automation/cloud-worker/src/throttle-handler.ps1` (deleted), `src/automation/cloud-worker/src/worker.ps1`, `src/automation/cloud-worker/tests/Test-WorkerLocal.ps1`
 
-### 4.9 Cloud-worker: 30-second shutdown grace period is hard-coded
+### 4.9 Cloud-worker: 30-second shutdown grace period is hard-coded — **FIXED**
 - If EXO operations take longer, they get killed mid-execution
 - **Fix**: Make configurable via `SHUTDOWN_GRACE_SECONDS` environment variable
 - **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:408`
+- **Resolution**: Added `ShutdownGraceSeconds` config property (reads `SHUTDOWN_GRACE_SECONDS`, defaults to 30). Job dispatcher uses `$Config.ShutdownGraceSeconds` instead of hard-coded value. Bicep template exposes `shutdownGraceSeconds` parameter and passes it as env var.
 
 ### 4.10 Admin API: member add/remove doesn't dispatch Service Bus messages — **FIXED**
 - `MemberManagementFunction` updates the database when members are added (`POST /api/batches/{id}/members`) or removed (`DELETE /api/batches/{batchId}/members/{memberId}`), but never publishes `MemberAddedMessage` or `MemberRemovedMessage` to Service Bus
@@ -250,9 +251,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 23 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.10, 4.11)
+- **Fixed**: 24 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 10 items (4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 11 Tier 5 items — recommended before production load
 
 ## Verification
 

@@ -28,6 +28,7 @@ function Get-WorkerConfiguration {
         MaxRetryDelaySeconds       = [int]($env:MAX_RETRY_DELAY_SECONDS ?? '120')
         HealthCheckIntervalSeconds = [int]($env:HEALTH_CHECK_INTERVAL_SECONDS ?? '30')
         IdleTimeoutSeconds         = [int]($env:IDLE_TIMEOUT_SECONDS ?? '300')
+        ShutdownGraceSeconds       = [int]($env:SHUTDOWN_GRACE_SECONDS ?? '30')
     }
 
     $requiredFields = @(

@@ -17,6 +17,7 @@ services:
       - APP_SECRET_NAME=worker-app-secret
       - APPINSIGHTS_CONNECTION_STRING=InstrumentationKey=your-key;IngestionEndpoint=https://your-region.in.applicationinsights.azure.com/
       - IDLE_TIMEOUT_SECONDS=0  # Disable idle shutdown for local dev
+      - SHUTDOWN_GRACE_SECONDS=30
       # For local development without managed identity, set these:
       # - AZURE_TENANT_ID=your-hosting-tenant-id
       # - AZURE_CLIENT_ID=your-dev-app-id

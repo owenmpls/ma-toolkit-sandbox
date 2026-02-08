@@ -35,6 +35,10 @@ param containerMemory string = '2.0Gi'
 @minValue(0)
 param idleTimeoutSeconds int = 300
 
+@description('Grace period in seconds to wait for active jobs to complete during shutdown.')
+@minValue(0)
+param shutdownGraceSeconds int = 30
+
 @description('Subnet resource ID for the Container App Environment. Leave empty to skip VNet integration.')
 param cloudWorkerSubnetId string = ''
 
@@ -207,6 +211,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'APP_SECRET_NAME', value: 'worker-app-secret' }
             { name: 'APPINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
             { name: 'IDLE_TIMEOUT_SECONDS', value: string(idleTimeoutSeconds) }
+            { name: 'SHUTDOWN_GRACE_SECONDS', value: string(shutdownGraceSeconds) }
           ]
         }
       ]
