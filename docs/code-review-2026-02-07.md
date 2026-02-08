@@ -191,6 +191,31 @@ Updated `schema.sql` to match the C# models:
 - **Files**: `src/automation/admin-api/src/AdminApi.Functions/Functions/MemberManagementFunction.cs`
 - **Resolution**: Added `ServiceBusClient` injection, `PublishMemberAddedAsync`/`PublishMemberRemovedAsync` private methods (same pattern as `ManualBatchService`). `AddAsync` captures member IDs from `InsertAsync`, dispatches per-member after the insert loop. `RemoveAsync` dispatches after `MarkRemovedAsync`. Both are best-effort — publish failure is logged as warning, member operation still succeeds. 7 new tests added.
 
+### 4.11 Runbook version transition handling broken for in-flight batches — **FIXED**
+
+Seven interconnected bugs caused by `batches.runbook_id` being a per-version row ID while queries treated it as version-agnostic. Publishing a new runbook version while batches are in-flight silently orphans them.
+
+**Root cause**: `GetActiveByRunbookAsync(runbook.Id)` and `GetByRunbookAndTimeAsync(runbook.Id, ...)` filter by `runbook_id`, which is the auto-increment row ID for a *specific version*. After publishing v2, `runbook.Id` is the v2 row, but existing batches still reference v1's row ID.
+
+**Sub-issues fixed:**
+1. **PhaseDispatcher sends active version instead of phase's version** — `PhaseDispatcher.cs:57` sent `runbook.Version` instead of `phase.RunbookVersion`, causing the orchestrator to load wrong YAML for step creation
+2. **MemberAddedHandler uses single version for all catch-up phases** — After version transition, catch-up phases span versions but handler used one definition for all
+3. **VersionTransitionHandler never runs** — `GetActiveByRunbookAsync(runbook.Id)` returns zero results for old-version batches, so the handler was never reached
+4. **BatchDetector creates duplicate batches** — `GetByRunbookAndTimeAsync(runbook.Id, ...)` can't find v1 batches, creating duplicates under v2
+5. **Old-version pending phases not cleaned up** — VersionTransitionHandler created new phases but left old pending phases, causing double execution
+6. **Superseded phases block batch completion** — `CheckBatchCompletionAsync` didn't treat superseded phases as terminal
+7. **Batch query returns zero results after version publish** — Same root cause as #3/#4
+
+**Fix (`851d832`):**
+- Added `GetActiveByRunbookNameAsync` / `GetByRunbookNameAndTimeAsync` — join `batches` to `runbooks` by name
+- `PhaseDispatcher` sends `phase.RunbookVersion` in messages
+- Added `PhaseStatus.Superseded` constant + schema CHECK constraint update
+- `VersionTransitionHandler` calls `SupersedeOldVersionPendingAsync` after creating new phases
+- `PhaseDueHandler` and `ResultProcessor` treat `Superseded` as terminal in batch completion checks
+- `MemberAddedHandler` loads per-phase version runbook for catch-up step definitions
+
+**Files**: `IBatchRepository.cs`, `BatchRepository.cs`, `SchedulerTimerFunction.cs`, `BatchDetector.cs`, `PhaseDispatcher.cs`, `PhaseStatus.cs`, `schema.sql`, `IPhaseExecutionRepository.cs`, `PhaseExecutionRepository.cs`, `VersionTransitionHandler.cs`, `PhaseDueHandler.cs`, `ResultProcessor.cs`, `MemberAddedHandler.cs`
+
 ---
 
 ## Tier 5: Deferred / Low-Priority
@@ -216,15 +241,15 @@ These are worth tracking but can be addressed post-initial-deployment:
 1. ~~**Schema fixes** (Tier 1) — cannot deploy without these~~ — **DONE** (`e754c60`)
 2. ~~**SQL connectivity + SKU fix** (Tier 2.1, 2.2) — cannot run without these~~ — **DONE** (2.1 via network.bicep, 2.2 via `dd5dfce`)
 3. ~~**Service Bus topic config** (Tier 2.3, 2.4) — must be right on first create~~ — **DONE** (2.3 via `d178cb1`, 2.4 via `de8a303`)
-4. **Cross-service contracts** (Tier 3) — ~~affects all components~~ 3.1 and 3.2 fixed; 3.3 still open
+4. ~~**Cross-service contracts** (Tier 3) — affects all components~~ — **DONE** (3.1, 3.2, 3.3 all fixed)
 5. **Application fixes** (Tier 4) — fix before any real workload
 6. ~~**Infrastructure hardening** (Tier 2.5-2.7) — before production~~ — **DONE** (2.5 via network.bicep, 2.7 via `194a8f1`; 2.6 deferred for sandbox)
 
 ## Progress Summary
 
-- **Fixed**: 16 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 4.1, 4.2, 4.3, 4.10)
+- **Fixed**: 18 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.10, 4.11)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 17 items (3.3, 4.4–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 15 items (4.4–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 
