@@ -69,7 +69,6 @@ orchestrator/
         DbConnectionFactory.cs        # Singleton: creates SqlConnection from config
         RunbookParser.cs              # YamlDotNet deserialization
         PhaseEvaluator.cs             # Parses offsets, calculates due_at
-        MemberDataReader.cs           # Reads member data JSON from member_data table
         WorkerDispatcher.cs           # Sends jobs to worker-jobs Service Bus topic
         RetryScheduler.cs             # Sends scheduled retry-check messages to orchestrator-events topic
         RollbackExecutor.cs           # Executes rollback sequences on failure
@@ -150,11 +149,9 @@ The `PhaseProgressionService` centralizes all progression logic, used by `Result
 
 ### Member Data & Template Resolution
 
-Member data is stored in a single `member_data` table as JSON documents (one row per member per runbook table name). The `MemberDataReader` deserializes JSON into `Dictionary<string, string>` for use in template resolution.
+Member data is stored as a JSON document (`data_json` column) on each `batch_members` row, snapshotted at insertion time. Handlers deserialize `BatchMemberRecord.DataJson` into `Dictionary<string, string>` for use in template resolution.
 
 **Template resolution** uses the shared `ITemplateResolver` from `MaToolkit.Automation.Shared`. Templates use `{{ColumnName}}` syntax resolved from the member data dictionary. Special variables `{{_batch_id}}` and `{{_batch_start_time}}` are always available. `ResolveInitParams` resolves only batch-level variables (no member data). Throws `TemplateResolutionException` for unresolved variables.
-
-The `ITemplateResolver` and `IMemberDataReader` interfaces are defined in the shared library. The `MemberDataReader` implementation lives in the orchestrator.
 
 ### Polling Convention
 
@@ -258,7 +255,7 @@ Service Bus connection uses DefaultAzureCredential:
 
 **Orchestrator reads from:**
 - `runbooks.yaml_content` (for rollback definitions, on_member_removed)
-- `member_data` table (member data JSON documents for template resolution)
+- `batch_members.data_json` (member data JSON for template resolution)
 
 ## Infrastructure
 

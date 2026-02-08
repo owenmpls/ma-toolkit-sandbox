@@ -2,6 +2,7 @@ using System.Data;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Models.Yaml;
+using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -62,13 +63,25 @@ public class MemberSynchronizer : IMemberSynchronizer
 
         var diff = _memberDiff.ComputeDiff(existingMembers, currentKeys);
 
+        // Build DataRow lookup and multi-valued column config for added members
+        var rowLookup = rows.ToDictionary(
+            r => r[definition.DataSource.PrimaryKey]?.ToString() ?? string.Empty,
+            StringComparer.OrdinalIgnoreCase);
+        var mvCols = definition.DataSource.MultiValuedColumns
+            .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
         // Process added members
         foreach (var addedKey in diff.Added)
         {
+            var dataJson = rowLookup.TryGetValue(addedKey, out var row)
+                ? MemberDataSerializer.Serialize(row, mvCols)
+                : null;
+
             var memberId = await _memberRepo.InsertAsync(new BatchMemberRecord
             {
                 BatchId = batch.Id,
-                MemberKey = addedKey
+                MemberKey = addedKey,
+                DataJson = dataJson
             });
 
             try

@@ -7,6 +7,7 @@ public class BatchMemberRecord
     public int Id { get; set; }
     public int BatchId { get; set; }
     public string MemberKey { get; set; } = string.Empty;
+    public string? DataJson { get; set; }
     public string Status { get; set; } = MemberStatus.Active;
     public DateTime AddedAt { get; set; }
     public DateTime? RemovedAt { get; set; }

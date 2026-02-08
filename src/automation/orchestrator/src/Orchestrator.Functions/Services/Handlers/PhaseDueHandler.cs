@@ -26,7 +26,6 @@ public class PhaseDueHandler : IPhaseDueHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
-    private readonly IMemberDataReader _memberDataReader;
     private readonly IPhaseProgressionService _progressionService;
     private readonly IDbConnectionFactory _db;
     private readonly ILogger<PhaseDueHandler> _logger;
@@ -41,7 +40,6 @@ public class PhaseDueHandler : IPhaseDueHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
-        IMemberDataReader memberDataReader,
         IPhaseProgressionService progressionService,
         IDbConnectionFactory db,
         ILogger<PhaseDueHandler> logger)
@@ -55,7 +53,6 @@ public class PhaseDueHandler : IPhaseDueHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
-        _memberDataReader = memberDataReader;
         _progressionService = progressionService;
         _db = db;
         _logger = logger;
@@ -230,10 +227,6 @@ public class PhaseDueHandler : IPhaseDueHandler
             return;
         }
 
-        // Load member data from member_data table
-        var memberKeys = members.Select(m => m.MemberKey).ToList();
-        var memberData = await _memberDataReader.GetMembersDataAsync(runbook.DataTableName, memberKeys);
-
         // Create step executions in a transaction
         using var conn = _db.CreateConnection();
         conn.Open();
@@ -242,12 +235,12 @@ public class PhaseDueHandler : IPhaseDueHandler
         {
             foreach (var member in members)
             {
-                if (!memberData.TryGetValue(member.MemberKey, out var dataRow))
+                if (string.IsNullOrEmpty(member.DataJson))
                 {
-                    _logger.LogWarning("No data found for member {MemberKey} in table {TableName}",
-                        member.MemberKey, runbook.DataTableName);
+                    _logger.LogWarning("No data found for member {MemberKey}", member.MemberKey);
                     continue;
                 }
+                var dataRow = JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)!;
 
                 try
                 {

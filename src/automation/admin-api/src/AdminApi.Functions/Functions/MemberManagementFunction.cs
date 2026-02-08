@@ -20,7 +20,6 @@ public class MemberManagementFunction
     private readonly IBatchRepository _batchRepo;
     private readonly IMemberRepository _memberRepo;
     private readonly IRunbookRepository _runbookRepo;
-    private readonly IDynamicTableManager _dynamicTableManager;
     private readonly IRunbookParser _parser;
     private readonly ICsvUploadService _csvUpload;
     private readonly ServiceBusClient _serviceBusClient;
@@ -30,7 +29,6 @@ public class MemberManagementFunction
         IBatchRepository batchRepo,
         IMemberRepository memberRepo,
         IRunbookRepository runbookRepo,
-        IDynamicTableManager dynamicTableManager,
         IRunbookParser parser,
         ICsvUploadService csvUpload,
         ServiceBusClient serviceBusClient,
@@ -39,7 +37,6 @@ public class MemberManagementFunction
         _batchRepo = batchRepo;
         _memberRepo = memberRepo;
         _runbookRepo = runbookRepo;
-        _dynamicTableManager = dynamicTableManager;
         _parser = parser;
         _csvUpload = csvUpload;
         _serviceBusClient = serviceBusClient;
@@ -141,16 +138,10 @@ public class MemberManagementFunction
             .Select(m => m.MemberKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Upsert data into dynamic table
-        await _dynamicTableManager.UpsertDataAsync(
-            runbook.DataTableName,
-            definition.DataSource.PrimaryKey,
-            definition.DataSource.BatchTimeColumn,
-            csvResult.Data!,
-            definition.DataSource.MultiValuedColumns);
-
-        // Add new members
+        // Add new members with point-in-time data snapshot
         var primaryKey = definition.DataSource.PrimaryKey;
+        var mvCols = definition.DataSource.MultiValuedColumns
+            .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var addedCount = 0;
         var skippedCount = 0;
         var addedMembers = new List<(int MemberId, string MemberKey)>();
@@ -168,7 +159,8 @@ public class MemberManagementFunction
             var memberId = await _memberRepo.InsertAsync(new BatchMemberRecord
             {
                 BatchId = id,
-                MemberKey = memberKey
+                MemberKey = memberKey,
+                DataJson = MemberDataSerializer.Serialize(row, mvCols)
             });
             addedCount++;
             addedMembers.Add((memberId, memberKey));

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Exceptions;
 using MaToolkit.Automation.Shared.Models.Messages;
@@ -21,7 +22,6 @@ public class MemberRemovedHandler : IMemberRemovedHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
-    private readonly IMemberDataReader _memberDataReader;
     private readonly ILogger<MemberRemovedHandler> _logger;
 
     public MemberRemovedHandler(
@@ -33,7 +33,6 @@ public class MemberRemovedHandler : IMemberRemovedHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
-        IMemberDataReader memberDataReader,
         ILogger<MemberRemovedHandler> logger)
     {
         _batchRepo = batchRepo;
@@ -44,7 +43,6 @@ public class MemberRemovedHandler : IMemberRemovedHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
-        _memberDataReader = memberDataReader;
         _logger = logger;
     }
 
@@ -89,7 +87,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
             return;
         }
 
-        // Load member data from member_data table (may still have last known data)
+        // Load member data from batch_members record
         var batch = await _batchRepo.GetByIdAsync(message.BatchId);
         if (batch == null)
         {
@@ -97,7 +95,10 @@ public class MemberRemovedHandler : IMemberRemovedHandler
             return;
         }
 
-        var memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, message.MemberKey);
+        var member = await _memberRepo.GetByIdAsync(message.BatchMemberId);
+        Dictionary<string, string>? memberData = null;
+        if (member?.DataJson != null)
+            memberData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson);
         if (memberData == null)
         {
             _logger.LogWarning(

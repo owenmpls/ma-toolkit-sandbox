@@ -22,7 +22,6 @@ public class MemberManagementFunctionTests
     private readonly Mock<IBatchRepository> _batchRepoMock;
     private readonly Mock<IMemberRepository> _memberRepoMock;
     private readonly Mock<IRunbookRepository> _runbookRepoMock;
-    private readonly Mock<IDynamicTableManager> _dynamicTableManagerMock;
     private readonly Mock<IRunbookParser> _parserMock;
     private readonly Mock<ICsvUploadService> _csvUploadMock;
     private readonly Mock<ServiceBusClient> _serviceBusClientMock;
@@ -34,7 +33,6 @@ public class MemberManagementFunctionTests
         _batchRepoMock = new Mock<IBatchRepository>();
         _memberRepoMock = new Mock<IMemberRepository>();
         _runbookRepoMock = new Mock<IRunbookRepository>();
-        _dynamicTableManagerMock = new Mock<IDynamicTableManager>();
         _parserMock = new Mock<IRunbookParser>();
         _csvUploadMock = new Mock<ICsvUploadService>();
         _loggerMock = new Mock<ILogger<MemberManagementFunction>>();
@@ -50,7 +48,6 @@ public class MemberManagementFunctionTests
             _batchRepoMock.Object,
             _memberRepoMock.Object,
             _runbookRepoMock.Object,
-            _dynamicTableManagerMock.Object,
             _parserMock.Object,
             _csvUploadMock.Object,
             _serviceBusClientMock.Object,

@@ -96,7 +96,7 @@ scheduler/
 
 - **Dapper for data access**: All SQL operations use Dapper with raw SQL. No Entity Framework. Repositories are scoped, DbConnectionFactory is singleton.
 - **YamlDotNet for runbook parsing**: Runbooks are stored as raw YAML in the `runbooks.yaml_content` column and parsed on every timer tick. The parser uses `UnderscoredNamingConvention` and `IgnoreUnmatchedProperties`.
-- **Member data storage**: Member data is stored in a single `member_data` table as JSON documents (one row per member per runbook table name). The shared `DynamicTableManager` upserts via a single MERGE with OPENJSON.
+- **Member data storage**: Member data is stored as a JSON document (`data_json` column) on each `batch_members` row, snapshotted at insertion time via `MemberDataSerializer`. This gives each batch a point-in-time snapshot of the data that was current when the member entered the batch.
 - **Template resolution**: Step params use `{{ColumnName}}` syntax resolved from member data dictionaries via the shared `ITemplateResolver`. Special vars: `{{_batch_id}}`, `{{_batch_start_time}}`.
 - **Service Bus publishing**: All 5 message types (`batch-init`, `phase-due`, `member-added`, `member-removed`, `poll-check`) go to a single topic (`orchestrator-events`) with a `MessageType` application property for filtering.
 - **Offset-based scheduling**: Phase offsets like `T-5d` are parsed to minutes. `due_at = batch_start_time - offset_minutes`. The timer evaluates `due_at <= now AND status = 'pending'`.
@@ -106,9 +106,9 @@ scheduler/
 
 ## SQL Tables
 
-The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`, `member_data`. See `docs/orchestrator-contract.md` for full column definitions.
+The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`. See `docs/orchestrator-contract.md` for full column definitions.
 
-Member data is stored in the `member_data` table as JSON documents (`data_json` column). The shared `DynamicTableManager` handles upserts via OPENJSON MERGE, and the shared `IMemberDataReader` interface provides read access.
+Member data is stored as a JSON document in the `batch_members.data_json` column, snapshotted at insertion time. The shared `MemberDataSerializer` handles `DataRow` → JSON conversion including multi-valued column handling.
 
 ## Configuration
 

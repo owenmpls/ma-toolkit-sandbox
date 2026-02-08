@@ -21,7 +21,6 @@ public class PollCheckHandler : IPollCheckHandler
     private readonly IRollbackExecutor _rollbackExecutor;
     private readonly IRunbookRepository _runbookRepo;
     private readonly IRunbookParser _runbookParser;
-    private readonly IMemberDataReader _memberDataReader;
     private readonly IMemberRepository _memberRepo;
     private readonly IPhaseProgressionService _progressionService;
     private readonly ILogger<PollCheckHandler> _logger;
@@ -34,7 +33,6 @@ public class PollCheckHandler : IPollCheckHandler
         IRollbackExecutor rollbackExecutor,
         IRunbookRepository runbookRepo,
         IRunbookParser runbookParser,
-        IMemberDataReader memberDataReader,
         IMemberRepository memberRepo,
         IPhaseProgressionService progressionService,
         ILogger<PollCheckHandler> logger)
@@ -46,7 +44,6 @@ public class PollCheckHandler : IPollCheckHandler
         _rollbackExecutor = rollbackExecutor;
         _runbookRepo = runbookRepo;
         _runbookParser = runbookParser;
-        _memberDataReader = memberDataReader;
         _memberRepo = memberRepo;
         _progressionService = progressionService;
         _logger = logger;
@@ -228,7 +225,9 @@ public class PollCheckHandler : IPollCheckHandler
             var member = await _memberRepo.GetByIdAsync(batchMemberId.Value);
             if (member != null)
             {
-                memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, member.MemberKey);
+                memberData = member.DataJson != null
+                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)
+                    : null;
             }
             else
             {

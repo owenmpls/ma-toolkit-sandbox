@@ -130,15 +130,18 @@ public class BatchDetector : IBatchDetector
                 Status = BatchStatus.Detected
             }, transaction);
 
-            // Insert members
+            // Insert members with point-in-time data snapshot
             var memberIds = new List<int>();
+            var mvCols = definition.DataSource.MultiValuedColumns
+                .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
             foreach (var row in rows)
             {
                 var memberKey = row[definition.DataSource.PrimaryKey]?.ToString() ?? string.Empty;
                 var memberId = await _memberRepo.InsertAsync(new BatchMemberRecord
                 {
                     BatchId = batchId,
-                    MemberKey = memberKey
+                    MemberKey = memberKey,
+                    DataJson = MemberDataSerializer.Serialize(row, mvCols)
                 }, transaction);
                 memberIds.Add(memberId);
             }

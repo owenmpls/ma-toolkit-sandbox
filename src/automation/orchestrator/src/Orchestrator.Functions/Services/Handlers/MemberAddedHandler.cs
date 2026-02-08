@@ -25,7 +25,6 @@ public class MemberAddedHandler : IMemberAddedHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
-    private readonly IMemberDataReader _memberDataReader;
     private readonly ILogger<MemberAddedHandler> _logger;
 
     public MemberAddedHandler(
@@ -38,7 +37,6 @@ public class MemberAddedHandler : IMemberAddedHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
-        IMemberDataReader memberDataReader,
         ILogger<MemberAddedHandler> logger)
     {
         _batchRepo = batchRepo;
@@ -50,7 +48,6 @@ public class MemberAddedHandler : IMemberAddedHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
-        _memberDataReader = memberDataReader;
         _logger = logger;
     }
 
@@ -85,14 +82,19 @@ public class MemberAddedHandler : IMemberAddedHandler
 
         var definition = _runbookParser.Parse(runbook.YamlContent);
 
-        // Load member data from member_data table
-        var memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, message.MemberKey);
-        if (memberData == null)
+        // Load member data from batch_members record
+        var member = await _memberRepo.GetByIdAsync(message.BatchMemberId);
+        if (member == null)
         {
-            _logger.LogError("Member data not found for {MemberKey} in table {TableName}",
-                message.MemberKey, runbook.DataTableName);
+            _logger.LogError("Batch member {BatchMemberId} not found", message.BatchMemberId);
             return;
         }
+        if (string.IsNullOrEmpty(member.DataJson))
+        {
+            _logger.LogError("Member data not found for {MemberKey}", message.MemberKey);
+            return;
+        }
+        var memberData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)!;
 
         // Get overdue phases (dispatched or completed)
         var overduePhases = (await _phaseRepo.GetDispatchedByBatchAsync(message.BatchId))

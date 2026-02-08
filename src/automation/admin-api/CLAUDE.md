@@ -193,10 +193,9 @@ The API uses Entra ID (Azure AD) JWT bearer authentication via `Microsoft.Identi
 ### CSV Upload Flow
 1. Parse CSV, validate primary key column exists, check for duplicates
 2. Create batch with `is_manual = 1`, `batch_start_time = NULL`
-3. Upsert member data as JSON documents into `member_data` table
-4. Insert batch_members for each row
-5. Create phase_executions with `status = 'pending'`, `due_at = NULL`
-6. If init steps exist, create init_executions
+3. Insert batch_members for each row with `data_json` snapshot (via `MemberDataSerializer`)
+4. Create phase_executions with `status = 'pending'`, `due_at = NULL`
+5. If init steps exist, create init_executions
 
 ### Manual Batch Advancement Flow
 1. Validate batch is manual (`is_manual = 1`)
@@ -241,8 +240,8 @@ Data source connections are read from environment variables by name (configured 
 **Admin-specific table:**
 - `runbook_automation_settings` – Automation enable/disable per runbook
 
-**Member data table** (shared):
-- `member_data` – Member data stored as JSON documents (one row per member per runbook table name)
+**Member data:**
+- `batch_members.data_json` – Member data stored as JSON document, snapshotted at insertion time
 
 ## Infrastructure
 

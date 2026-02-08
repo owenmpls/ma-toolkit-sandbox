@@ -44,10 +44,10 @@ public class MemberRepository : IMemberRepository
         try
         {
             return await conn.QuerySingleAsync<int>(@"
-                INSERT INTO batch_members (batch_id, member_key, status)
-                VALUES (@BatchId, @MemberKey, @Status);
+                INSERT INTO batch_members (batch_id, member_key, data_json, status)
+                VALUES (@BatchId, @MemberKey, @DataJson, @Status);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                new { record.BatchId, record.MemberKey, Status = MemberStatus.Active }, transaction);
+                new { record.BatchId, record.MemberKey, record.DataJson, Status = MemberStatus.Active }, transaction);
         }
         finally
         {

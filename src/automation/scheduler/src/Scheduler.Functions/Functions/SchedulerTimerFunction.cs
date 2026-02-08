@@ -14,7 +14,6 @@ public class SchedulerTimerFunction
     private readonly IRunbookRepository _runbookRepo;
     private readonly IAutomationSettingsRepository _automationRepo;
     private readonly IBatchRepository _batchRepo;
-    private readonly IDynamicTableManager _dynamicTableManager;
     private readonly IDataSourceQueryService _dataSourceQuery;
     private readonly IRunbookParser _parser;
     private readonly IBatchDetector _batchDetector;
@@ -28,7 +27,6 @@ public class SchedulerTimerFunction
         IRunbookRepository runbookRepo,
         IAutomationSettingsRepository automationRepo,
         IBatchRepository batchRepo,
-        IDynamicTableManager dynamicTableManager,
         IDataSourceQueryService dataSourceQuery,
         IRunbookParser parser,
         IBatchDetector batchDetector,
@@ -41,7 +39,6 @@ public class SchedulerTimerFunction
         _runbookRepo = runbookRepo;
         _automationRepo = automationRepo;
         _batchRepo = batchRepo;
-        _dynamicTableManager = dynamicTableManager;
         _dataSourceQuery = dataSourceQuery;
         _parser = parser;
         _batchDetector = batchDetector;
@@ -126,14 +123,6 @@ public class SchedulerTimerFunction
 
             if (queryResults.Rows.Count > 0)
             {
-                // Upsert query results into member_data table
-                await _dynamicTableManager.UpsertDataAsync(
-                    runbook.DataTableName,
-                    definition.DataSource.PrimaryKey,
-                    definition.DataSource.BatchTimeColumn,
-                    queryResults,
-                    definition.DataSource.MultiValuedColumns);
-
                 // Group by batch time and process each group
                 var batchGroups = await _batchDetector.GroupByBatchTimeAsync(queryResults, definition.DataSource);
 

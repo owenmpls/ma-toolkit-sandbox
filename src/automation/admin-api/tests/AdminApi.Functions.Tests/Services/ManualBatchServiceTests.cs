@@ -20,7 +20,6 @@ public class ManualBatchServiceTests
     private readonly Mock<IMemberRepository> _memberRepoMock;
     private readonly Mock<IPhaseExecutionRepository> _phaseRepoMock;
     private readonly Mock<IInitExecutionRepository> _initRepoMock;
-    private readonly Mock<IDynamicTableManager> _dynamicTableManagerMock;
     private readonly Mock<IPhaseEvaluator> _phaseEvaluatorMock;
     private readonly Mock<IDbConnectionFactory> _dbMock;
     private readonly Mock<ILogger<ManualBatchService>> _loggerMock;
@@ -33,7 +32,6 @@ public class ManualBatchServiceTests
         _memberRepoMock = new Mock<IMemberRepository>();
         _phaseRepoMock = new Mock<IPhaseExecutionRepository>();
         _initRepoMock = new Mock<IInitExecutionRepository>();
-        _dynamicTableManagerMock = new Mock<IDynamicTableManager>();
         _phaseEvaluatorMock = new Mock<IPhaseEvaluator>();
         _dbMock = new Mock<IDbConnectionFactory>();
         _loggerMock = new Mock<ILogger<ManualBatchService>>();
@@ -55,7 +53,6 @@ public class ManualBatchServiceTests
             _memberRepoMock.Object,
             _phaseRepoMock.Object,
             _initRepoMock.Object,
-            _dynamicTableManagerMock.Object,
             _phaseEvaluatorMock.Object,
             _dbMock.Object,
             _loggerMock.Object,

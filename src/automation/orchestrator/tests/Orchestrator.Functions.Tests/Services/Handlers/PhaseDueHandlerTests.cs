@@ -25,7 +25,6 @@ public class PhaseDueHandlerTests
     private readonly Mock<IRunbookParser> _runbookParser = new();
     private readonly Mock<ITemplateResolver> _templateResolver = new();
     private readonly Mock<IPhaseEvaluator> _phaseEvaluator = new();
-    private readonly Mock<IMemberDataReader> _memberDataReader = new();
     private readonly Mock<IPhaseProgressionService> _progressionService = new();
     private readonly Mock<IDbConnectionFactory> _db = new();
     private readonly PhaseDueHandler _sut;
@@ -47,7 +46,6 @@ public class PhaseDueHandlerTests
             _runbookParser.Object,
             _templateResolver.Object,
             _phaseEvaluator.Object,
-            _memberDataReader.Object,
             _progressionService.Object,
             _db.Object,
             Mock.Of<ILogger<PhaseDueHandler>>());

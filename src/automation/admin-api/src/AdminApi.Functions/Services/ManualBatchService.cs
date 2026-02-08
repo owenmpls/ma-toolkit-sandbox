@@ -50,7 +50,6 @@ public class ManualBatchService : IManualBatchService
     private readonly IMemberRepository _memberRepo;
     private readonly IPhaseExecutionRepository _phaseRepo;
     private readonly IInitExecutionRepository _initRepo;
-    private readonly IDynamicTableManager _dynamicTableManager;
     private readonly IPhaseEvaluator _phaseEvaluator;
     private readonly IDbConnectionFactory _db;
     private readonly ServiceBusClient _serviceBusClient;
@@ -61,7 +60,6 @@ public class ManualBatchService : IManualBatchService
         IMemberRepository memberRepo,
         IPhaseExecutionRepository phaseRepo,
         IInitExecutionRepository initRepo,
-        IDynamicTableManager dynamicTableManager,
         IPhaseEvaluator phaseEvaluator,
         IDbConnectionFactory db,
         ILogger<ManualBatchService> logger,
@@ -71,7 +69,6 @@ public class ManualBatchService : IManualBatchService
         _memberRepo = memberRepo;
         _phaseRepo = phaseRepo;
         _initRepo = initRepo;
-        _dynamicTableManager = dynamicTableManager;
         _phaseEvaluator = phaseEvaluator;
         _db = db;
         _serviceBusClient = serviceBusClient;
@@ -112,23 +109,18 @@ public class ManualBatchService : IManualBatchService
                 };
                 var batchId = await _batchRepo.InsertAsync(batch, transaction);
 
-                // Upsert member data into member_data table
-                await _dynamicTableManager.UpsertDataAsync(
-                    runbook.DataTableName,
-                    definition.DataSource.PrimaryKey,
-                    definition.DataSource.BatchTimeColumn,
-                    memberData,
-                    definition.DataSource.MultiValuedColumns);
-
-                // Insert batch members
+                // Insert batch members with point-in-time data snapshot
                 var primaryKey = definition.DataSource.PrimaryKey;
+                var mvCols = definition.DataSource.MultiValuedColumns
+                    .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
                 foreach (DataRow row in memberData.Rows)
                 {
                     var memberKey = row[primaryKey]?.ToString() ?? string.Empty;
                     await _memberRepo.InsertAsync(new BatchMemberRecord
                     {
                         BatchId = batchId,
-                        MemberKey = memberKey
+                        MemberKey = memberKey,
+                        DataJson = MemberDataSerializer.Serialize(row, mvCols)
                     }, transaction);
                 }
 

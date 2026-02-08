@@ -36,7 +36,6 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddHttpClient<IDatabricksQueryClient, DatabricksQueryClient>();
 builder.Services.AddScoped<IDataverseQueryClient, DataverseQueryClient>();
 builder.Services.AddScoped<IDataSourceQueryService, DataSourceQueryService>();
-builder.Services.AddScoped<IDynamicTableManager, DynamicTableManager>();
 
 // Shared parsing and evaluation services
 builder.Services.AddScoped<IRunbookParser, RunbookParser>();

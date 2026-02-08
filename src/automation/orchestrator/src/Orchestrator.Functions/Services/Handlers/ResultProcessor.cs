@@ -22,7 +22,6 @@ public class ResultProcessor : IResultProcessor
     private readonly IRunbookParser _runbookParser;
     private readonly IWorkerDispatcher _workerDispatcher;
     private readonly IRollbackExecutor _rollbackExecutor;
-    private readonly IMemberDataReader _memberDataReader;
     private readonly IMemberRepository _memberRepo;
     private readonly IPhaseProgressionService _progressionService;
     private readonly IRetryScheduler _retryScheduler;
@@ -37,7 +36,6 @@ public class ResultProcessor : IResultProcessor
         IRunbookParser runbookParser,
         IWorkerDispatcher workerDispatcher,
         IRollbackExecutor rollbackExecutor,
-        IMemberDataReader memberDataReader,
         IMemberRepository memberRepo,
         IPhaseProgressionService progressionService,
         IRetryScheduler retryScheduler,
@@ -51,7 +49,6 @@ public class ResultProcessor : IResultProcessor
         _runbookParser = runbookParser;
         _workerDispatcher = workerDispatcher;
         _rollbackExecutor = rollbackExecutor;
-        _memberDataReader = memberDataReader;
         _memberRepo = memberRepo;
         _progressionService = progressionService;
         _retryScheduler = retryScheduler;
@@ -363,7 +360,9 @@ public class ResultProcessor : IResultProcessor
             var member = await _memberRepo.GetByIdAsync(batchMemberId.Value);
             if (member != null)
             {
-                memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, member.MemberKey);
+                memberData = member.DataJson != null
+                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)
+                    : null;
             }
             else
             {
