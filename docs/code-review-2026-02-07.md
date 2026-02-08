@@ -184,6 +184,13 @@ Updated `schema.sql` to match the C# models:
 - **Fix**: Make configurable via `SHUTDOWN_GRACE_SECONDS` environment variable
 - **File**: `src/automation/cloud-worker/src/job-dispatcher.ps1:408`
 
+### 4.10 Admin API: member add/remove doesn't dispatch Service Bus messages — **FIXED**
+- `MemberManagementFunction` updates the database when members are added (`POST /api/batches/{id}/members`) or removed (`DELETE /api/batches/{batchId}/members/{memberId}`), but never publishes `MemberAddedMessage` or `MemberRemovedMessage` to Service Bus
+- **Impact**: Added members don't get catch-up step executions for already-dispatched phases (orchestrator's `MemberAddedHandler` never fires); removed members don't get pending steps cancelled or `on_member_removed` cleanup dispatched (orchestrator's `MemberRemovedHandler` never fires)
+- **Fix**: Inject `ServiceBusClient` into `MemberManagementFunction`, publish messages after DB operations (best-effort with try/catch per member), set `add_dispatched_at`/`remove_dispatched_at` timestamps on success
+- **Files**: `src/automation/admin-api/src/AdminApi.Functions/Functions/MemberManagementFunction.cs`
+- **Resolution**: Added `ServiceBusClient` injection, `PublishMemberAddedAsync`/`PublishMemberRemovedAsync` private methods (same pattern as `ManualBatchService`). `AddAsync` captures member IDs from `InsertAsync`, dispatches per-member after the insert loop. `RemoveAsync` dispatches after `MarkRemovedAsync`. Both are best-effort — publish failure is logged as warning, member operation still succeeds. 7 new tests added.
+
 ---
 
 ## Tier 5: Deferred / Low-Priority
@@ -215,9 +222,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 15 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 4.1, 4.2, 4.3)
+- **Fixed**: 16 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 4.1, 4.2, 4.3, 4.10)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 18 items (3.3, 4.4–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 17 items (3.3, 4.4–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 

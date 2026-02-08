@@ -1,5 +1,8 @@
+using System.Text.Json;
+using Azure.Messaging.ServiceBus;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
+using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +23,7 @@ public class MemberManagementFunction
     private readonly IDynamicTableManager _dynamicTableManager;
     private readonly IRunbookParser _parser;
     private readonly ICsvUploadService _csvUpload;
+    private readonly ServiceBusClient _serviceBusClient;
     private readonly ILogger<MemberManagementFunction> _logger;
 
     public MemberManagementFunction(
@@ -29,6 +33,7 @@ public class MemberManagementFunction
         IDynamicTableManager dynamicTableManager,
         IRunbookParser parser,
         ICsvUploadService csvUpload,
+        ServiceBusClient serviceBusClient,
         ILogger<MemberManagementFunction> logger)
     {
         _batchRepo = batchRepo;
@@ -37,6 +42,7 @@ public class MemberManagementFunction
         _dynamicTableManager = dynamicTableManager;
         _parser = parser;
         _csvUpload = csvUpload;
+        _serviceBusClient = serviceBusClient;
         _logger = logger;
     }
 
@@ -147,6 +153,7 @@ public class MemberManagementFunction
         var primaryKey = definition.DataSource.PrimaryKey;
         var addedCount = 0;
         var skippedCount = 0;
+        var addedMembers = new List<(int MemberId, string MemberKey)>();
 
         foreach (System.Data.DataRow row in csvResult.Data!.Rows)
         {
@@ -158,12 +165,28 @@ public class MemberManagementFunction
                 continue;
             }
 
-            await _memberRepo.InsertAsync(new BatchMemberRecord
+            var memberId = await _memberRepo.InsertAsync(new BatchMemberRecord
             {
                 BatchId = id,
                 MemberKey = memberKey
             });
             addedCount++;
+            addedMembers.Add((memberId, memberKey));
+        }
+
+        // Dispatch member-added messages to orchestrator (best-effort)
+        foreach (var (newMemberId, memberKey) in addedMembers)
+        {
+            try
+            {
+                await PublishMemberAddedAsync(batch, runbook, newMemberId, memberKey);
+                await _memberRepo.SetAddDispatchedAsync(newMemberId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to dispatch member-added for {MemberKey} in batch {BatchId}",
+                    memberKey, id);
+            }
         }
 
         _logger.LogInformation(
@@ -210,6 +233,21 @@ public class MemberManagementFunction
 
         await _memberRepo.MarkRemovedAsync(memberId);
 
+        // Dispatch member-removed message to orchestrator (best-effort)
+        var runbook = await _runbookRepo.GetByIdAsync(batch.RunbookId);
+        if (runbook is not null)
+        {
+            try
+            {
+                await PublishMemberRemovedAsync(batch, runbook, memberId, member.MemberKey);
+                await _memberRepo.SetRemoveDispatchedAsync(memberId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to dispatch member-removed for member {MemberId}", memberId);
+            }
+        }
+
         _logger.LogInformation("Removed member {MemberId} from batch {BatchId}", memberId, batchId);
 
         return new OkObjectResult(new
@@ -218,5 +256,45 @@ public class MemberManagementFunction
             batchId,
             memberId
         });
+    }
+
+    private async Task PublishMemberAddedAsync(
+        BatchRecord batch, RunbookRecord runbook, int batchMemberId, string memberKey)
+    {
+        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
+        var message = new MemberAddedMessage
+        {
+            RunbookName = runbook.Name,
+            RunbookVersion = runbook.Version,
+            BatchId = batch.Id,
+            BatchMemberId = batchMemberId,
+            MemberKey = memberKey
+        };
+        var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))
+        {
+            ContentType = "application/json"
+        };
+        sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
+        await sender.SendMessageAsync(sbMessage);
+    }
+
+    private async Task PublishMemberRemovedAsync(
+        BatchRecord batch, RunbookRecord runbook, int batchMemberId, string memberKey)
+    {
+        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
+        var message = new MemberRemovedMessage
+        {
+            RunbookName = runbook.Name,
+            RunbookVersion = runbook.Version,
+            BatchId = batch.Id,
+            BatchMemberId = batchMemberId,
+            MemberKey = memberKey
+        };
+        var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))
+        {
+            ContentType = "application/json"
+        };
+        sbMessage.ApplicationProperties["MessageType"] = message.MessageType;
+        await sender.SendMessageAsync(sbMessage);
     }
 }
