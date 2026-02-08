@@ -114,6 +114,7 @@ dotnet run --project src/automation/admin-cli/src/AdminCli/ -- --help
 # Run all tests
 dotnet test src/automation/shared/MaToolkit.Automation.Shared.Tests/
 dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/
+dotnet test src/automation/orchestrator/tests/Orchestrator.Functions.Tests/
 dotnet test src/automation/admin-cli/tests/AdminCli.Tests/
 
 # Run with verbose output

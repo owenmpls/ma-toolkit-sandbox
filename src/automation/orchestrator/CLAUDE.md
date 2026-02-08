@@ -10,6 +10,9 @@ C# Azure Functions project using the **isolated worker model** (.NET 8, Function
 # Build
 dotnet build src/automation/orchestrator/src/Orchestrator.Functions/
 
+# Run tests (33 tests)
+dotnet test src/automation/orchestrator/tests/Orchestrator.Functions.Tests/
+
 # Run locally (requires Azure Functions Core Tools v4)
 cd src/automation/orchestrator/src/Orchestrator.Functions && func start
 
@@ -75,13 +78,22 @@ orchestrator/
           PhaseExecutionRepository.cs # Status updates, completion tracking
           StepExecutionRepository.cs  # Full lifecycle: dispatched, succeeded, failed, polling
           InitExecutionRepository.cs  # Full lifecycle for init steps
+        PhaseProgressionService.cs    # Per-member step/phase/batch progression + failure handling
         Handlers/
           BatchInitHandler.cs         # Process batch-init: dispatch init steps sequentially
-          PhaseDueHandler.cs          # Process phase-due: dispatch steps by index
+          PhaseDueHandler.cs          # Process phase-due: per-member step dispatch
           MemberAddedHandler.cs       # Process member-added: create catch-up steps
           MemberRemovedHandler.cs     # Process member-removed: cancel pending, run cleanup
-          PollCheckHandler.cs         # Process poll-check: timeout check, re-dispatch
-          ResultProcessor.cs          # Process worker results: update status, advance progression
+          PollCheckHandler.cs         # Process poll-check: timeout check, re-dispatch, member failure
+          ResultProcessor.cs          # Process worker results: update status, advance member progression
+  tests/
+    Orchestrator.Functions.Tests/
+      Orchestrator.Functions.Tests.csproj
+      Services/
+        PhaseProgressionServiceTests.cs   # 20 tests: member progression, failure, phase/batch completion
+        Handlers/
+          ResultProcessorTests.cs         # 5 tests: success/failure routing, terminal guard
+          PhaseDueHandlerTests.cs         # 7 tests: per-member dispatch, mixed progress, edge cases
 ```
 
 ## NuGet Packages
@@ -119,8 +131,17 @@ orchestrator/
 ### Step Execution Model
 
 - **Init steps**: Execute sequentially (one at a time) within a batch
-- **Phase steps**: Group by `step_index`, execute all members in parallel at each index
-- **Step indices**: Steps at index N must all complete before index N+1 starts
+- **Phase steps**: Per-member independent progression — each member advances through steps at their own pace
+- **Member isolation**: A failed member is marked `failed`, all their remaining steps (across all phases) are cancelled, and healthy members continue unblocked
+
+### Per-Member Progression (`PhaseProgressionService`)
+
+The `PhaseProgressionService` centralizes all progression logic, used by `ResultProcessor`, `PhaseDueHandler`, and `PollCheckHandler`:
+
+- **`CheckMemberProgressionAsync`** — After a step succeeds, walks that member's steps in order and dispatches their next pending step. Each member progresses independently.
+- **`HandleMemberFailureAsync`** — After a step fails or poll times out, marks the member as `failed` and cancels all their non-terminal steps across ALL phases. Then checks if the phase is complete.
+- **`CheckPhaseCompletionAsync`** — When all steps in a phase are terminal: marks phase `Completed` if at least one member fully succeeded, or `Failed` if no member did.
+- **`CheckBatchCompletionAsync`** — When all phases are terminal: marks batch `Completed` if at least one phase completed, or `Failed` if none did.
 
 ### Polling Convention
 
@@ -141,11 +162,21 @@ Orchestrator checks `Result.complete` to determine if step is still polling.
 **Batch statuses:**
 - `detected` → `init_dispatched` → `active` → `completed` / `failed`
 
+**Member statuses:**
+- `active` → `removed` (removed from batch) / `failed` (step failure isolated this member)
+
 **Phase execution statuses:**
-- `pending` → `dispatched` → `completed` / `failed` / `skipped`
+- `pending` → `dispatched` → `completed` (≥1 member succeeded) / `failed` (no member succeeded) / `skipped`
 
 **Step execution statuses:**
 - `pending` → `dispatched` → `succeeded` / `failed` / `polling` → `poll_timeout` / `cancelled`
+
+### Race Condition Safety
+
+- **Two results arrive simultaneously for same phase:** Both call `CheckPhaseCompletionAsync`, both query all steps. Only one sees all steps terminal. `SetCompletedAsync`/`SetFailedAsync` use `WHERE status = 'dispatched'` guard — only one call succeeds.
+- **Member failure + step success for same member:** `SetFailedAsync` on member uses `WHERE status = 'active'` — idempotent. `SetCancelledAsync` on steps uses status guards — won't cancel already-succeeded steps.
+- **Duplicate phase-due messages:** `PhaseDueHandler` is idempotent — step creation checks for existing steps, dispatch only targets `pending` steps.
+- **Result for already-cancelled step:** `ResultProcessor` has a terminal-state guard — ignores results for steps already in terminal status.
 
 ## Configuration
 
@@ -166,6 +197,7 @@ Service Bus connection uses DefaultAzureCredential:
 
 **Orchestrator writes to:**
 - `batches.status` (active, completed, failed)
+- `batch_members.status` (failed), `batch_members.failed_at`
 - `phase_executions.status`, `completed_at`
 - `step_executions.*` (status, job_id, result_json, error_message, timestamps, polling fields)
 - `init_executions.*` (same fields)
