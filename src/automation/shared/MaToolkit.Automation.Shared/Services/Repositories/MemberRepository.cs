@@ -80,6 +80,16 @@ public class MemberRepository : IMemberRepository
             new { Id = id });
     }
 
+    public async Task<bool> SetFailedAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.ExecuteAsync(
+            @"UPDATE batch_members SET status = @Status, failed_at = SYSUTCDATETIME()
+              WHERE id = @Id AND status = @ExpectedStatus",
+            new { Id = id, Status = MemberStatus.Failed, ExpectedStatus = MemberStatus.Active });
+        return rows > 0;
+    }
+
     public async Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey)
     {
         using var conn = _db.CreateConnection();

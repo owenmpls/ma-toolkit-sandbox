@@ -61,8 +61,16 @@ public class StepExecutionRepository : IStepExecutionRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryAsync<StepExecutionRecord>(
-            "SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN (@Pending, @Dispatched)",
-            new { BatchMemberId = batchMemberId, Pending = StepStatus.Pending, Dispatched = StepStatus.Dispatched });
+            "SELECT * FROM step_executions WHERE batch_member_id = @BatchMemberId AND status IN (@Pending, @Dispatched, @Polling)",
+            new { BatchMemberId = batchMemberId, Pending = StepStatus.Pending, Dispatched = StepStatus.Dispatched, Polling = StepStatus.Polling });
+    }
+
+    public async Task<IEnumerable<StepExecutionRecord>> GetByPhaseAndMemberAsync(int phaseExecutionId, int batchMemberId)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<StepExecutionRecord>(
+            "SELECT * FROM step_executions WHERE phase_execution_id = @PhaseExecutionId AND batch_member_id = @BatchMemberId ORDER BY step_index",
+            new { PhaseExecutionId = phaseExecutionId, BatchMemberId = batchMemberId });
     }
 
     public async Task<IEnumerable<StepExecutionRecord>> GetPollingStepsDueAsync(DateTime now)

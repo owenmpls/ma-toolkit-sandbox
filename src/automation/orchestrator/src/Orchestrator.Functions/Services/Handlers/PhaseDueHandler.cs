@@ -27,6 +27,7 @@ public class PhaseDueHandler : IPhaseDueHandler
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
     private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IPhaseProgressionService _progressionService;
     private readonly IDbConnectionFactory _db;
     private readonly ILogger<PhaseDueHandler> _logger;
 
@@ -41,6 +42,7 @@ public class PhaseDueHandler : IPhaseDueHandler
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
         IDynamicTableReader dynamicTableReader,
+        IPhaseProgressionService progressionService,
         IDbConnectionFactory db,
         ILogger<PhaseDueHandler> logger)
     {
@@ -54,6 +56,7 @@ public class PhaseDueHandler : IPhaseDueHandler
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
         _dynamicTableReader = dynamicTableReader;
+        _progressionService = progressionService;
         _db = db;
         _logger = logger;
     }
@@ -82,7 +85,7 @@ public class PhaseDueHandler : IPhaseDueHandler
         // Create step executions for this phase (idempotent — skips if steps already exist)
         await CreateStepExecutionsAsync(message, phaseExecution);
 
-        // Get all step executions for this phase grouped by step_index
+        // Get all step executions for this phase
         var allSteps = (await _stepRepo.GetByPhaseExecutionAsync(message.PhaseExecutionId))
             .OrderBy(s => s.StepIndex)
             .ThenBy(s => s.Id)
@@ -90,102 +93,106 @@ public class PhaseDueHandler : IPhaseDueHandler
 
         if (allSteps.Count == 0)
         {
-            _logger.LogInformation(
-                "No step executions for phase {PhaseExecutionId}, marking complete",
-                message.PhaseExecutionId);
-            var completedEmpty = await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
-            if (!completedEmpty)
-                _logger.LogWarning("Phase {PhaseExecutionId} was not in dispatched status when marking complete", message.PhaseExecutionId);
-            await CheckBatchCompletionAsync(message.BatchId);
+            // No steps — check if all members are failed, otherwise mark complete
+            var activeMembers = await _memberRepo.GetActiveByBatchAsync(message.BatchId);
+            if (!activeMembers.Any())
+            {
+                _logger.LogWarning(
+                    "No step executions and no active members for phase {PhaseExecutionId}, marking failed",
+                    message.PhaseExecutionId);
+                await _phaseRepo.SetFailedAsync(message.PhaseExecutionId);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "No step executions for phase {PhaseExecutionId}, marking complete",
+                    message.PhaseExecutionId);
+                await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
+            }
+            await _progressionService.CheckBatchCompletionAsync(message.BatchId);
             return;
         }
 
-        // Group steps by step_index
-        var stepGroups = allSteps.GroupBy(s => s.StepIndex).OrderBy(g => g.Key).ToList();
+        // Per-member dispatch: find each member's next dispatchable step
+        var memberGroups = allSteps.GroupBy(s => s.BatchMemberId).ToList();
+        var jobsToDispatch = new List<(StepExecutionRecord Step, WorkerJobMessage Job)>();
 
-        // Find the first step_index that has pending steps
-        foreach (var group in stepGroups)
+        foreach (var memberSteps in memberGroups)
         {
-            var stepIndex = group.Key;
-            var stepsAtIndex = group.ToList();
+            var steps = memberSteps.OrderBy(s => s.StepIndex).ToList();
 
-            // Check if there are any pending steps at this index
-            var pendingSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Pending).ToList();
-            if (pendingSteps.Count == 0)
+            // Find this member's next pending step where all prior steps succeeded
+            StepExecutionRecord? nextPending = null;
+            var allPriorSucceeded = true;
+
+            foreach (var step in steps)
             {
-                // All steps at this index are dispatched/completed/failed
-                // Check if any are still in progress
-                var inProgressSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Dispatched || s.Status == StepStatus.Polling).ToList();
-                if (inProgressSteps.Count > 0)
+                if (step.Status == StepStatus.Pending && allPriorSucceeded)
                 {
-                    _logger.LogInformation(
-                        "Waiting for {Count} in-progress steps at index {StepIndex} for phase {PhaseExecutionId}",
-                        inProgressSteps.Count, stepIndex, message.PhaseExecutionId);
-                    return; // Wait for them to complete before proceeding to next index
+                    nextPending = step;
+                    break;
                 }
-
-                // Check if any failed
-                var failedSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Failed || s.Status == StepStatus.PollTimeout).ToList();
-                if (failedSteps.Count > 0)
+                else if (step.Status is StepStatus.Dispatched or StepStatus.Polling)
                 {
-                    _logger.LogWarning(
-                        "{Count} steps failed at index {StepIndex} for phase {PhaseExecutionId}",
-                        failedSteps.Count, stepIndex, message.PhaseExecutionId);
-                    // Continue to check for rollback handling in ResultProcessor
+                    // Member has an in-progress step — skip
+                    break;
                 }
-
-                continue; // Move to next index
+                else if (step.Status == StepStatus.Succeeded)
+                {
+                    continue;
+                }
+                else
+                {
+                    // Failed/cancelled/poll_timeout — member already handled
+                    allPriorSucceeded = false;
+                    break;
+                }
             }
 
-            // Dispatch all pending steps at this index in parallel
-            _logger.LogInformation(
-                "Dispatching {Count} steps at index {StepIndex} for phase {PhaseExecutionId}",
-                pendingSteps.Count, stepIndex, message.PhaseExecutionId);
-
-            var jobs = new List<WorkerJobMessage>();
-            foreach (var step in pendingSteps)
+            if (nextPending != null)
             {
                 var job = new WorkerJobMessage
                 {
-                    JobId = $"step-{step.Id}",
+                    JobId = $"step-{nextPending.Id}",
                     BatchId = message.BatchId,
-                    WorkerId = step.WorkerId!,
-                    FunctionName = step.FunctionName!,
-                    Parameters = string.IsNullOrEmpty(step.ParamsJson)
+                    WorkerId = nextPending.WorkerId!,
+                    FunctionName = nextPending.FunctionName!,
+                    Parameters = string.IsNullOrEmpty(nextPending.ParamsJson)
                         ? new Dictionary<string, string>()
-                        : JsonSerializer.Deserialize<Dictionary<string, string>>(step.ParamsJson) ?? new(),
+                        : JsonSerializer.Deserialize<Dictionary<string, string>>(nextPending.ParamsJson) ?? new(),
                     CorrelationData = new JobCorrelationData
                     {
-                        StepExecutionId = step.Id,
+                        StepExecutionId = nextPending.Id,
                         IsInitStep = false,
                         RunbookName = message.RunbookName,
                         RunbookVersion = message.RunbookVersion
                     }
                 };
-                jobs.Add(job);
+                jobsToDispatch.Add((nextPending, job));
             }
+        }
 
-            await _workerDispatcher.DispatchJobsAsync(jobs);
+        if (jobsToDispatch.Count > 0)
+        {
+            _logger.LogInformation(
+                "Dispatching {Count} steps for {MemberCount} members in phase {PhaseExecutionId}",
+                jobsToDispatch.Count, jobsToDispatch.Count, message.PhaseExecutionId);
 
-            // Update step statuses
-            foreach (var (step, job) in pendingSteps.Zip(jobs))
+            await _workerDispatcher.DispatchJobsAsync(jobsToDispatch.Select(x => x.Job));
+
+            foreach (var (step, job) in jobsToDispatch)
             {
                 await _stepRepo.SetDispatchedAsync(step.Id, job.JobId);
             }
 
+            // Set phase to dispatched if still pending
             await _phaseRepo.SetDispatchedAsync(message.PhaseExecutionId);
-
-            return; // Only dispatch one step_index at a time
         }
-
-        // All step indices processed, phase is complete
-        _logger.LogInformation(
-            "All steps completed for phase {PhaseExecutionId}, marking complete",
-            message.PhaseExecutionId);
-        var completed = await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
-        if (!completed)
-            _logger.LogWarning("Phase {PhaseExecutionId} was not in dispatched status when marking complete", message.PhaseExecutionId);
-        await CheckBatchCompletionAsync(message.BatchId);
+        else
+        {
+            // No steps to dispatch — re-delivery or all members terminal
+            await _progressionService.CheckPhaseCompletionAsync(message.PhaseExecutionId);
+        }
     }
 
     private async Task CreateStepExecutionsAsync(PhaseDueMessage message, PhaseExecutionRecord phase)
@@ -290,24 +297,4 @@ public class PhaseDueHandler : IPhaseDueHandler
         }
     }
 
-    private async Task CheckBatchCompletionAsync(int batchId)
-    {
-        var phases = await _phaseRepo.GetByBatchAsync(batchId);
-        var allCompleted = phases.All(p =>
-            p.Status == PhaseStatus.Completed ||
-            p.Status == PhaseStatus.Skipped ||
-            p.Status == PhaseStatus.Superseded);
-        var anyFailed = phases.Any(p => p.Status == PhaseStatus.Failed);
-
-        if (anyFailed)
-        {
-            _logger.LogWarning("Batch {BatchId} has failed phases", batchId);
-            await _batchRepo.SetFailedAsync(batchId);
-        }
-        else if (allCompleted)
-        {
-            _logger.LogInformation("All phases completed for batch {BatchId}, marking batch complete", batchId);
-            await _batchRepo.SetCompletedAsync(batchId);
-        }
-    }
 }

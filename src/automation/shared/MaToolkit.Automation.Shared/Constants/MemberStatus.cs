@@ -7,4 +7,5 @@ public static class MemberStatus
 {
     public const string Active = "active";
     public const string Removed = "removed";
+    public const string Failed = "failed";
 }

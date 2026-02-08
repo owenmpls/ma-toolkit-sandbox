@@ -10,6 +10,7 @@ public class BatchMemberRecord
     public string Status { get; set; } = MemberStatus.Active;
     public DateTime AddedAt { get; set; }
     public DateTime? RemovedAt { get; set; }
+    public DateTime? FailedAt { get; set; }
     public DateTime? AddDispatchedAt { get; set; }
     public DateTime? RemoveDispatchedAt { get; set; }
 }

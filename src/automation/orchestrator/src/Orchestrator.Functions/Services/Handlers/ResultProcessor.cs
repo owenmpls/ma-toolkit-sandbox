@@ -23,6 +23,7 @@ public class ResultProcessor : IResultProcessor
     private readonly IWorkerDispatcher _workerDispatcher;
     private readonly IRollbackExecutor _rollbackExecutor;
     private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IPhaseProgressionService _progressionService;
     private readonly ILogger<ResultProcessor> _logger;
 
     public ResultProcessor(
@@ -35,6 +36,7 @@ public class ResultProcessor : IResultProcessor
         IWorkerDispatcher workerDispatcher,
         IRollbackExecutor rollbackExecutor,
         IDynamicTableReader dynamicTableReader,
+        IPhaseProgressionService progressionService,
         ILogger<ResultProcessor> logger)
     {
         _stepRepo = stepRepo;
@@ -46,6 +48,7 @@ public class ResultProcessor : IResultProcessor
         _workerDispatcher = workerDispatcher;
         _rollbackExecutor = rollbackExecutor;
         _dynamicTableReader = dynamicTableReader;
+        _progressionService = progressionService;
         _logger = logger;
     }
 
@@ -147,12 +150,24 @@ public class ResultProcessor : IResultProcessor
         }
     }
 
+    private static bool IsTerminalStepStatus(string status) =>
+        status is StepStatus.Succeeded or StepStatus.Failed or StepStatus.PollTimeout or StepStatus.Cancelled;
+
     private async Task ProcessStepResultAsync(WorkerResultMessage result, JobCorrelationData correlation)
     {
         var stepExec = await _stepRepo.GetByIdAsync(correlation.StepExecutionId!.Value);
         if (stepExec == null)
         {
             _logger.LogWarning("Step execution {StepExecutionId} not found", correlation.StepExecutionId);
+            return;
+        }
+
+        // Guard: if step is already terminal, ignore this result (e.g. result for a cancelled step)
+        if (IsTerminalStepStatus(stepExec.Status))
+        {
+            _logger.LogInformation(
+                "Step execution {StepExecutionId} already in terminal status '{Status}', ignoring result",
+                stepExec.Id, stepExec.Status);
             return;
         }
 
@@ -192,8 +207,10 @@ public class ResultProcessor : IResultProcessor
                 "Step execution {StepExecutionId} succeeded",
                 stepExec.Id);
 
-            // Check if we need to advance to next step_index or complete the phase
-            await CheckPhaseProgressionAsync(stepExec.PhaseExecutionId, correlation.RunbookName, correlation.RunbookVersion);
+            // Advance this member to the next step (per-member progression)
+            await _progressionService.CheckMemberProgressionAsync(
+                stepExec.PhaseExecutionId, stepExec.BatchMemberId,
+                correlation.RunbookName, correlation.RunbookVersion);
         }
         else
         {
@@ -212,7 +229,6 @@ public class ResultProcessor : IResultProcessor
             // Trigger rollback if configured
             if (!string.IsNullOrEmpty(stepExec.OnFailure))
             {
-                // Get phase execution to find batch ID
                 var phaseExec = await _phaseRepo.GetByIdAsync(stepExec.PhaseExecutionId);
                 if (phaseExec != null)
                 {
@@ -220,6 +236,10 @@ public class ResultProcessor : IResultProcessor
                         phaseExec.BatchId, stepExec.BatchMemberId, null);
                 }
             }
+
+            // Handle member failure: mark member failed, cancel remaining steps, check phase completion
+            await _progressionService.HandleMemberFailureAsync(
+                stepExec.PhaseExecutionId, stepExec.BatchMemberId);
         }
     }
 
@@ -263,117 +283,6 @@ public class ResultProcessor : IResultProcessor
         _logger.LogInformation(
             "Dispatched next init step '{StepName}' (job {JobId}) for batch {BatchId}",
             nextStep.StepName, job.JobId, batchId);
-    }
-
-    private async Task CheckPhaseProgressionAsync(int phaseExecutionId, string runbookName, int runbookVersion)
-    {
-        var allSteps = (await _stepRepo.GetByPhaseExecutionAsync(phaseExecutionId))
-            .OrderBy(s => s.StepIndex)
-            .ThenBy(s => s.Id)
-            .ToList();
-
-        // Group by step_index
-        var stepGroups = allSteps.GroupBy(s => s.StepIndex).OrderBy(g => g.Key).ToList();
-
-        foreach (var group in stepGroups)
-        {
-            var stepIndex = group.Key;
-            var stepsAtIndex = group.ToList();
-
-            var pendingSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Pending).ToList();
-            var inProgressSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Dispatched || s.Status == StepStatus.Polling).ToList();
-            var succeededSteps = stepsAtIndex.Where(s => s.Status == StepStatus.Succeeded).ToList();
-
-            // If there are pending steps at this index, dispatch them
-            if (pendingSteps.Count > 0)
-            {
-                _logger.LogInformation(
-                    "Dispatching {Count} pending steps at index {StepIndex} for phase {PhaseExecutionId}",
-                    pendingSteps.Count, stepIndex, phaseExecutionId);
-
-                // Get batch ID from phase (once, outside loop)
-                var phase = await _phaseRepo.GetByIdAsync(phaseExecutionId);
-                var batchId = phase?.BatchId ?? 0;
-
-                foreach (var step in pendingSteps)
-                {
-                    var job = new WorkerJobMessage
-                    {
-                        JobId = $"step-{step.Id}",
-                        BatchId = batchId,
-                        WorkerId = step.WorkerId!,
-                        FunctionName = step.FunctionName!,
-                        Parameters = string.IsNullOrEmpty(step.ParamsJson)
-                            ? new Dictionary<string, string>()
-                            : JsonSerializer.Deserialize<Dictionary<string, string>>(step.ParamsJson) ?? new(),
-                        CorrelationData = new JobCorrelationData
-                        {
-                            StepExecutionId = step.Id,
-                            IsInitStep = false,
-                            RunbookName = runbookName,
-                            RunbookVersion = runbookVersion
-                        }
-                    };
-
-                    await _workerDispatcher.DispatchJobAsync(job);
-                    await _stepRepo.SetDispatchedAsync(step.Id, job.JobId);
-                }
-                return;
-            }
-
-            // If there are in-progress steps at this index, wait
-            if (inProgressSteps.Count > 0)
-            {
-                _logger.LogDebug(
-                    "Waiting for {Count} in-progress steps at index {StepIndex} for phase {PhaseExecutionId}",
-                    inProgressSteps.Count, stepIndex, phaseExecutionId);
-                return;
-            }
-
-            // If not all steps at this index succeeded, there was a failure - don't proceed
-            if (succeededSteps.Count != stepsAtIndex.Count)
-            {
-                _logger.LogWarning(
-                    "Not all steps succeeded at index {StepIndex} for phase {PhaseExecutionId} ({Succeeded}/{Total})",
-                    stepIndex, phaseExecutionId, succeededSteps.Count, stepsAtIndex.Count);
-                // Don't mark phase as failed here - individual step handlers should handle that
-                return;
-            }
-
-            // All steps at this index succeeded, continue to next index
-        }
-
-        // All steps completed - mark phase as completed
-        _logger.LogInformation("All steps completed for phase {PhaseExecutionId}", phaseExecutionId);
-        await _phaseRepo.SetCompletedAsync(phaseExecutionId);
-
-        // Check if batch is complete
-        var phaseExec = await _phaseRepo.GetByIdAsync(phaseExecutionId);
-        if (phaseExec != null)
-        {
-            await CheckBatchCompletionAsync(phaseExec.BatchId);
-        }
-    }
-
-    private async Task CheckBatchCompletionAsync(int batchId)
-    {
-        var phases = await _phaseRepo.GetByBatchAsync(batchId);
-        var allCompleted = phases.All(p =>
-            p.Status == PhaseStatus.Completed ||
-            p.Status == PhaseStatus.Skipped ||
-            p.Status == PhaseStatus.Superseded);
-        var anyFailed = phases.Any(p => p.Status == PhaseStatus.Failed);
-
-        if (anyFailed)
-        {
-            _logger.LogWarning("Batch {BatchId} has failed phases", batchId);
-            await _batchRepo.SetFailedAsync(batchId);
-        }
-        else if (allCompleted)
-        {
-            _logger.LogInformation("All phases completed for batch {BatchId}, marking batch complete", batchId);
-            await _batchRepo.SetCompletedAsync(batchId);
-        }
     }
 
     private async Task TriggerRollbackAsync(string rollbackName, string runbookName, int runbookVersion, int batchId, int? batchMemberId, System.Data.DataRow? memberData)

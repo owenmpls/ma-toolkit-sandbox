@@ -21,6 +21,7 @@ public class PollCheckHandler : IPollCheckHandler
     private readonly IRollbackExecutor _rollbackExecutor;
     private readonly IRunbookRepository _runbookRepo;
     private readonly IRunbookParser _runbookParser;
+    private readonly IPhaseProgressionService _progressionService;
     private readonly ILogger<PollCheckHandler> _logger;
 
     public PollCheckHandler(
@@ -31,6 +32,7 @@ public class PollCheckHandler : IPollCheckHandler
         IRollbackExecutor rollbackExecutor,
         IRunbookRepository runbookRepo,
         IRunbookParser runbookParser,
+        IPhaseProgressionService progressionService,
         ILogger<PollCheckHandler> logger)
     {
         _stepRepo = stepRepo;
@@ -40,6 +42,7 @@ public class PollCheckHandler : IPollCheckHandler
         _rollbackExecutor = rollbackExecutor;
         _runbookRepo = runbookRepo;
         _runbookParser = runbookParser;
+        _progressionService = progressionService;
         _logger = logger;
     }
 
@@ -159,6 +162,10 @@ public class PollCheckHandler : IPollCheckHandler
                 {
                     await TriggerRollbackAsync(step.OnFailure, message.RunbookName, message.RunbookVersion, message.BatchId);
                 }
+
+                // Handle member failure: mark member failed, cancel remaining steps, check phase completion
+                await _progressionService.HandleMemberFailureAsync(
+                    step.PhaseExecutionId, step.BatchMemberId);
                 return;
             }
         }

@@ -55,10 +55,11 @@ CREATE TABLE batch_members (
     status                  NVARCHAR(32) NOT NULL DEFAULT 'active',
     added_at                DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     removed_at              DATETIME2,
+    failed_at               DATETIME2,
     add_dispatched_at       DATETIME2,
     remove_dispatched_at    DATETIME2,
     CONSTRAINT UQ_batch_member UNIQUE (batch_id, member_key),
-    CONSTRAINT CK_member_status CHECK (status IN ('active', 'removed'))
+    CONSTRAINT CK_member_status CHECK (status IN ('active', 'removed', 'failed'))
 );
 
 -- Phase execution tracking (one per batch + phase + runbook version)
@@ -103,7 +104,7 @@ CREATE TABLE step_executions (
     CONSTRAINT UQ_step_exec UNIQUE (phase_execution_id, batch_member_id, step_name),
     CONSTRAINT CK_step_status CHECK (status IN (
         'pending', 'dispatched', 'succeeded', 'failed',
-        'polling', 'poll_timeout', 'rolled_back', 'skipped'))
+        'polling', 'poll_timeout', 'cancelled', 'rolled_back', 'skipped'))
 );
 
 -- Batch init step execution tracking

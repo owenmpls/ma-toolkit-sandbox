@@ -12,5 +12,6 @@ public interface IMemberRepository
     Task MarkRemovedAsync(int id);
     Task SetAddDispatchedAsync(int id);
     Task SetRemoveDispatchedAsync(int id);
+    Task<bool> SetFailedAsync(int id);
     Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey);
 }

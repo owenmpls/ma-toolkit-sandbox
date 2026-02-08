@@ -43,6 +43,9 @@ builder.Services.AddScoped<IDynamicTableReader, DynamicTableReader>();
 builder.Services.AddScoped<IWorkerDispatcher, WorkerDispatcher>();
 builder.Services.AddScoped<IRollbackExecutor, RollbackExecutor>();
 
+// Progression service
+builder.Services.AddScoped<IPhaseProgressionService, PhaseProgressionService>();
+
 // Message handlers
 builder.Services.AddScoped<IBatchInitHandler, BatchInitHandler>();
 builder.Services.AddScoped<IPhaseDueHandler, PhaseDueHandler>();
