@@ -202,6 +202,14 @@ function Get-RunspaceAuthScriptBlock {
             ErrorAction  = 'Stop'
         }
         Connect-ExchangeOnline @exoParams
+
+        # Store auth config for mid-lifetime EXO token refresh
+        $global:EXOAuthConfig = @{
+            TenantId  = $TenantId
+            AppId     = $AppId
+            AppSecret = $AppSecret
+        }
+        $global:EXOAuthTime = [DateTime]::UtcNow
     }
 
     return $authScript

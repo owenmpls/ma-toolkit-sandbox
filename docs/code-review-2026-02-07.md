@@ -153,21 +153,24 @@ Updated `schema.sql` to match the C# models:
 - **File**: `src/automation/admin-api/src/AdminApi.Functions/Program.cs:48-54`
 - **Resolution**: Made `ServiceBusNamespace` required with `[Required]` annotation (caught by `ValidateOnStart`). Made `ServiceBusClient` non-nullable in DI and `ManualBatchService`. Removed null guards — publish calls are now unconditional. Additionally moved step creation from scheduler's `PhaseDispatcher` into orchestrator's `PhaseDueHandler`, so both scheduler and admin-api are thin dispatchers that send `PhaseDueMessage` and the orchestrator owns all step creation, template resolution, and worker dispatch.
 
-### 4.4 Scheduler: unresolved template variables passed silently to workers
+### 4.4 Scheduler: unresolved template variables passed silently to workers — **FIXED**
 - `TemplateResolver.cs`: If a `{{column}}` doesn't match query data, the literal `{{column}}` string is sent to the worker
 - **Fix**: Either throw or mark the step as failed instead of dispatching bad parameters
 - **File**: `src/automation/shared/.../Services/TemplateResolver.cs`
+- **Resolution**: `TemplateResolver` now throws on unresolved `{{column}}` variables instead of passing literal placeholders to workers.
 
-### 4.5 Scheduler: YAML parse errors silently skip runbook
+### 4.5 Scheduler: YAML parse errors silently skip runbook — **FIXED**
 - `SchedulerTimerFunction.ProcessRunbookAsync()`: Generic catch logs error but continues
 - Operator may not notice a runbook is dead
 - **Fix**: Log at Critical severity; consider adding a "last_error" field to the runbook table
 - **File**: `src/automation/scheduler/src/Scheduler.Functions/Functions/SchedulerTimerFunction.cs`
+- **Resolution**: Processing errors now surface on the runbook record — `last_error` and `last_error_time` columns added to `runbooks` table, set on processing failure, cleared on success. Logged at Error severity with full exception details.
 
-### 4.6 Cloud-worker: app secret never refreshed
-- Secret fetched once at startup, used for the entire worker lifetime
+### 4.6 Cloud-worker: EXO access token never refreshed — **FIXED**
+- EXO connected via `Connect-ExchangeOnline -AccessToken` with a pre-fetched OAuth token that expires in ~60 minutes; nothing refreshed it during worker lifetime
 - **Fix**: Add periodic refresh (e.g., every 10 minutes) or catch 401 errors and refresh on demand
-- **File**: `src/automation/cloud-worker/src/worker.ps1:84-91`
+- **File**: `src/automation/cloud-worker/src/auth.ps1`, `src/automation/cloud-worker/src/runspace-manager.ps1`
+- **Resolution**: Auth config stored in runspace globals (`$global:EXOAuthConfig`, `$global:EXOAuthTime`) during init. `Refresh-EXOConnection` inline function in execution script fetches a new OAuth token and reconnects EXO. Proactive refresh before each job (at 45 min threshold). Reactive refresh on auth errors (401/Unauthorized/expired) in the retry loop.
 
 ### 4.7 Cloud-worker: idle timeout can fire mid-job
 - `job-dispatcher.ps1`: `lastActivityTime` resets on message receipt, but if a job runs longer than the idle timeout (300s default), the worker exits while the job is still in-flight
@@ -247,9 +250,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 18 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.10, 4.11)
+- **Fixed**: 21 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.10, 4.11)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 15 items (4.4–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 12 items (4.7–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 

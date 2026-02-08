@@ -165,6 +165,35 @@ function Invoke-InRunspace {
     $executionScript = {
         param($FunctionName, $Parameters, $MaxRetries, $BaseDelaySeconds, $MaxDelaySeconds)
 
+        # Inline helper: refresh EXO connection with a new OAuth token
+        function Refresh-EXOConnection {
+            $cfg = $global:EXOAuthConfig
+            $tokenUrl = 'https://login.microsoftonline.com/{0}/oauth2/v2.0/token' -f $cfg.TenantId
+            $body = @{
+                client_id     = $cfg.AppId
+                client_secret = $cfg.AppSecret
+                scope         = 'https://outlook.office365.com/.default'
+                grant_type    = 'client_credentials'
+            }
+            $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType 'application/x-www-form-urlencoded' -ErrorAction Stop
+            $exoParams = @{
+                AccessToken  = $response.access_token
+                Organization = $cfg.TenantId
+                ShowBanner   = $false
+                ErrorAction  = 'Stop'
+            }
+            Connect-ExchangeOnline @exoParams
+            $global:EXOAuthTime = [DateTime]::UtcNow
+        }
+
+        # Proactive EXO token refresh (tokens expire after ~60 min, refresh at 45 min)
+        if ($global:EXOAuthConfig -and $global:EXOAuthTime) {
+            $minutesSinceAuth = ([DateTime]::UtcNow - $global:EXOAuthTime).TotalMinutes
+            if ($minutesSinceAuth -ge 45) {
+                try { Refresh-EXOConnection } catch { }
+            }
+        }
+
         $attempt = 0
         while ($true) {
             $attempt++
@@ -179,6 +208,21 @@ function Invoke-InRunspace {
             catch {
                 $ex = $_.Exception
                 $message = "$($ex.Message) $($ex.InnerException.Message)"
+
+                # Check for auth errors — refresh EXO token and retry
+                $isAuthError = $false
+                $authPatterns = @('401', 'Unauthorized', 'token.*expired', 'Access token has expired')
+                foreach ($pattern in $authPatterns) {
+                    if ($message -match $pattern) {
+                        $isAuthError = $true
+                        break
+                    }
+                }
+
+                if ($isAuthError -and $global:EXOAuthConfig -and $attempt -lt $MaxRetries) {
+                    try { Refresh-EXOConnection } catch { }
+                    continue
+                }
 
                 # Check for throttling
                 $isThrottled = $false
