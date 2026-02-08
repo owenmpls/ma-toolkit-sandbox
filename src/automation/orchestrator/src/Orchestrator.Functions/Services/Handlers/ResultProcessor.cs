@@ -23,6 +23,7 @@ public class ResultProcessor : IResultProcessor
     private readonly IWorkerDispatcher _workerDispatcher;
     private readonly IRollbackExecutor _rollbackExecutor;
     private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IMemberRepository _memberRepo;
     private readonly IPhaseProgressionService _progressionService;
     private readonly ILogger<ResultProcessor> _logger;
 
@@ -36,6 +37,7 @@ public class ResultProcessor : IResultProcessor
         IWorkerDispatcher workerDispatcher,
         IRollbackExecutor rollbackExecutor,
         IDynamicTableReader dynamicTableReader,
+        IMemberRepository memberRepo,
         IPhaseProgressionService progressionService,
         ILogger<ResultProcessor> logger)
     {
@@ -48,6 +50,7 @@ public class ResultProcessor : IResultProcessor
         _workerDispatcher = workerDispatcher;
         _rollbackExecutor = rollbackExecutor;
         _dynamicTableReader = dynamicTableReader;
+        _memberRepo = memberRepo;
         _progressionService = progressionService;
         _logger = logger;
     }
@@ -145,7 +148,7 @@ public class ResultProcessor : IResultProcessor
             // Trigger rollback if configured
             if (!string.IsNullOrEmpty(initExec.OnFailure))
             {
-                await TriggerRollbackAsync(initExec.OnFailure, correlation.RunbookName, correlation.RunbookVersion, initExec.BatchId, null, null);
+                await TriggerRollbackAsync(initExec.OnFailure, correlation.RunbookName, correlation.RunbookVersion, initExec.BatchId, null);
             }
         }
     }
@@ -233,7 +236,7 @@ public class ResultProcessor : IResultProcessor
                 if (phaseExec != null)
                 {
                     await TriggerRollbackAsync(stepExec.OnFailure, correlation.RunbookName, correlation.RunbookVersion,
-                        phaseExec.BatchId, stepExec.BatchMemberId, null);
+                        phaseExec.BatchId, stepExec.BatchMemberId);
                 }
             }
 
@@ -285,7 +288,7 @@ public class ResultProcessor : IResultProcessor
             nextStep.StepName, job.JobId, batchId);
     }
 
-    private async Task TriggerRollbackAsync(string rollbackName, string runbookName, int runbookVersion, int batchId, int? batchMemberId, System.Data.DataRow? memberData)
+    private async Task TriggerRollbackAsync(string rollbackName, string runbookName, int runbookVersion, int batchId, int? batchMemberId)
     {
         var runbook = await _runbookRepo.GetByNameAndVersionAsync(runbookName, runbookVersion);
         if (runbook == null)
@@ -301,6 +304,21 @@ public class ResultProcessor : IResultProcessor
         {
             _logger.LogWarning("Batch {BatchId} not found for rollback", batchId);
             return;
+        }
+
+        // Load member data for per-member rollback template resolution
+        System.Data.DataRow? memberData = null;
+        if (batchMemberId.HasValue)
+        {
+            var member = await _memberRepo.GetByIdAsync(batchMemberId.Value);
+            if (member != null)
+            {
+                memberData = await _dynamicTableReader.GetMemberDataAsync(runbook.DataTableName, member.MemberKey);
+            }
+            else
+            {
+                _logger.LogWarning("Member {BatchMemberId} not found for rollback template resolution", batchMemberId.Value);
+            }
         }
 
         await _rollbackExecutor.ExecuteRollbackAsync(rollbackName, definition, batch, memberData, batchMemberId);

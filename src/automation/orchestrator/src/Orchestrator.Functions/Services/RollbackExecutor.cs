@@ -83,7 +83,7 @@ public class RollbackExecutor : IRollbackExecutor
 
                 var job = new WorkerJobMessage
                 {
-                    JobId = $"rollback-{batch.Id}-{rollbackName}-{stepIndex}",
+                    JobId = $"rollback-{batch.Id}-{batchMemberId?.ToString() ?? "batch"}-{rollbackName}-{stepIndex}",
                     BatchId = batch.Id,
                     WorkerId = step.WorkerId,
                     FunctionName = step.Function,

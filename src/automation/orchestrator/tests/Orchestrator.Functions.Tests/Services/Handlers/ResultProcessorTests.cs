@@ -24,6 +24,7 @@ public class ResultProcessorTests
     private readonly Mock<IWorkerDispatcher> _workerDispatcher = new();
     private readonly Mock<IRollbackExecutor> _rollbackExecutor = new();
     private readonly Mock<IDynamicTableReader> _dynamicTableReader = new();
+    private readonly Mock<IMemberRepository> _memberRepo = new();
     private readonly Mock<IPhaseProgressionService> _progressionService = new();
     private readonly ResultProcessor _sut;
 
@@ -39,6 +40,7 @@ public class ResultProcessorTests
             _workerDispatcher.Object,
             _rollbackExecutor.Object,
             _dynamicTableReader.Object,
+            _memberRepo.Object,
             _progressionService.Object,
             Mock.Of<ILogger<ResultProcessor>>());
     }
@@ -119,9 +121,58 @@ public class ResultProcessorTests
         _stepRepo.Setup(x => x.SetFailedAsync(1, It.IsAny<string>())).ReturnsAsync(true);
         _phaseRepo.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(new PhaseExecutionRecord { Id = 10, BatchId = 1 });
         _runbookRepo.Setup(x => x.GetByNameAndVersionAsync("runbook1", 1)).ReturnsAsync(
-            new RunbookRecord { Id = 1, Name = "runbook1", Version = 1, YamlContent = "test" });
+            new RunbookRecord { Id = 1, Name = "runbook1", Version = 1, YamlContent = "test", DataTableName = "runbook_runbook1_v1" });
         _runbookParser.Setup(x => x.Parse(It.IsAny<string>())).Returns(new MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition());
         _batchRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(new BatchRecord { Id = 1 });
+        _memberRepo.Setup(x => x.GetByIdAsync(100)).ReturnsAsync(new BatchMemberRecord { Id = 100, MemberKey = "test-key" });
+
+        var dataTable = new System.Data.DataTable();
+        dataTable.Columns.Add("MemberKey");
+        var row = dataTable.NewRow();
+        row["MemberKey"] = "test-key";
+        dataTable.Rows.Add(row);
+        _dynamicTableReader.Setup(x => x.GetMemberDataAsync("runbook_runbook1_v1", "test-key")).ReturnsAsync(row);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Failure,
+            Error = new WorkerErrorInfo { Message = "Error" },
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _rollbackExecutor.Verify(x => x.ExecuteRollbackAsync(
+            "rollback-step", It.IsAny<MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition>(),
+            It.IsAny<BatchRecord>(), It.IsAny<System.Data.DataRow>(), 100), Times.Once);
+        _progressionService.Verify(x => x.HandleMemberFailureAsync(10, 100), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessStepResult_Failure_WithRollback_MemberNotFound_PassesNullData()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            Status = StepStatus.Dispatched,
+            OnFailure = "rollback-step"
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetFailedAsync(1, It.IsAny<string>())).ReturnsAsync(true);
+        _phaseRepo.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(new PhaseExecutionRecord { Id = 10, BatchId = 1 });
+        _runbookRepo.Setup(x => x.GetByNameAndVersionAsync("runbook1", 1)).ReturnsAsync(
+            new RunbookRecord { Id = 1, Name = "runbook1", Version = 1, YamlContent = "test", DataTableName = "runbook_runbook1_v1" });
+        _runbookParser.Setup(x => x.Parse(It.IsAny<string>())).Returns(new MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition());
+        _batchRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(new BatchRecord { Id = 1 });
+        _memberRepo.Setup(x => x.GetByIdAsync(100)).ReturnsAsync((BatchMemberRecord?)null);
 
         var result = new WorkerResultMessage
         {

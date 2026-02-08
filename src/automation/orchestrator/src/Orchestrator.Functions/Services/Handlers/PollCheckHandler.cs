@@ -21,6 +21,8 @@ public class PollCheckHandler : IPollCheckHandler
     private readonly IRollbackExecutor _rollbackExecutor;
     private readonly IRunbookRepository _runbookRepo;
     private readonly IRunbookParser _runbookParser;
+    private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IMemberRepository _memberRepo;
     private readonly IPhaseProgressionService _progressionService;
     private readonly ILogger<PollCheckHandler> _logger;
 
@@ -32,6 +34,8 @@ public class PollCheckHandler : IPollCheckHandler
         IRollbackExecutor rollbackExecutor,
         IRunbookRepository runbookRepo,
         IRunbookParser runbookParser,
+        IDynamicTableReader dynamicTableReader,
+        IMemberRepository memberRepo,
         IPhaseProgressionService progressionService,
         ILogger<PollCheckHandler> logger)
     {
@@ -42,6 +46,8 @@ public class PollCheckHandler : IPollCheckHandler
         _rollbackExecutor = rollbackExecutor;
         _runbookRepo = runbookRepo;
         _runbookParser = runbookParser;
+        _dynamicTableReader = dynamicTableReader;
+        _memberRepo = memberRepo;
         _progressionService = progressionService;
         _logger = logger;
     }
@@ -95,7 +101,7 @@ public class PollCheckHandler : IPollCheckHandler
                 // Trigger rollback if configured
                 if (!string.IsNullOrEmpty(step.OnFailure))
                 {
-                    await TriggerRollbackAsync(step.OnFailure, message.RunbookName, message.RunbookVersion, step.BatchId);
+                    await TriggerRollbackAsync(step.OnFailure, message.RunbookName, message.RunbookVersion, step.BatchId, null);
                 }
                 return;
             }
@@ -160,7 +166,7 @@ public class PollCheckHandler : IPollCheckHandler
                 // Trigger rollback if configured
                 if (!string.IsNullOrEmpty(step.OnFailure))
                 {
-                    await TriggerRollbackAsync(step.OnFailure, message.RunbookName, message.RunbookVersion, message.BatchId);
+                    await TriggerRollbackAsync(step.OnFailure, message.RunbookName, message.RunbookVersion, message.BatchId, step.BatchMemberId);
                 }
 
                 // Handle member failure: mark member failed, cancel remaining steps, check phase completion
@@ -197,7 +203,7 @@ public class PollCheckHandler : IPollCheckHandler
             step.Id, step.PollCount + 1);
     }
 
-    private async Task TriggerRollbackAsync(string rollbackName, string runbookName, int runbookVersion, int batchId)
+    private async Task TriggerRollbackAsync(string rollbackName, string runbookName, int runbookVersion, int batchId, int? batchMemberId)
     {
         var runbook = await _runbookRepo.GetByNameAndVersionAsync(runbookName, runbookVersion);
         if (runbook == null)
@@ -215,6 +221,21 @@ public class PollCheckHandler : IPollCheckHandler
             return;
         }
 
-        await _rollbackExecutor.ExecuteRollbackAsync(rollbackName, definition, batch, null, null);
+        // Load member data for per-member rollback template resolution
+        System.Data.DataRow? memberData = null;
+        if (batchMemberId.HasValue)
+        {
+            var member = await _memberRepo.GetByIdAsync(batchMemberId.Value);
+            if (member != null)
+            {
+                memberData = await _dynamicTableReader.GetMemberDataAsync(runbook.DataTableName, member.MemberKey);
+            }
+            else
+            {
+                _logger.LogWarning("Member {BatchMemberId} not found for rollback template resolution", batchMemberId.Value);
+            }
+        }
+
+        await _rollbackExecutor.ExecuteRollbackAsync(rollbackName, definition, batch, memberData, batchMemberId);
     }
 }
