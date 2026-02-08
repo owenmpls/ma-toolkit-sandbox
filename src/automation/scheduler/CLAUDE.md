@@ -67,14 +67,12 @@ scheduler/
         PhaseExecutionRepository.cs      # CRUD for phase_executions table
         StepExecutionRepository.cs       # CRUD for step_executions table
         InitExecutionRepository.cs       # CRUD for init_executions table
-        DynamicTableManager.cs           # Creates and upserts per-runbook dynamic SQL tables
         DataverseQueryClient.cs          # Queries Dataverse via TDS endpoint (SqlConnection)
         DatabricksQueryClient.cs         # Queries Databricks via SQL Statements REST API
         DataSourceQueryService.cs        # Routes to Dataverse or Databricks based on config.type
         RunbookParser.cs                 # YamlDotNet deserialization + validation
         MemberDiffService.cs             # Computes added/removed members between query results and existing batch
         PhaseEvaluator.cs                # Parses offsets (T-5d), calculates due_at, creates phase execution records
-        TemplateResolver.cs              # Resolves {{ColumnName}} templates from member data rows
         ServiceBusPublisher.cs           # Sends typed messages to orchestrator-events topic
 ```
 
@@ -98,19 +96,19 @@ scheduler/
 
 - **Dapper for data access**: All SQL operations use Dapper with raw SQL. No Entity Framework. Repositories are scoped, DbConnectionFactory is singleton.
 - **YamlDotNet for runbook parsing**: Runbooks are stored as raw YAML in the `runbooks.yaml_content` column and parsed on every timer tick. The parser uses `UnderscoredNamingConvention` and `IgnoreUnmatchedProperties`.
-- **Dynamic tables**: Each runbook version gets its own SQL table (`runbook_{name}_v{version}`) whose columns match the data source query output. Created on first encounter via DDL, upserted via MERGE.
-- **Template resolution**: Step params use `{{ColumnName}}` syntax resolved at phase dispatch time from the member's row in the dynamic table. Special vars: `{{_batch_id}}`, `{{_batch_start_time}}`.
+- **Member data storage**: Member data is stored in a single `member_data` table as JSON documents (one row per member per runbook table name). The shared `DynamicTableManager` upserts via a single MERGE with OPENJSON.
+- **Template resolution**: Step params use `{{ColumnName}}` syntax resolved from member data dictionaries via the shared `ITemplateResolver`. Special vars: `{{_batch_id}}`, `{{_batch_start_time}}`.
 - **Service Bus publishing**: All 5 message types (`batch-init`, `phase-due`, `member-added`, `member-removed`, `poll-check`) go to a single topic (`orchestrator-events`) with a `MessageType` application property for filtering.
 - **Offset-based scheduling**: Phase offsets like `T-5d` are parsed to minutes. `due_at = batch_start_time - offset_minutes`. The timer evaluates `due_at <= now AND status = 'pending'`.
 - **Version transitions**: When a new runbook version is published, existing active batches get new phase executions. The `overdue_behavior` setting (`rerun`/`ignore`) controls whether past-due phases are re-executed or skipped.
-- **Multi-valued columns**: Semicolon-delimited, comma-delimited, or JSON array values are normalized to JSON arrays in the dynamic table.
+- **Multi-valued columns**: Semicolon-delimited, comma-delimited, or JSON array values are normalized to JSON arrays in the member data JSON document.
 - **Polling**: Steps with `poll` config get `is_poll_step = 1` and interval/timeout stored in seconds. The scheduler checks `last_polled_at + interval <= now` and emits `poll-check` messages.
 
 ## SQL Tables
 
-The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`. See `docs/orchestrator-contract.md` for full column definitions.
+The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`, `member_data`. See `docs/orchestrator-contract.md` for full column definitions.
 
-Dynamic data tables are created at runtime by `DynamicTableManager` with system columns (`_row_id`, `_member_key`, `_batch_time`, `_first_seen_at`, `_last_seen_at`, `_is_current`) plus one NVARCHAR(MAX) column per query result column.
+Member data is stored in the `member_data` table as JSON documents (`data_json` column). The shared `DynamicTableManager` handles upserts via OPENJSON MERGE, and the shared `IMemberDataReader` interface provides read access.
 
 ## Configuration
 

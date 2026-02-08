@@ -68,9 +68,8 @@ orchestrator/
       Services/
         DbConnectionFactory.cs        # Singleton: creates SqlConnection from config
         RunbookParser.cs              # YamlDotNet deserialization
-        TemplateResolver.cs           # Resolves {{ColumnName}} templates from member data
         PhaseEvaluator.cs             # Parses offsets, calculates due_at
-        DynamicTableReader.cs         # Reads member data from runbook dynamic tables
+        MemberDataReader.cs           # Reads member data JSON from member_data table
         WorkerDispatcher.cs           # Sends jobs to worker-jobs Service Bus topic
         RetryScheduler.cs             # Sends scheduled retry-check messages to orchestrator-events topic
         RollbackExecutor.cs           # Executes rollback sequences on failure
@@ -148,6 +147,14 @@ The `PhaseProgressionService` centralizes all progression logic, used by `Result
 - **`HandleMemberFailureAsync`** — After a step fails (with retries exhausted or no retries configured) or poll times out, marks the member as `failed` and cancels all their non-terminal steps across ALL phases. Then checks if the phase is complete.
 - **`CheckPhaseCompletionAsync`** — When all steps in a phase are terminal: marks phase `Completed` if at least one member fully succeeded, or `Failed` if no member did.
 - **`CheckBatchCompletionAsync`** — When all phases are terminal: marks batch `Completed` if at least one phase completed, or `Failed` if none did.
+
+### Member Data & Template Resolution
+
+Member data is stored in a single `member_data` table as JSON documents (one row per member per runbook table name). The `MemberDataReader` deserializes JSON into `Dictionary<string, string>` for use in template resolution.
+
+**Template resolution** uses the shared `ITemplateResolver` from `MaToolkit.Automation.Shared`. Templates use `{{ColumnName}}` syntax resolved from the member data dictionary. Special variables `{{_batch_id}}` and `{{_batch_start_time}}` are always available. `ResolveInitParams` resolves only batch-level variables (no member data). Throws `TemplateResolutionException` for unresolved variables.
+
+The `ITemplateResolver` and `IMemberDataReader` interfaces are defined in the shared library. The `MemberDataReader` implementation lives in the orchestrator.
 
 ### Polling Convention
 
@@ -251,7 +258,7 @@ Service Bus connection uses DefaultAzureCredential:
 
 **Orchestrator reads from:**
 - `runbooks.yaml_content` (for rollback definitions, on_member_removed)
-- `runbook_{name}_v{version}` dynamic tables (member data for template resolution)
+- `member_data` table (member data JSON documents for template resolution)
 
 ## Infrastructure
 
