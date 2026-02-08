@@ -46,7 +46,7 @@ public class WorkerResultMessage
 
         try
         {
-            if (Result.Value.TryGetProperty("complete", out var complete))
+            if (TryGetPropertyCaseInsensitive(Result.Value, "complete", out var complete))
             {
                 return !complete.GetBoolean();
             }
@@ -70,7 +70,7 @@ public class WorkerResultMessage
 
         try
         {
-            if (Result.Value.TryGetProperty("data", out var data))
+            if (TryGetPropertyCaseInsensitive(Result.Value, "data", out var data))
             {
                 return data;
             }
@@ -81,6 +81,20 @@ public class WorkerResultMessage
         }
 
         return Result;
+    }
+
+    private static bool TryGetPropertyCaseInsensitive(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = prop.Value;
+                return true;
+            }
+        }
+        value = default;
+        return false;
     }
 }
 

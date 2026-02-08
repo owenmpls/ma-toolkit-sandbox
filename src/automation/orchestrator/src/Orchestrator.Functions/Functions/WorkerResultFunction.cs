@@ -9,6 +9,11 @@ namespace Orchestrator.Functions.Functions;
 
 public class WorkerResultFunction
 {
+    private static readonly JsonSerializerOptions CaseInsensitiveOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly IResultProcessor _resultProcessor;
     private readonly ILogger<WorkerResultFunction> _logger;
 
@@ -36,7 +41,7 @@ public class WorkerResultFunction
         try
         {
             var body = message.Body.ToString();
-            var result = JsonSerializer.Deserialize<WorkerResultMessage>(body);
+            var result = JsonSerializer.Deserialize<WorkerResultMessage>(body, CaseInsensitiveOptions);
 
             if (result == null)
             {

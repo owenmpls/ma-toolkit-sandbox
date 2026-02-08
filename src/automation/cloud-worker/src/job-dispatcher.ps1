@@ -108,17 +108,17 @@ function New-JobResult {
     }
 
     return [PSCustomObject]@{
-        JobId           = $Job.JobId
-        BatchId         = if ($Job.PSObject.Properties['BatchId']) { $Job.BatchId } else { $null }
-        WorkerId        = $WorkerId
-        FunctionName    = $Job.FunctionName
-        Status          = $Status
-        ResultType      = $resultType
-        Result          = $resultValue
-        Error           = $ErrorInfo
-        DurationMs      = $DurationMs
-        Timestamp       = (Get-Date).ToUniversalTime().ToString('o')
-        CorrelationData = if ($Job.PSObject.Properties['CorrelationData']) { $Job.CorrelationData } else { $null }
+        jobId           = $Job.JobId
+        batchId         = if ($Job.PSObject.Properties['BatchId']) { $Job.BatchId } else { $null }
+        workerId        = $WorkerId
+        functionName    = $Job.FunctionName
+        status          = $Status
+        resultType      = $resultType
+        result          = $resultValue
+        error           = $ErrorInfo
+        durationMs      = $DurationMs
+        timestamp       = (Get-Date).ToUniversalTime().ToString('o')
+        correlationData = if ($Job.PSObject.Properties['CorrelationData']) { $Job.CorrelationData } else { $null }
     }
 }
 
@@ -337,10 +337,10 @@ function Start-JobDispatcher {
                             BatchId      = $job.BatchId ?? $null
                             FunctionName = $job.FunctionName ?? 'unknown'
                         }) -WorkerId $Config.WorkerId -Status 'failure' -ErrorInfo ([PSCustomObject]@{
-                            Message     = "Invalid job: $($validation.Error)"
-                            Type        = 'ValidationError'
-                            IsThrottled = $false
-                            Attempts    = 0
+                            message     = "Invalid job: $($validation.Error)"
+                            type        = 'ValidationError'
+                            isThrottled = $false
+                            attempts    = 0
                         })
                         Send-ServiceBusResult -Sender $Sender -Result $errorResult
                         Complete-ServiceBusMessage -Receiver $Receiver -Message $message
@@ -354,10 +354,10 @@ function Start-JobDispatcher {
                             FunctionName = $job.FunctionName
                         }
                         $errorResult = New-JobResult -Job $job -WorkerId $Config.WorkerId -Status 'failure' -ErrorInfo ([PSCustomObject]@{
-                            Message     = "Function '$($job.FunctionName)' is not allowed. Only exported module functions can be invoked."
-                            Type        = 'SecurityValidationError'
-                            IsThrottled = $false
-                            Attempts    = 0
+                            message     = "Function '$($job.FunctionName)' is not allowed. Only exported module functions can be invoked."
+                            type        = 'SecurityValidationError'
+                            isThrottled = $false
+                            attempts    = 0
                         })
                         Send-ServiceBusResult -Sender $Sender -Result $errorResult
                         Complete-ServiceBusMessage -Receiver $Receiver -Message $message

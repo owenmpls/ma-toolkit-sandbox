@@ -7,7 +7,10 @@
     PowerShellVersion = '7.4'
 
     FunctionsToExport = @(
-        'Set-CustomUserAttribute'
+        'Set-ExampleUserAttribute'
+        'Get-ExampleMailboxInfo'
+        'Test-ExampleMigrationReady'
+        'Start-ExampleLongOperation'
     )
 
     CmdletsToExport   = @()

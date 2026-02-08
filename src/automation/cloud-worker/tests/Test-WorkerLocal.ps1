@@ -145,6 +145,41 @@ Test-Step 'ExampleCustomModule.psm1 parses' {
     }
 }
 
+Test-Step 'ExampleCustomModule manifest exports 4 functions' {
+    $manifestPath = Join-Path $modulesPath 'CustomFunctions' 'ExampleCustomModule' 'ExampleCustomModule.psd1'
+    $manifest = Import-PowerShellDataFile -Path $manifestPath
+    if ($manifest.FunctionsToExport.Count -ne 4) {
+        throw "Expected 4 exported functions, got $($manifest.FunctionsToExport.Count)"
+    }
+}
+
+Test-Step 'ExampleCustomModule exports expected function names' {
+    $manifestPath = Join-Path $modulesPath 'CustomFunctions' 'ExampleCustomModule' 'ExampleCustomModule.psd1'
+    $manifest = Import-PowerShellDataFile -Path $manifestPath
+    $expected = @('Set-ExampleUserAttribute', 'Get-ExampleMailboxInfo', 'Test-ExampleMigrationReady', 'Start-ExampleLongOperation')
+    foreach ($fn in $expected) {
+        if ($fn -notin $manifest.FunctionsToExport) {
+            throw "Missing expected export: $fn"
+        }
+    }
+}
+
+Test-Step 'ExampleCustomModule defines all exported functions' {
+    $filePath = Join-Path $modulesPath 'CustomFunctions' 'ExampleCustomModule' 'ExampleCustomModule.psm1'
+    $tokens = $null
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($filePath, [ref]$tokens, [ref]$errors)
+    $functions = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)
+    $functionNames = $functions | ForEach-Object { $_.Name }
+
+    $expected = @('Set-ExampleUserAttribute', 'Get-ExampleMailboxInfo', 'Test-ExampleMigrationReady', 'Start-ExampleLongOperation')
+    foreach ($fn in $expected) {
+        if ($fn -notin $functionNames) {
+            throw "Function '$fn' not defined in psm1"
+        }
+    }
+}
+
 # --- Test 6: Config function loads ---
 Write-Host ''
 Write-Host 'Functional tests (dot-source):' -ForegroundColor Yellow

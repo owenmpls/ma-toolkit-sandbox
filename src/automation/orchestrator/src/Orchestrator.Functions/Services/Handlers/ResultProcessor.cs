@@ -335,11 +335,21 @@ public class ResultProcessor : IResultProcessor
 
             foreach (var (outputKey, resultFieldName) in stepDef.OutputParams)
             {
-                if (resultDoc.RootElement.TryGetProperty(resultFieldName, out var fieldValue))
+                JsonElement? matchedField = null;
+                foreach (var prop in resultDoc.RootElement.EnumerateObject())
                 {
-                    outputDict[outputKey] = fieldValue.ValueKind == JsonValueKind.String
-                        ? fieldValue.GetString()!
-                        : fieldValue.GetRawText();
+                    if (string.Equals(prop.Name, resultFieldName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedField = prop.Value;
+                        break;
+                    }
+                }
+
+                if (matchedField.HasValue)
+                {
+                    outputDict[outputKey] = matchedField.Value.ValueKind == JsonValueKind.String
+                        ? matchedField.Value.GetString()!
+                        : matchedField.Value.GetRawText();
                 }
                 else
                 {
