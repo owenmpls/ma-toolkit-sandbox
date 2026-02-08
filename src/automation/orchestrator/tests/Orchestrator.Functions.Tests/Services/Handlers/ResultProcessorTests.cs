@@ -23,7 +23,7 @@ public class ResultProcessorTests
     private readonly Mock<IRunbookParser> _runbookParser = new();
     private readonly Mock<IWorkerDispatcher> _workerDispatcher = new();
     private readonly Mock<IRollbackExecutor> _rollbackExecutor = new();
-    private readonly Mock<IDynamicTableReader> _dynamicTableReader = new();
+    private readonly Mock<IMemberDataReader> _memberDataReader = new();
     private readonly Mock<IMemberRepository> _memberRepo = new();
     private readonly Mock<IPhaseProgressionService> _progressionService = new();
     private readonly Mock<IRetryScheduler> _retryScheduler = new();
@@ -40,7 +40,7 @@ public class ResultProcessorTests
             _runbookParser.Object,
             _workerDispatcher.Object,
             _rollbackExecutor.Object,
-            _dynamicTableReader.Object,
+            _memberDataReader.Object,
             _memberRepo.Object,
             _progressionService.Object,
             _retryScheduler.Object,
@@ -128,12 +128,8 @@ public class ResultProcessorTests
         _batchRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(new BatchRecord { Id = 1 });
         _memberRepo.Setup(x => x.GetByIdAsync(100)).ReturnsAsync(new BatchMemberRecord { Id = 100, MemberKey = "test-key" });
 
-        var dataTable = new System.Data.DataTable();
-        dataTable.Columns.Add("MemberKey");
-        var row = dataTable.NewRow();
-        row["MemberKey"] = "test-key";
-        dataTable.Rows.Add(row);
-        _dynamicTableReader.Setup(x => x.GetMemberDataAsync("runbook_runbook1_v1", "test-key")).ReturnsAsync(row);
+        var memberData = new Dictionary<string, string> { ["MemberKey"] = "test-key" };
+        _memberDataReader.Setup(x => x.GetMemberDataAsync("runbook_runbook1_v1", "test-key")).ReturnsAsync(memberData);
 
         var result = new WorkerResultMessage
         {
@@ -152,7 +148,7 @@ public class ResultProcessorTests
 
         _rollbackExecutor.Verify(x => x.ExecuteRollbackAsync(
             "rollback-step", It.IsAny<MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition>(),
-            It.IsAny<BatchRecord>(), It.IsAny<System.Data.DataRow>(), 100), Times.Once);
+            It.IsAny<BatchRecord>(), It.IsAny<Dictionary<string, string>>(), 100), Times.Once);
         _progressionService.Verify(x => x.HandleMemberFailureAsync(10, 100), Times.Once);
     }
 

@@ -144,15 +144,28 @@ CREATE TABLE init_executions (
 );
 
 -- =============================================================================
--- Dynamic Data Tables (created at runtime by DynamicTableManager)
+-- Member Data (JSON document storage — replaces per-runbook dynamic tables)
+-- =============================================================================
+-- All member data is stored as JSON documents in a single table, keyed by
+-- runbook_table_name (e.g. "runbook_user_migration_v2") and member_key.
+-- This replaces the legacy per-runbook dynamic tables (runbook_{name}_v{version}).
+
+CREATE TABLE member_data (
+    id                  INT IDENTITY(1,1) PRIMARY KEY,
+    runbook_table_name  NVARCHAR(128) NOT NULL,
+    member_key          NVARCHAR(256) NOT NULL,
+    batch_time          DATETIME2,
+    data_json           NVARCHAR(MAX) NOT NULL,
+    first_seen_at       DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    last_seen_at        DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    is_current          BIT NOT NULL DEFAULT 1,
+    CONSTRAINT UQ_member_data UNIQUE (runbook_table_name, member_key)
+);
+CREATE INDEX IX_member_data_lookup ON member_data (runbook_table_name, member_key, is_current);
+
+-- =============================================================================
+-- Legacy: Dynamic Data Tables (previously created at runtime by DynamicTableManager)
 -- =============================================================================
 -- Named: runbook_{sanitized_name}_v{version}
--- System columns:
---   _row_id        INT IDENTITY(1,1) PRIMARY KEY
---   _member_key    NVARCHAR(256) NOT NULL UNIQUE
---   _batch_time    DATETIME2           (NULL if immediate)
---   _first_seen_at DATETIME2 DEFAULT SYSUTCDATETIME()
---   _last_seen_at  DATETIME2 DEFAULT SYSUTCDATETIME()
---   _is_current    BIT DEFAULT 1       (0 = no longer in query results)
--- Plus: one NVARCHAR(MAX) column per query result column
--- Multi-valued columns stored as JSON arrays
+-- These are no longer created by new code. Existing tables may remain from
+-- prior deployments and can be cleaned up after migration to member_data.

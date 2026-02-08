@@ -112,14 +112,7 @@ public class ManualBatchService : IManualBatchService
                 };
                 var batchId = await _batchRepo.InsertAsync(batch, transaction);
 
-                // Ensure dynamic table exists
-                var queryColumns = memberData.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
-                await _dynamicTableManager.EnsureTableAsync(
-                    runbook.DataTableName,
-                    queryColumns,
-                    definition.DataSource.MultiValuedColumns);
-
-                // Upsert member data into dynamic table
+                // Upsert member data into member_data table
                 await _dynamicTableManager.UpsertDataAsync(
                     runbook.DataTableName,
                     definition.DataSource.PrimaryKey,

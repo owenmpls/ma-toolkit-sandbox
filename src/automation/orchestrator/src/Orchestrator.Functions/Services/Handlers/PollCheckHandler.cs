@@ -21,7 +21,7 @@ public class PollCheckHandler : IPollCheckHandler
     private readonly IRollbackExecutor _rollbackExecutor;
     private readonly IRunbookRepository _runbookRepo;
     private readonly IRunbookParser _runbookParser;
-    private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IMemberDataReader _memberDataReader;
     private readonly IMemberRepository _memberRepo;
     private readonly IPhaseProgressionService _progressionService;
     private readonly ILogger<PollCheckHandler> _logger;
@@ -34,7 +34,7 @@ public class PollCheckHandler : IPollCheckHandler
         IRollbackExecutor rollbackExecutor,
         IRunbookRepository runbookRepo,
         IRunbookParser runbookParser,
-        IDynamicTableReader dynamicTableReader,
+        IMemberDataReader memberDataReader,
         IMemberRepository memberRepo,
         IPhaseProgressionService progressionService,
         ILogger<PollCheckHandler> logger)
@@ -46,7 +46,7 @@ public class PollCheckHandler : IPollCheckHandler
         _rollbackExecutor = rollbackExecutor;
         _runbookRepo = runbookRepo;
         _runbookParser = runbookParser;
-        _dynamicTableReader = dynamicTableReader;
+        _memberDataReader = memberDataReader;
         _memberRepo = memberRepo;
         _progressionService = progressionService;
         _logger = logger;
@@ -222,13 +222,13 @@ public class PollCheckHandler : IPollCheckHandler
         }
 
         // Load member data for per-member rollback template resolution
-        System.Data.DataRow? memberData = null;
+        Dictionary<string, string>? memberData = null;
         if (batchMemberId.HasValue)
         {
             var member = await _memberRepo.GetByIdAsync(batchMemberId.Value);
             if (member != null)
             {
-                memberData = await _dynamicTableReader.GetMemberDataAsync(runbook.DataTableName, member.MemberKey);
+                memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, member.MemberKey);
             }
             else
             {

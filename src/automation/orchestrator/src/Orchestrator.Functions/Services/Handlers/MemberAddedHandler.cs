@@ -25,7 +25,7 @@ public class MemberAddedHandler : IMemberAddedHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
-    private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IMemberDataReader _memberDataReader;
     private readonly ILogger<MemberAddedHandler> _logger;
 
     public MemberAddedHandler(
@@ -38,7 +38,7 @@ public class MemberAddedHandler : IMemberAddedHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
-        IDynamicTableReader dynamicTableReader,
+        IMemberDataReader memberDataReader,
         ILogger<MemberAddedHandler> logger)
     {
         _batchRepo = batchRepo;
@@ -50,7 +50,7 @@ public class MemberAddedHandler : IMemberAddedHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
-        _dynamicTableReader = dynamicTableReader;
+        _memberDataReader = memberDataReader;
         _logger = logger;
     }
 
@@ -85,8 +85,8 @@ public class MemberAddedHandler : IMemberAddedHandler
 
         var definition = _runbookParser.Parse(runbook.YamlContent);
 
-        // Load member data from dynamic table
-        var memberData = await _dynamicTableReader.GetMemberDataAsync(runbook.DataTableName, message.MemberKey);
+        // Load member data from member_data table
+        var memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, message.MemberKey);
         if (memberData == null)
         {
             _logger.LogError("Member data not found for {MemberKey} in table {TableName}",

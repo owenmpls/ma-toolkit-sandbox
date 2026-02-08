@@ -1,28 +1,8 @@
-using System.Data;
 using System.Text.RegularExpressions;
 using MaToolkit.Automation.Shared.Exceptions;
 using Microsoft.Extensions.Logging;
 
-namespace Orchestrator.Functions.Services;
-
-public interface ITemplateResolver
-{
-    Dictionary<string, string> ResolveParams(
-        Dictionary<string, string> paramTemplates,
-        DataRow memberData,
-        int batchId,
-        DateTime? batchStartTime);
-
-    string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime);
-
-    /// <summary>
-    /// Resolve parameters for init steps (no member data available).
-    /// </summary>
-    Dictionary<string, string> ResolveInitParams(
-        Dictionary<string, string> paramTemplates,
-        int batchId,
-        DateTime? batchStartTime);
-}
+namespace MaToolkit.Automation.Shared.Services;
 
 public class TemplateResolver : ITemplateResolver
 {
@@ -36,7 +16,7 @@ public class TemplateResolver : ITemplateResolver
 
     public Dictionary<string, string> ResolveParams(
         Dictionary<string, string> paramTemplates,
-        DataRow memberData,
+        Dictionary<string, string> memberData,
         int batchId,
         DateTime? batchStartTime)
     {
@@ -50,7 +30,8 @@ public class TemplateResolver : ITemplateResolver
         return resolved;
     }
 
-    public string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime)
+    public string ResolveString(string template, Dictionary<string, string> memberData,
+        int batchId, DateTime? batchStartTime)
     {
         var unresolvedVariables = new List<string>();
 
@@ -64,24 +45,14 @@ public class TemplateResolver : ITemplateResolver
             if (variableName == "_batch_start_time")
                 return (batchStartTime ?? DateTime.UtcNow).ToString("o");
 
-            // Column lookup
-            if (memberData.Table.Columns.Contains(variableName))
-            {
-                var value = memberData[variableName];
-                if (value is DBNull || value is null)
-                    return string.Empty;
-                return value.ToString()!;
-            }
+            // Key lookup
+            if (memberData.TryGetValue(variableName, out var value))
+                return value ?? string.Empty;
 
-            // Also check without system prefix for columns stored with underscore prefix
+            // Also check with underscore prefix for system columns
             var altName = $"_{variableName}";
-            if (memberData.Table.Columns.Contains(altName))
-            {
-                var value = memberData[altName];
-                if (value is DBNull || value is null)
-                    return string.Empty;
-                return value.ToString()!;
-            }
+            if (memberData.TryGetValue(altName, out var altValue))
+                return altValue ?? string.Empty;
 
             unresolvedVariables.Add(variableName);
             return match.Value;

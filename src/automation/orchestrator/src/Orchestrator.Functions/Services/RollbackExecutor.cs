@@ -1,4 +1,3 @@
-using System.Data;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
@@ -17,7 +16,7 @@ public interface IRollbackExecutor
         string rollbackName,
         RunbookDefinition runbook,
         BatchRecord batch,
-        DataRow? memberData,
+        Dictionary<string, string>? memberData,
         int? batchMemberId);
 }
 
@@ -47,7 +46,7 @@ public class RollbackExecutor : IRollbackExecutor
         string rollbackName,
         RunbookDefinition runbook,
         BatchRecord batch,
-        DataRow? memberData,
+        Dictionary<string, string>? memberData,
         int? batchMemberId)
     {
         if (!runbook.Rollbacks.TryGetValue(rollbackName, out var rollbackSteps))

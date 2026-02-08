@@ -39,7 +39,7 @@ builder.Services.AddScoped<IInitExecutionRepository, InitExecutionRepository>();
 builder.Services.AddScoped<IRunbookParser, RunbookParser>();
 builder.Services.AddScoped<ITemplateResolver, TemplateResolver>();
 builder.Services.AddScoped<IPhaseEvaluator, PhaseEvaluator>();
-builder.Services.AddScoped<IDynamicTableReader, DynamicTableReader>();
+builder.Services.AddScoped<IMemberDataReader, MemberDataReader>();
 builder.Services.AddScoped<IWorkerDispatcher, WorkerDispatcher>();
 builder.Services.AddScoped<IRollbackExecutor, RollbackExecutor>();
 

@@ -26,7 +26,7 @@ public class PhaseDueHandler : IPhaseDueHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
-    private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IMemberDataReader _memberDataReader;
     private readonly IPhaseProgressionService _progressionService;
     private readonly IDbConnectionFactory _db;
     private readonly ILogger<PhaseDueHandler> _logger;
@@ -41,7 +41,7 @@ public class PhaseDueHandler : IPhaseDueHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
-        IDynamicTableReader dynamicTableReader,
+        IMemberDataReader memberDataReader,
         IPhaseProgressionService progressionService,
         IDbConnectionFactory db,
         ILogger<PhaseDueHandler> logger)
@@ -55,7 +55,7 @@ public class PhaseDueHandler : IPhaseDueHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
-        _dynamicTableReader = dynamicTableReader;
+        _memberDataReader = memberDataReader;
         _progressionService = progressionService;
         _db = db;
         _logger = logger;
@@ -230,9 +230,9 @@ public class PhaseDueHandler : IPhaseDueHandler
             return;
         }
 
-        // Load member data from dynamic table
+        // Load member data from member_data table
         var memberKeys = members.Select(m => m.MemberKey).ToList();
-        var memberData = await _dynamicTableReader.GetMembersDataAsync(runbook.DataTableName, memberKeys);
+        var memberData = await _memberDataReader.GetMembersDataAsync(runbook.DataTableName, memberKeys);
 
         // Create step executions in a transaction
         using var conn = _db.CreateConnection();

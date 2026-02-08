@@ -126,14 +126,7 @@ public class SchedulerTimerFunction
 
             if (queryResults.Rows.Count > 0)
             {
-                // Ensure dynamic data table exists
-                var queryColumns = queryResults.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
-                await _dynamicTableManager.EnsureTableAsync(
-                    runbook.DataTableName,
-                    queryColumns,
-                    definition.DataSource.MultiValuedColumns);
-
-                // Upsert query results into dynamic table
+                // Upsert query results into member_data table
                 await _dynamicTableManager.UpsertDataAsync(
                     runbook.DataTableName,
                     definition.DataSource.PrimaryKey,

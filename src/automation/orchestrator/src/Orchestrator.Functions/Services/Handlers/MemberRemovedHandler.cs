@@ -21,7 +21,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
     private readonly IRunbookParser _runbookParser;
     private readonly ITemplateResolver _templateResolver;
     private readonly IPhaseEvaluator _phaseEvaluator;
-    private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IMemberDataReader _memberDataReader;
     private readonly ILogger<MemberRemovedHandler> _logger;
 
     public MemberRemovedHandler(
@@ -33,7 +33,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
         IRunbookParser runbookParser,
         ITemplateResolver templateResolver,
         IPhaseEvaluator phaseEvaluator,
-        IDynamicTableReader dynamicTableReader,
+        IMemberDataReader memberDataReader,
         ILogger<MemberRemovedHandler> logger)
     {
         _batchRepo = batchRepo;
@@ -44,7 +44,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
         _runbookParser = runbookParser;
         _templateResolver = templateResolver;
         _phaseEvaluator = phaseEvaluator;
-        _dynamicTableReader = dynamicTableReader;
+        _memberDataReader = memberDataReader;
         _logger = logger;
     }
 
@@ -89,7 +89,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
             return;
         }
 
-        // Load member data from dynamic table (may still have last known data)
+        // Load member data from member_data table (may still have last known data)
         var batch = await _batchRepo.GetByIdAsync(message.BatchId);
         if (batch == null)
         {
@@ -97,7 +97,7 @@ public class MemberRemovedHandler : IMemberRemovedHandler
             return;
         }
 
-        var memberData = await _dynamicTableReader.GetMemberDataAsync(runbook.DataTableName, message.MemberKey);
+        var memberData = await _memberDataReader.GetMemberDataAsync(runbook.DataTableName, message.MemberKey);
         if (memberData == null)
         {
             _logger.LogWarning(
