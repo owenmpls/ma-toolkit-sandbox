@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MaToolkit.Automation.Shared.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace Scheduler.Functions.Services;
@@ -44,7 +45,9 @@ public class TemplateResolver : ITemplateResolver
 
     public string ResolveString(string template, DataRow memberData, int batchId, DateTime? batchStartTime)
     {
-        return TemplatePattern.Replace(template, match =>
+        var unresolvedVariables = new List<string>();
+
+        var result = TemplatePattern.Replace(template, match =>
         {
             var variableName = match.Groups[1].Value;
 
@@ -73,8 +76,13 @@ public class TemplateResolver : ITemplateResolver
                 return value.ToString()!;
             }
 
-            _logger.LogWarning("Unresolved template variable: {Variable}", variableName);
-            return match.Value; // Leave unresolved
+            unresolvedVariables.Add(variableName);
+            return match.Value;
         });
+
+        if (unresolvedVariables.Count > 0)
+            throw new TemplateResolutionException(template, unresolvedVariables);
+
+        return result;
     }
 }

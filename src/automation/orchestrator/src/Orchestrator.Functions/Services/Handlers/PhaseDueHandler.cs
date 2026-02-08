@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Exceptions;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
@@ -227,30 +228,39 @@ public class PhaseDueHandler : IPhaseDueHandler
                     continue;
                 }
 
-                for (int i = 0; i < phaseDefinition.Steps.Count; i++)
+                try
                 {
-                    var step = phaseDefinition.Steps[i];
-                    var resolvedParams = _templateResolver.ResolveParams(
-                        step.Params, dataRow, message.BatchId, batch?.BatchStartTime);
-                    var resolvedFunction = _templateResolver.ResolveString(
-                        step.Function, dataRow, message.BatchId, batch?.BatchStartTime);
-
-                    await _stepRepo.InsertAsync(new StepExecutionRecord
+                    for (int i = 0; i < phaseDefinition.Steps.Count; i++)
                     {
-                        PhaseExecutionId = phase.Id,
-                        BatchMemberId = member.Id,
-                        StepName = step.Name,
-                        StepIndex = i,
-                        WorkerId = step.WorkerId,
-                        FunctionName = resolvedFunction,
-                        ParamsJson = JsonSerializer.Serialize(resolvedParams),
-                        IsPollStep = step.Poll is not null,
-                        PollIntervalSec = step.Poll is not null
-                            ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
-                        PollTimeoutSec = step.Poll is not null
-                            ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
-                        OnFailure = step.OnFailure
-                    }, transaction);
+                        var step = phaseDefinition.Steps[i];
+                        var resolvedParams = _templateResolver.ResolveParams(
+                            step.Params, dataRow, message.BatchId, batch?.BatchStartTime);
+                        var resolvedFunction = _templateResolver.ResolveString(
+                            step.Function, dataRow, message.BatchId, batch?.BatchStartTime);
+
+                        await _stepRepo.InsertAsync(new StepExecutionRecord
+                        {
+                            PhaseExecutionId = phase.Id,
+                            BatchMemberId = member.Id,
+                            StepName = step.Name,
+                            StepIndex = i,
+                            WorkerId = step.WorkerId,
+                            FunctionName = resolvedFunction,
+                            ParamsJson = JsonSerializer.Serialize(resolvedParams),
+                            IsPollStep = step.Poll is not null,
+                            PollIntervalSec = step.Poll is not null
+                                ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
+                            PollTimeoutSec = step.Poll is not null
+                                ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
+                            OnFailure = step.OnFailure
+                        }, transaction);
+                    }
+                }
+                catch (TemplateResolutionException ex)
+                {
+                    _logger.LogWarning(
+                        "Skipping member {MemberKey}: unresolved template variables [{Variables}]",
+                        member.MemberKey, string.Join(", ", ex.UnresolvedVariables));
                 }
             }
 

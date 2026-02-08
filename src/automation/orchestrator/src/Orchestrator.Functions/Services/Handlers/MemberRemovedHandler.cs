@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using MaToolkit.Automation.Shared.Exceptions;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
@@ -113,44 +114,53 @@ public class MemberRemovedHandler : IMemberRemovedHandler
         {
             var step = definition.OnMemberRemoved[stepIndex];
 
-            Dictionary<string, string> resolvedParams;
-            string resolvedFunction;
+            try
+            {
+                Dictionary<string, string> resolvedParams;
+                string resolvedFunction;
 
-            if (memberData != null)
-            {
-                resolvedFunction = _templateResolver.ResolveString(
-                    step.Function, memberData, batch.Id, batch.BatchStartTime);
-                resolvedParams = _templateResolver.ResolveParams(
-                    step.Params, memberData, batch.Id, batch.BatchStartTime);
-            }
-            else
-            {
-                // Limited resolution - only batch-level variables
-                resolvedFunction = step.Function;
-                resolvedParams = _templateResolver.ResolveInitParams(
-                    step.Params, batch.Id, batch.BatchStartTime);
-            }
-
-            var job = new WorkerJobMessage
-            {
-                JobId = $"removed-{message.BatchMemberId}-{stepIndex}",
-                BatchId = message.BatchId,
-                WorkerId = step.WorkerId,
-                FunctionName = resolvedFunction,
-                Parameters = resolvedParams,
-                CorrelationData = new JobCorrelationData
+                if (memberData != null)
                 {
-                    IsInitStep = false,
-                    RunbookName = message.RunbookName,
-                    RunbookVersion = message.RunbookVersion
+                    resolvedFunction = _templateResolver.ResolveString(
+                        step.Function, memberData, batch.Id, batch.BatchStartTime);
+                    resolvedParams = _templateResolver.ResolveParams(
+                        step.Params, memberData, batch.Id, batch.BatchStartTime);
                 }
-            };
+                else
+                {
+                    // Limited resolution - only batch-level variables
+                    resolvedFunction = step.Function;
+                    resolvedParams = _templateResolver.ResolveInitParams(
+                        step.Params, batch.Id, batch.BatchStartTime);
+                }
 
-            await _workerDispatcher.DispatchJobAsync(job);
+                var job = new WorkerJobMessage
+                {
+                    JobId = $"removed-{message.BatchMemberId}-{stepIndex}",
+                    BatchId = message.BatchId,
+                    WorkerId = step.WorkerId,
+                    FunctionName = resolvedFunction,
+                    Parameters = resolvedParams,
+                    CorrelationData = new JobCorrelationData
+                    {
+                        IsInitStep = false,
+                        RunbookName = message.RunbookName,
+                        RunbookVersion = message.RunbookVersion
+                    }
+                };
 
-            _logger.LogInformation(
-                "Dispatched on_member_removed step '{StepName}' (job {JobId}) for member {MemberKey}",
-                step.Name, job.JobId, message.MemberKey);
+                await _workerDispatcher.DispatchJobAsync(job);
+
+                _logger.LogInformation(
+                    "Dispatched on_member_removed step '{StepName}' (job {JobId}) for member {MemberKey}",
+                    step.Name, job.JobId, message.MemberKey);
+            }
+            catch (TemplateResolutionException ex)
+            {
+                _logger.LogWarning(
+                    "Skipping on_member_removed step '{StepName}' for member {MemberKey}: unresolved template variables [{Variables}]",
+                    step.Name, message.MemberKey, string.Join(", ", ex.UnresolvedVariables));
+            }
         }
     }
 }

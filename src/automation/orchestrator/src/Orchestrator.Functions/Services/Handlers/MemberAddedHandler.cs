@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Exceptions;
 using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
@@ -136,68 +137,77 @@ public class MemberAddedHandler : IMemberAddedHandler
                 continue;
             }
 
-            // Create step executions for each step in the phase
-            var jobs = new List<WorkerJobMessage>();
-            var stepRecords = new List<StepExecutionRecord>();
-
-            for (var stepIndex = 0; stepIndex < phaseDefinition.Steps.Count; stepIndex++)
+            try
             {
-                var step = phaseDefinition.Steps[stepIndex];
+                // Create step executions for each step in the phase
+                var jobs = new List<WorkerJobMessage>();
+                var stepRecords = new List<StepExecutionRecord>();
 
-                // Resolve function name and parameters using member data
-                var resolvedFunction = _templateResolver.ResolveString(
-                    step.Function, memberData, batch.Id, batch.BatchStartTime);
-                var resolvedParams = _templateResolver.ResolveParams(
-                    step.Params, memberData, batch.Id, batch.BatchStartTime);
-
-                var stepRecord = new StepExecutionRecord
+                for (var stepIndex = 0; stepIndex < phaseDefinition.Steps.Count; stepIndex++)
                 {
-                    PhaseExecutionId = phaseExec.Id,
-                    BatchMemberId = message.BatchMemberId,
-                    StepName = step.Name,
-                    StepIndex = stepIndex,
-                    WorkerId = step.WorkerId,
-                    FunctionName = resolvedFunction,
-                    ParamsJson = JsonSerializer.Serialize(resolvedParams),
-                    IsPollStep = step.Poll != null,
-                    PollIntervalSec = step.Poll != null ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
-                    PollTimeoutSec = step.Poll != null ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
-                    OnFailure = step.OnFailure
-                };
+                    var step = phaseDefinition.Steps[stepIndex];
 
-                var stepId = await _stepRepo.InsertAsync(stepRecord);
-                stepRecord.Id = stepId;
-                stepRecords.Add(stepRecord);
-            }
+                    // Resolve function name and parameters using member data
+                    var resolvedFunction = _templateResolver.ResolveString(
+                        step.Function, memberData, batch.Id, batch.BatchStartTime);
+                    var resolvedParams = _templateResolver.ResolveParams(
+                        step.Params, memberData, batch.Id, batch.BatchStartTime);
 
-            // Dispatch first step_index for this phase (sequential within phase)
-            var firstSteps = stepRecords.Where(s => s.StepIndex == 0).ToList();
-            foreach (var step in firstSteps)
-            {
-                var job = new WorkerJobMessage
-                {
-                    JobId = $"step-{step.Id}",
-                    BatchId = message.BatchId,
-                    WorkerId = step.WorkerId!,
-                    FunctionName = step.FunctionName!,
-                    Parameters = string.IsNullOrEmpty(step.ParamsJson)
-                        ? new Dictionary<string, string>()
-                        : JsonSerializer.Deserialize<Dictionary<string, string>>(step.ParamsJson) ?? new(),
-                    CorrelationData = new JobCorrelationData
+                    var stepRecord = new StepExecutionRecord
                     {
-                        StepExecutionId = step.Id,
-                        IsInitStep = false,
-                        RunbookName = message.RunbookName,
-                        RunbookVersion = phaseExec.RunbookVersion
-                    }
-                };
+                        PhaseExecutionId = phaseExec.Id,
+                        BatchMemberId = message.BatchMemberId,
+                        StepName = step.Name,
+                        StepIndex = stepIndex,
+                        WorkerId = step.WorkerId,
+                        FunctionName = resolvedFunction,
+                        ParamsJson = JsonSerializer.Serialize(resolvedParams),
+                        IsPollStep = step.Poll != null,
+                        PollIntervalSec = step.Poll != null ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
+                        PollTimeoutSec = step.Poll != null ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
+                        OnFailure = step.OnFailure
+                    };
 
-                await _workerDispatcher.DispatchJobAsync(job);
-                await _stepRepo.SetDispatchedAsync(step.Id, job.JobId);
+                    var stepId = await _stepRepo.InsertAsync(stepRecord);
+                    stepRecord.Id = stepId;
+                    stepRecords.Add(stepRecord);
+                }
 
-                _logger.LogInformation(
-                    "Dispatched catch-up step '{StepName}' for member {MemberKey} in phase {PhaseName}",
-                    step.StepName, message.MemberKey, phaseExec.PhaseName);
+                // Dispatch first step_index for this phase (sequential within phase)
+                var firstSteps = stepRecords.Where(s => s.StepIndex == 0).ToList();
+                foreach (var step in firstSteps)
+                {
+                    var job = new WorkerJobMessage
+                    {
+                        JobId = $"step-{step.Id}",
+                        BatchId = message.BatchId,
+                        WorkerId = step.WorkerId!,
+                        FunctionName = step.FunctionName!,
+                        Parameters = string.IsNullOrEmpty(step.ParamsJson)
+                            ? new Dictionary<string, string>()
+                            : JsonSerializer.Deserialize<Dictionary<string, string>>(step.ParamsJson) ?? new(),
+                        CorrelationData = new JobCorrelationData
+                        {
+                            StepExecutionId = step.Id,
+                            IsInitStep = false,
+                            RunbookName = message.RunbookName,
+                            RunbookVersion = phaseExec.RunbookVersion
+                        }
+                    };
+
+                    await _workerDispatcher.DispatchJobAsync(job);
+                    await _stepRepo.SetDispatchedAsync(step.Id, job.JobId);
+
+                    _logger.LogInformation(
+                        "Dispatched catch-up step '{StepName}' for member {MemberKey} in phase {PhaseName}",
+                        step.StepName, message.MemberKey, phaseExec.PhaseName);
+                }
+            }
+            catch (TemplateResolutionException ex)
+            {
+                _logger.LogWarning(
+                    "Skipping phase {PhaseName} for member {MemberKey}: unresolved template variables [{Variables}]",
+                    phaseExec.PhaseName, message.MemberKey, string.Join(", ", ex.UnresolvedVariables));
             }
         }
     }
