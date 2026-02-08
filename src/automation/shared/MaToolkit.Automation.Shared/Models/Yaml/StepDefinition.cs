@@ -16,6 +16,9 @@ public class StepDefinition
     [YamlMember(Alias = "params")]
     public Dictionary<string, string> Params { get; set; } = new();
 
+    [YamlMember(Alias = "output_params")]
+    public Dictionary<string, string> OutputParams { get; set; } = new();
+
     [YamlMember(Alias = "on_failure")]
     public string? OnFailure { get; set; }
 

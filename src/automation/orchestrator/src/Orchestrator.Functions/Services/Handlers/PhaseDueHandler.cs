@@ -242,6 +242,14 @@ public class PhaseDueHandler : IPhaseDueHandler
                 }
                 var dataRow = JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)!;
 
+                // Merge worker output data for cross-phase resolution
+                if (!string.IsNullOrEmpty(member.WorkerDataJson))
+                {
+                    var workerData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.WorkerDataJson)!;
+                    foreach (var (key, value) in workerData)
+                        dataRow[key] = value;  // Worker wins on collision
+                }
+
                 try
                 {
                     for (int i = 0; i < phaseDefinition.Steps.Count; i++)

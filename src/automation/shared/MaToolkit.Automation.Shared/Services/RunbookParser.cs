@@ -208,6 +208,18 @@ public class RunbookParser : IRunbookParser
                 }
             }
         }
+
+        // Validate output_params
+        if (step.OutputParams is not null)
+        {
+            foreach (var (key, value) in step.OutputParams)
+            {
+                if (string.IsNullOrWhiteSpace(key))
+                    errors.Add($"{context}, step '{step.Name}': output_params key must not be empty");
+                if (string.IsNullOrWhiteSpace(value))
+                    errors.Add($"{context}, step '{step.Name}': output_params value (result field name) must not be empty for key '{key}'");
+            }
+        }
     }
 
     private static void ValidateTemplateSyntax(string value, string context, List<string> errors)

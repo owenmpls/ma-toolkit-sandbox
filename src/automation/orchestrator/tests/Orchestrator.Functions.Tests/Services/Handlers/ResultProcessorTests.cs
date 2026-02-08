@@ -406,6 +406,166 @@ public class ResultProcessorTests
         _batchRepo.Verify(x => x.SetFailedAsync(It.IsAny<int>()), Times.Never);
     }
 
+    // ---- Output Params Extraction ----
+
+    [Fact]
+    public async Task ProcessStepResult_Success_ExtractsOutputParams()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            StepName = "lookup-mailbox",
+            Status = StepStatus.Dispatched
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetSucceededAsync(1, It.IsAny<string?>())).ReturnsAsync(true);
+
+        // Setup runbook with output_params
+        _runbookRepo.Setup(x => x.GetByNameAndVersionAsync("runbook1", 1)).ReturnsAsync(
+            new RunbookRecord { Id = 1, Name = "runbook1", Version = 1, YamlContent = "test", DataTableName = "t" });
+        _phaseRepo.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(
+            new PhaseExecutionRecord { Id = 10, BatchId = 1, PhaseName = "phase1" });
+        var stepDef = new MaToolkit.Automation.Shared.Models.Yaml.StepDefinition
+        {
+            Name = "lookup-mailbox",
+            OutputParams = new Dictionary<string, string> { ["MailboxGuid"] = "mailboxGuid" }
+        };
+        var definition = new MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition
+        {
+            Phases = new List<MaToolkit.Automation.Shared.Models.Yaml.PhaseDefinition>
+            {
+                new() { Name = "phase1", Steps = new List<MaToolkit.Automation.Shared.Models.Yaml.StepDefinition> { stepDef } }
+            }
+        };
+        _runbookParser.Setup(x => x.Parse(It.IsAny<string>())).Returns(definition);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Success,
+            Result = JsonSerializer.SerializeToElement(new { mailboxGuid = "abc-123" }),
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _memberRepo.Verify(x => x.MergeWorkerDataAsync(100,
+            It.Is<Dictionary<string, string>>(d => d["MailboxGuid"] == "abc-123")), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessStepResult_Success_NoOutputParams_SkipsMerge()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            StepName = "simple-step",
+            Status = StepStatus.Dispatched
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetSucceededAsync(1, It.IsAny<string?>())).ReturnsAsync(true);
+
+        _runbookRepo.Setup(x => x.GetByNameAndVersionAsync("runbook1", 1)).ReturnsAsync(
+            new RunbookRecord { Id = 1, Name = "runbook1", Version = 1, YamlContent = "test", DataTableName = "t" });
+        _phaseRepo.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(
+            new PhaseExecutionRecord { Id = 10, BatchId = 1, PhaseName = "phase1" });
+        var stepDef = new MaToolkit.Automation.Shared.Models.Yaml.StepDefinition
+        {
+            Name = "simple-step",
+            OutputParams = new Dictionary<string, string>()  // empty
+        };
+        var definition = new MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition
+        {
+            Phases = new List<MaToolkit.Automation.Shared.Models.Yaml.PhaseDefinition>
+            {
+                new() { Name = "phase1", Steps = new List<MaToolkit.Automation.Shared.Models.Yaml.StepDefinition> { stepDef } }
+            }
+        };
+        _runbookParser.Setup(x => x.Parse(It.IsAny<string>())).Returns(definition);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Success,
+            Result = JsonSerializer.SerializeToElement(new { data = "value" }),
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        await _sut.ProcessAsync(result);
+
+        _memberRepo.Verify(x => x.MergeWorkerDataAsync(It.IsAny<int>(),
+            It.IsAny<Dictionary<string, string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessStepResult_Success_MissingResultField_WarnsButDoesNotFail()
+    {
+        var stepExec = new StepExecutionRecord
+        {
+            Id = 1,
+            PhaseExecutionId = 10,
+            BatchMemberId = 100,
+            StepName = "lookup-step",
+            Status = StepStatus.Dispatched
+        };
+        _stepRepo.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(stepExec);
+        _stepRepo.Setup(x => x.SetSucceededAsync(1, It.IsAny<string?>())).ReturnsAsync(true);
+
+        _runbookRepo.Setup(x => x.GetByNameAndVersionAsync("runbook1", 1)).ReturnsAsync(
+            new RunbookRecord { Id = 1, Name = "runbook1", Version = 1, YamlContent = "test", DataTableName = "t" });
+        _phaseRepo.Setup(x => x.GetByIdAsync(10)).ReturnsAsync(
+            new PhaseExecutionRecord { Id = 10, BatchId = 1, PhaseName = "phase1" });
+        var stepDef = new MaToolkit.Automation.Shared.Models.Yaml.StepDefinition
+        {
+            Name = "lookup-step",
+            OutputParams = new Dictionary<string, string> { ["MailboxGuid"] = "nonExistentField" }
+        };
+        var definition = new MaToolkit.Automation.Shared.Models.Yaml.RunbookDefinition
+        {
+            Phases = new List<MaToolkit.Automation.Shared.Models.Yaml.PhaseDefinition>
+            {
+                new() { Name = "phase1", Steps = new List<MaToolkit.Automation.Shared.Models.Yaml.StepDefinition> { stepDef } }
+            }
+        };
+        _runbookParser.Setup(x => x.Parse(It.IsAny<string>())).Returns(definition);
+
+        var result = new WorkerResultMessage
+        {
+            JobId = "step-1",
+            Status = WorkerResultStatus.Success,
+            Result = JsonSerializer.SerializeToElement(new { otherField = "value" }),
+            CorrelationData = new JobCorrelationData
+            {
+                StepExecutionId = 1,
+                RunbookName = "runbook1",
+                RunbookVersion = 1
+            }
+        };
+
+        // Should not throw
+        await _sut.ProcessAsync(result);
+
+        // Should not merge (no fields extracted)
+        _memberRepo.Verify(x => x.MergeWorkerDataAsync(It.IsAny<int>(),
+            It.IsAny<Dictionary<string, string>>()), Times.Never);
+        // Progression should still proceed
+        _progressionService.Verify(x => x.CheckMemberProgressionAsync(10, 100, "runbook1", 1), Times.Once);
+    }
+
     [Fact]
     public async Task ProcessInitResult_Failure_RetriesExhausted_MarksBatchFailed()
     {

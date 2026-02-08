@@ -96,6 +96,14 @@ public class MemberAddedHandler : IMemberAddedHandler
         }
         var memberData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)!;
 
+        // Merge worker output data for cross-phase resolution
+        if (!string.IsNullOrEmpty(member.WorkerDataJson))
+        {
+            var workerData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.WorkerDataJson)!;
+            foreach (var (key, value) in workerData)
+                memberData[key] = value;  // Worker wins on collision
+        }
+
         // Get overdue phases (dispatched or completed)
         var overduePhases = (await _phaseRepo.GetDispatchedByBatchAsync(message.BatchId))
             .OrderBy(p => p.OffsetMinutes)

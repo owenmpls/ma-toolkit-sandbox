@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Messages;
+using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
 
 namespace Orchestrator.Functions.Services;
@@ -21,6 +22,9 @@ public class PhaseProgressionService : IPhaseProgressionService
     private readonly IBatchRepository _batchRepo;
     private readonly IMemberRepository _memberRepo;
     private readonly IWorkerDispatcher _workerDispatcher;
+    private readonly IRunbookRepository _runbookRepo;
+    private readonly IRunbookParser _runbookParser;
+    private readonly ITemplateResolver _templateResolver;
     private readonly ILogger<PhaseProgressionService> _logger;
 
     public PhaseProgressionService(
@@ -29,6 +33,9 @@ public class PhaseProgressionService : IPhaseProgressionService
         IBatchRepository batchRepo,
         IMemberRepository memberRepo,
         IWorkerDispatcher workerDispatcher,
+        IRunbookRepository runbookRepo,
+        IRunbookParser runbookParser,
+        ITemplateResolver templateResolver,
         ILogger<PhaseProgressionService> logger)
     {
         _stepRepo = stepRepo;
@@ -36,6 +43,9 @@ public class PhaseProgressionService : IPhaseProgressionService
         _batchRepo = batchRepo;
         _memberRepo = memberRepo;
         _workerDispatcher = workerDispatcher;
+        _runbookRepo = runbookRepo;
+        _runbookParser = runbookParser;
+        _templateResolver = templateResolver;
         _logger = logger;
     }
 
@@ -57,19 +67,60 @@ public class PhaseProgressionService : IPhaseProgressionService
             switch (step.Status)
             {
                 case StepStatus.Pending:
-                    // Dispatch this step
+                    // Dispatch this step — re-resolve params from fresh member data
                     var phase = await _phaseRepo.GetByIdAsync(phaseExecutionId);
                     var batchId = phase?.BatchId ?? 0;
+
+                    var resolvedParams = string.IsNullOrEmpty(step.ParamsJson)
+                        ? new Dictionary<string, string>()
+                        : JsonSerializer.Deserialize<Dictionary<string, string>>(step.ParamsJson) ?? new();
+                    var resolvedFunction = step.FunctionName!;
+
+                    // Re-resolve templates from merged data_json + worker_data_json
+                    try
+                    {
+                        var member = await _memberRepo.GetByIdAsync(batchMemberId);
+                        var runbook = await _runbookRepo.GetByNameAndVersionAsync(runbookName, runbookVersion);
+                        if (member != null && runbook != null && !string.IsNullOrEmpty(member.DataJson))
+                        {
+                            var definition = _runbookParser.Parse(runbook.YamlContent);
+                            var phaseDef = definition.Phases.FirstOrDefault(p => p.Name == phase?.PhaseName);
+                            var stepDef = phaseDef?.Steps.FirstOrDefault(s => s.Name == step.StepName);
+
+                            if (stepDef != null)
+                            {
+                                var mergedData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.DataJson)!;
+                                if (!string.IsNullOrEmpty(member.WorkerDataJson))
+                                {
+                                    var workerData = JsonSerializer.Deserialize<Dictionary<string, string>>(member.WorkerDataJson)!;
+                                    foreach (var (key, value) in workerData)
+                                        mergedData[key] = value;
+                                }
+
+                                var batch = await _batchRepo.GetByIdAsync(batchId);
+                                resolvedParams = _templateResolver.ResolveParams(
+                                    stepDef.Params, mergedData, batchId, batch?.BatchStartTime);
+                                resolvedFunction = _templateResolver.ResolveString(
+                                    stepDef.Function, mergedData, batchId, batch?.BatchStartTime);
+
+                                await _stepRepo.UpdateParamsJsonAsync(step.Id, JsonSerializer.Serialize(resolvedParams));
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Failed to re-resolve params for step '{StepName}' member {MemberId}, using pre-resolved params",
+                            step.StepName, batchMemberId);
+                    }
 
                     var job = new WorkerJobMessage
                     {
                         JobId = $"step-{step.Id}",
                         BatchId = batchId,
                         WorkerId = step.WorkerId!,
-                        FunctionName = step.FunctionName!,
-                        Parameters = string.IsNullOrEmpty(step.ParamsJson)
-                            ? new Dictionary<string, string>()
-                            : JsonSerializer.Deserialize<Dictionary<string, string>>(step.ParamsJson) ?? new(),
+                        FunctionName = resolvedFunction,
+                        Parameters = resolvedParams,
                         CorrelationData = new JobCorrelationData
                         {
                             StepExecutionId = step.Id,

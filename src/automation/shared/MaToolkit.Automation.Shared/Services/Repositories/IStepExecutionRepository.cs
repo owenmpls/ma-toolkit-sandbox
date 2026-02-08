@@ -22,4 +22,5 @@ public interface IStepExecutionRepository
     Task<bool> SetCancelledAsync(int id);
     Task<bool> SetRetryPendingAsync(int id, DateTime retryAfter);
     Task UpdatePollStateAsync(int id);
+    Task UpdateParamsJsonAsync(int id, string paramsJson);
 }

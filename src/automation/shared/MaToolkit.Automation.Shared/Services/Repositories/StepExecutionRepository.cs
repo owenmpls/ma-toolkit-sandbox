@@ -211,4 +211,13 @@ public class StepExecutionRepository : IStepExecutionRepository
             WHERE id = @Id",
             new { Id = id });
     }
+
+    public async Task UpdateParamsJsonAsync(int id, string paramsJson)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(@"
+            UPDATE step_executions SET params_json = @ParamsJson
+            WHERE id = @Id AND status = @Status",
+            new { Id = id, ParamsJson = paramsJson, Status = StepStatus.Pending });
+    }
 }

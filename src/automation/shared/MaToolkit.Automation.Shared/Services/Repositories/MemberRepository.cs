@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Dapper;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Models.Db;
@@ -96,6 +97,25 @@ public class MemberRepository : IMemberRepository
         await conn.ExecuteAsync(
             "UPDATE batch_members SET data_json = @DataJson WHERE id = @Id AND status = @Status",
             new { Id = id, DataJson = dataJson, Status = MemberStatus.Active });
+    }
+
+    public async Task MergeWorkerDataAsync(int id, Dictionary<string, string> outputData)
+    {
+        using var conn = _db.CreateConnection();
+        var existing = await conn.QuerySingleOrDefaultAsync<string?>(
+            "SELECT worker_data_json FROM batch_members WHERE id = @Id",
+            new { Id = id });
+
+        var merged = string.IsNullOrEmpty(existing)
+            ? new Dictionary<string, string>()
+            : JsonSerializer.Deserialize<Dictionary<string, string>>(existing) ?? new();
+
+        foreach (var (key, value) in outputData)
+            merged[key] = value;
+
+        await conn.ExecuteAsync(
+            "UPDATE batch_members SET worker_data_json = @WorkerDataJson WHERE id = @Id",
+            new { Id = id, WorkerDataJson = JsonSerializer.Serialize(merged) });
     }
 
     public async Task<bool> IsMemberInActiveBatchAsync(int runbookId, string memberKey)

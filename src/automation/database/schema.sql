@@ -53,6 +53,7 @@ CREATE TABLE batch_members (
     batch_id                INT NOT NULL REFERENCES batches(id),
     member_key              NVARCHAR(256) NOT NULL,
     data_json               NVARCHAR(MAX),
+    worker_data_json        NVARCHAR(MAX),
     status                  NVARCHAR(32) NOT NULL DEFAULT 'active',
     added_at                DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     removed_at              DATETIME2,

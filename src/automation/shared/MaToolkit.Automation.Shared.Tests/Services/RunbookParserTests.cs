@@ -863,6 +863,123 @@ phases:
 
     #endregion
 
+    #region Output Params Validation Tests
+
+    [Fact]
+    public void Parse_WithOutputParams_ParsesCorrectly()
+    {
+        var yaml = @"
+name: test-runbook
+data_source:
+  type: dataverse
+  connection: conn
+  query: SELECT 1
+  primary_key: id
+  batch_time: immediate
+phases:
+  - name: phase1
+    offset: T-0
+    steps:
+      - name: lookup-mailbox
+        worker_id: worker1
+        function: Get-MailboxGuid
+        params:
+          upn: '{{UserPrincipalName}}'
+        output_params:
+          MailboxGuid: mailboxGuid
+          DisplayName: displayName
+";
+
+        var result = _sut.Parse(yaml);
+
+        result.Phases[0].Steps[0].OutputParams.Should().HaveCount(2);
+        result.Phases[0].Steps[0].OutputParams["MailboxGuid"].Should().Be("mailboxGuid");
+        result.Phases[0].Steps[0].OutputParams["DisplayName"].Should().Be("displayName");
+    }
+
+    [Fact]
+    public void Parse_WithoutOutputParams_DefaultsToEmptyDictionary()
+    {
+        var yaml = @"
+name: test-runbook
+data_source:
+  type: dataverse
+  connection: conn
+  query: SELECT 1
+  primary_key: id
+  batch_time: immediate
+phases:
+  - name: phase1
+    offset: T-0
+    steps:
+      - name: step1
+        worker_id: worker1
+        function: DoWork
+";
+
+        var result = _sut.Parse(yaml);
+
+        result.Phases[0].Steps[0].OutputParams.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_OutputParams_EmptyValue_ReturnsError()
+    {
+        var yaml = @"
+name: test
+data_source:
+  type: dataverse
+  connection: conn
+  query: SELECT 1
+  primary_key: id
+  batch_time: immediate
+phases:
+  - name: phase1
+    offset: T-0
+    steps:
+      - name: step1
+        worker_id: worker1
+        function: DoWork
+        output_params:
+          MailboxGuid: ''
+";
+        var definition = _sut.Parse(yaml);
+
+        var errors = _sut.Validate(definition);
+
+        errors.Should().Contain(e => e.Contains("output_params value") && e.Contains("must not be empty"));
+    }
+
+    [Fact]
+    public void Validate_OutputParams_Valid_NoError()
+    {
+        var yaml = @"
+name: test
+data_source:
+  type: dataverse
+  connection: conn
+  query: SELECT 1
+  primary_key: id
+  batch_time: immediate
+phases:
+  - name: phase1
+    offset: T-0
+    steps:
+      - name: step1
+        worker_id: worker1
+        function: DoWork
+        output_params:
+          MailboxGuid: mailboxGuid
+";
+        var definition = _sut.Parse(yaml);
+
+        var errors = _sut.Validate(definition);
+
+        errors.Should().BeEmpty();
+    }
+
+    #endregion
+
     #region Template Syntax Validation Tests
 
     [Fact]

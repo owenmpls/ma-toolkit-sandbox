@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
@@ -233,6 +234,9 @@ public class ResultProcessor : IResultProcessor
                 "Step execution {StepExecutionId} succeeded",
                 stepExec.Id);
 
+            // Extract output params if configured
+            await ExtractOutputParamsAsync(stepExec, finalResultJson, correlation);
+
             // Advance this member to the next step (per-member progression)
             await _progressionService.CheckMemberProgressionAsync(
                 stepExec.PhaseExecutionId, stepExec.BatchMemberId,
@@ -290,6 +294,74 @@ public class ResultProcessor : IResultProcessor
             // Handle member failure: mark member failed, cancel remaining steps, check phase completion
             await _progressionService.HandleMemberFailureAsync(
                 stepExec.PhaseExecutionId, stepExec.BatchMemberId);
+        }
+    }
+
+    private async Task ExtractOutputParamsAsync(
+        StepExecutionRecord stepExec, string? finalResultJson, JobCorrelationData correlation)
+    {
+        if (string.IsNullOrEmpty(finalResultJson))
+            return;
+
+        try
+        {
+            var runbook = await _runbookRepo.GetByNameAndVersionAsync(
+                correlation.RunbookName, correlation.RunbookVersion);
+            if (runbook == null)
+            {
+                _logger.LogWarning(
+                    "Runbook {RunbookName} v{Version} not found for output param extraction",
+                    correlation.RunbookName, correlation.RunbookVersion);
+                return;
+            }
+
+            var definition = _runbookParser.Parse(runbook.YamlContent);
+
+            // Find the phase execution to get phase name
+            var phaseExec = await _phaseRepo.GetByIdAsync(stepExec.PhaseExecutionId);
+            if (phaseExec == null)
+                return;
+
+            var phaseDef = definition.Phases.FirstOrDefault(p => p.Name == phaseExec.PhaseName);
+            if (phaseDef == null)
+                return;
+
+            var stepDef = phaseDef.Steps.FirstOrDefault(s => s.Name == stepExec.StepName);
+            if (stepDef == null || stepDef.OutputParams.Count == 0)
+                return;
+
+            var resultDoc = JsonDocument.Parse(finalResultJson);
+            var outputDict = new Dictionary<string, string>();
+
+            foreach (var (outputKey, resultFieldName) in stepDef.OutputParams)
+            {
+                if (resultDoc.RootElement.TryGetProperty(resultFieldName, out var fieldValue))
+                {
+                    outputDict[outputKey] = fieldValue.ValueKind == JsonValueKind.String
+                        ? fieldValue.GetString()!
+                        : fieldValue.GetRawText();
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Output param '{OutputKey}': result field '{ResultField}' not found in step '{StepName}' result for member {MemberId}",
+                        outputKey, resultFieldName, stepExec.StepName, stepExec.BatchMemberId);
+                }
+            }
+
+            if (outputDict.Count > 0)
+            {
+                await _memberRepo.MergeWorkerDataAsync(stepExec.BatchMemberId, outputDict);
+                _logger.LogInformation(
+                    "Extracted {Count} output params from step '{StepName}' for member {MemberId}",
+                    outputDict.Count, stepExec.StepName, stepExec.BatchMemberId);
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to parse result JSON for output param extraction from step '{StepName}' for member {MemberId}",
+                stepExec.StepName, stepExec.BatchMemberId);
         }
     }
 
