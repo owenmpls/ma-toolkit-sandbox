@@ -44,7 +44,9 @@ public class ListRunbooksFunction
                 r.DataTableName,
                 r.OverdueBehavior,
                 r.RerunInit,
-                r.CreatedAt
+                r.CreatedAt,
+                r.LastError,
+                r.LastErrorAt
             })
         });
     }
@@ -76,7 +78,9 @@ public class ListRunbooksFunction
                 r.IsActive,
                 r.OverdueBehavior,
                 r.RerunInit,
-                r.CreatedAt
+                r.CreatedAt,
+                r.LastError,
+                r.LastErrorAt
             })
         });
     }

@@ -47,7 +47,9 @@ public class GetRunbookFunction
             runbook.IsActive,
             runbook.OverdueBehavior,
             runbook.RerunInit,
-            runbook.CreatedAt
+            runbook.CreatedAt,
+            runbook.LastError,
+            runbook.LastErrorAt
         });
     }
 
@@ -77,7 +79,9 @@ public class GetRunbookFunction
             runbook.IsActive,
             runbook.OverdueBehavior,
             runbook.RerunInit,
-            runbook.CreatedAt
+            runbook.CreatedAt,
+            runbook.LastError,
+            runbook.LastErrorAt
         });
     }
 }

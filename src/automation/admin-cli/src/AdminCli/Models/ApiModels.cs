@@ -10,6 +10,8 @@ public class RunbookResponse
     public string YamlContent { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? LastError { get; set; }
+    public DateTime? LastErrorAt { get; set; }
 }
 
 public class RunbookSummary
@@ -19,6 +21,8 @@ public class RunbookSummary
     public int Version { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? LastError { get; set; }
+    public DateTime? LastErrorAt { get; set; }
 }
 
 public class RunbookVersionSummary
@@ -26,6 +30,8 @@ public class RunbookVersionSummary
     public int Version { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? LastError { get; set; }
+    public DateTime? LastErrorAt { get; set; }
 }
 
 #endregion

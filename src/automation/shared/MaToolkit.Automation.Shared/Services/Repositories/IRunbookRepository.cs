@@ -14,4 +14,6 @@ public interface IRunbookRepository
     Task DeactivatePreviousVersionsAsync(string name, int currentVersion);
     Task<bool> DeactivateVersionAsync(string name, int version);
     Task SetIgnoreOverdueAppliedAsync(int id);
+    Task SetLastErrorAsync(int id, string error);
+    Task ClearLastErrorAsync(int id);
 }

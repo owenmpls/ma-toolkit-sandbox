@@ -93,4 +93,20 @@ public class RunbookRepository : IRunbookRepository
             "UPDATE runbooks SET ignore_overdue_applied = 1 WHERE id = @Id",
             new { Id = id });
     }
+
+    public async Task SetLastErrorAsync(int id, string error)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE runbooks SET last_error = @Error, last_error_at = SYSUTCDATETIME() WHERE id = @Id",
+            new { Id = id, Error = error });
+    }
+
+    public async Task ClearLastErrorAsync(int id)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE runbooks SET last_error = NULL, last_error_at = NULL WHERE id = @Id",
+            new { Id = id });
+    }
 }

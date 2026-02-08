@@ -71,11 +71,21 @@ public class SchedulerTimerFunction
             try
             {
                 await ProcessRunbookAsync(runbook);
+                await _runbookRepo.ClearLastErrorAsync(runbook.Id);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing runbook {RunbookName} v{Version}",
+                _logger.LogCritical(ex, "Error processing runbook {RunbookName} v{Version}",
                     runbook.Name, runbook.Version);
+                try
+                {
+                    await _runbookRepo.SetLastErrorAsync(runbook.Id, ex.Message);
+                }
+                catch (Exception dbEx)
+                {
+                    _logger.LogError(dbEx, "Failed to persist error state for runbook {RunbookName}",
+                        runbook.Name);
+                }
             }
         }
 

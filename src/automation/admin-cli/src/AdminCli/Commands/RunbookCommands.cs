@@ -86,13 +86,18 @@ public static class RunbookCommands
             var table = new Table();
             table.AddColumn("Name");
             table.AddColumn("Version");
+            table.AddColumn("Status");
             table.AddColumn("Created");
 
             foreach (var rb in runbooks)
             {
+                var status = string.IsNullOrEmpty(rb.LastError)
+                    ? "[green]ok[/]"
+                    : $"[red]error[/] [dim]({rb.LastErrorAt?.ToLocalTime():yyyy-MM-dd HH:mm})[/]";
                 table.AddRow(
                     rb.Name,
                     rb.Version.ToString(),
+                    status,
                     rb.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
             }
 
@@ -122,6 +127,13 @@ public static class RunbookCommands
         command.SetHandler(async (string name, int? version, FileInfo? output, string? apiUrl) =>
         {
             var runbook = await apiClient.GetRunbookAsync(name, version, apiUrl);
+
+            if (!string.IsNullOrEmpty(runbook.LastError))
+            {
+                AnsiConsole.MarkupLine($"[red]Warning:[/] Last processing error at {runbook.LastErrorAt?.ToLocalTime():yyyy-MM-dd HH:mm}:");
+                AnsiConsole.MarkupLine($"[red]{Markup.Escape(runbook.LastError)}[/]");
+                AnsiConsole.WriteLine();
+            }
 
             if (output != null)
             {
@@ -161,14 +173,19 @@ public static class RunbookCommands
             table.Title = new TableTitle($"Versions of [blue]{name}[/]");
             table.AddColumn("Version");
             table.AddColumn("Status");
+            table.AddColumn("Error");
             table.AddColumn("Created");
 
             foreach (var v in versions.OrderByDescending(x => x.Version))
             {
                 var status = v.IsActive ? "[green]active[/]" : "[dim]inactive[/]";
+                var error = string.IsNullOrEmpty(v.LastError)
+                    ? "[dim]-[/]"
+                    : $"[red]{Markup.Escape(v.LastError.Length > 60 ? v.LastError[..60] + "..." : v.LastError)}[/]";
                 table.AddRow(
                     v.Version.ToString(),
                     status,
+                    error,
                     v.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
             }
 

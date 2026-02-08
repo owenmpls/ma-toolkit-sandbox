@@ -15,6 +15,8 @@ CREATE TABLE runbooks (
     ignore_overdue_applied  BIT NOT NULL DEFAULT 0,
     rerun_init              BIT NOT NULL DEFAULT 0,
     created_at              DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    last_error              NVARCHAR(MAX)   NULL,
+    last_error_at           DATETIME2       NULL,
     CONSTRAINT UQ_runbook_name_version UNIQUE (name, version),
     CONSTRAINT CK_overdue_behavior CHECK (overdue_behavior IN ('rerun', 'ignore'))
 );
