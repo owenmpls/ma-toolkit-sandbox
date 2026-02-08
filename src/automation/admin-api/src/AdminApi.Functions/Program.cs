@@ -46,14 +46,11 @@ builder.Services.AddOptions<QueryClientSettings>()
 
 builder.Services.AddSingleton<IDbConnectionFactory, AdminApiDbConnectionFactory>();
 
-// Service Bus (optional - for dispatching phase events to orchestrator)
-// When not configured, ManualBatchService will skip event publishing
+// Service Bus (required - dispatches phase/init events to orchestrator)
 builder.Services.AddSingleton(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<AdminApiSettings>>().Value;
-    if (string.IsNullOrEmpty(settings.ServiceBusNamespace))
-        return (ServiceBusClient?)null;
-    return (ServiceBusClient?)new ServiceBusClient(settings.ServiceBusNamespace, new DefaultAzureCredential());
+    return new ServiceBusClient(settings.ServiceBusNamespace, new DefaultAzureCredential());
 });
 
 // Shared data source services

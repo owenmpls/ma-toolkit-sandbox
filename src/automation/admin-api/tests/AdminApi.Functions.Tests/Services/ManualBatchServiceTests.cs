@@ -1,4 +1,5 @@
 using System.Data;
+using Azure.Messaging.ServiceBus;
 using FluentAssertions;
 using AdminApi.Functions.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
@@ -23,6 +24,8 @@ public class ManualBatchServiceTests
     private readonly Mock<IPhaseEvaluator> _phaseEvaluatorMock;
     private readonly Mock<IDbConnectionFactory> _dbMock;
     private readonly Mock<ILogger<ManualBatchService>> _loggerMock;
+    private readonly Mock<ServiceBusClient> _serviceBusClientMock;
+    private readonly Mock<ServiceBusSender> _senderMock;
 
     public ManualBatchServiceTests()
     {
@@ -34,6 +37,14 @@ public class ManualBatchServiceTests
         _phaseEvaluatorMock = new Mock<IPhaseEvaluator>();
         _dbMock = new Mock<IDbConnectionFactory>();
         _loggerMock = new Mock<ILogger<ManualBatchService>>();
+
+        // Setup Service Bus mock
+        _serviceBusClientMock = new Mock<ServiceBusClient>();
+        _senderMock = new Mock<ServiceBusSender>();
+        _senderMock.Setup(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default))
+            .Returns(Task.CompletedTask);
+        _serviceBusClientMock.Setup(x => x.CreateSender(It.IsAny<string>()))
+            .Returns(_senderMock.Object);
 
         // Setup phase evaluator defaults
         _phaseEvaluatorMock.Setup(x => x.ParseOffsetMinutes(It.IsAny<string>())).Returns(0);
@@ -48,7 +59,7 @@ public class ManualBatchServiceTests
             _phaseEvaluatorMock.Object,
             _dbMock.Object,
             _loggerMock.Object,
-            serviceBusClient: null);
+            _serviceBusClientMock.Object);
     }
 
     private static RunbookRecord CreateRunbook()
@@ -408,6 +419,67 @@ public class ManualBatchServiceTests
 
         _phaseRepoMock.Verify(x => x.SetDispatchedAsync(5), Times.Once);
         _batchRepoMock.Verify(x => x.UpdateCurrentPhaseAsync(1, "phase1"), Times.Once);
+    }
+
+    #endregion
+
+    #region AdvanceBatch - Service Bus Tests
+
+    [Fact]
+    public async Task AdvanceBatchAsync_DispatchesPhase_SendsServiceBusMessage()
+    {
+        var batch = new BatchRecord
+        {
+            Id = 1,
+            IsManual = true,
+            Status = BatchStatus.Active
+        };
+        var runbook = CreateRunbook();
+        var definition = CreateDefinition();
+
+        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
+            .ReturnsAsync(new List<InitExecutionRecord>());
+
+        _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
+            .ReturnsAsync(new List<PhaseExecutionRecord>
+            {
+                new() { Id = 5, BatchId = 1, PhaseName = "phase1", OffsetMinutes = 0, Status = PhaseStatus.Pending, RunbookVersion = 1 }
+            });
+
+        _memberRepoMock.Setup(x => x.GetActiveByBatchAsync(1))
+            .ReturnsAsync(new List<BatchMemberRecord>
+            {
+                new() { Id = 10, BatchId = 1, MemberKey = "user1" }
+            });
+
+        await _sut.AdvanceBatchAsync(batch, runbook, definition);
+
+        _serviceBusClientMock.Verify(x => x.CreateSender("orchestrator-events"), Times.Once);
+        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task AdvanceBatchAsync_DispatchesInit_SendsServiceBusMessage()
+    {
+        var batch = new BatchRecord
+        {
+            Id = 1,
+            IsManual = true,
+            Status = BatchStatus.Detected
+        };
+        var runbook = CreateRunbook();
+        var definition = CreateDefinition(withInit: true);
+
+        _initRepoMock.Setup(x => x.GetByBatchAsync(1))
+            .ReturnsAsync(new List<InitExecutionRecord>
+            {
+                new() { Id = 1, BatchId = 1, Status = StepStatus.Pending }
+            });
+
+        await _sut.AdvanceBatchAsync(batch, runbook, definition);
+
+        _serviceBusClientMock.Verify(x => x.CreateSender("orchestrator-events"), Times.Once);
+        _senderMock.Verify(x => x.SendMessageAsync(It.IsAny<ServiceBusMessage>(), default), Times.Once);
     }
 
     #endregion

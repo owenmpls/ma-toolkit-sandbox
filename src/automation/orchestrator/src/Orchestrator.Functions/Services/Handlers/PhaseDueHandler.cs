@@ -1,6 +1,8 @@
 using System.Text.Json;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
+using MaToolkit.Automation.Shared.Models.Db;
 using MaToolkit.Automation.Shared.Models.Messages;
 using MaToolkit.Automation.Shared.Services;
 using MaToolkit.Automation.Shared.Services.Repositories;
@@ -21,6 +23,10 @@ public class PhaseDueHandler : IPhaseDueHandler
     private readonly IMemberRepository _memberRepo;
     private readonly IWorkerDispatcher _workerDispatcher;
     private readonly IRunbookParser _runbookParser;
+    private readonly ITemplateResolver _templateResolver;
+    private readonly IPhaseEvaluator _phaseEvaluator;
+    private readonly IDynamicTableReader _dynamicTableReader;
+    private readonly IDbConnectionFactory _db;
     private readonly ILogger<PhaseDueHandler> _logger;
 
     public PhaseDueHandler(
@@ -31,6 +37,10 @@ public class PhaseDueHandler : IPhaseDueHandler
         IMemberRepository memberRepo,
         IWorkerDispatcher workerDispatcher,
         IRunbookParser runbookParser,
+        ITemplateResolver templateResolver,
+        IPhaseEvaluator phaseEvaluator,
+        IDynamicTableReader dynamicTableReader,
+        IDbConnectionFactory db,
         ILogger<PhaseDueHandler> logger)
     {
         _batchRepo = batchRepo;
@@ -40,6 +50,10 @@ public class PhaseDueHandler : IPhaseDueHandler
         _memberRepo = memberRepo;
         _workerDispatcher = workerDispatcher;
         _runbookParser = runbookParser;
+        _templateResolver = templateResolver;
+        _phaseEvaluator = phaseEvaluator;
+        _dynamicTableReader = dynamicTableReader;
+        _db = db;
         _logger = logger;
     }
 
@@ -55,6 +69,9 @@ public class PhaseDueHandler : IPhaseDueHandler
             _logger.LogError("Phase execution {PhaseExecutionId} not found", message.PhaseExecutionId);
             return;
         }
+
+        // Create step executions for this phase (idempotent — skips if steps already exist)
+        await CreateStepExecutionsAsync(message, phaseExecution);
 
         // Get all step executions for this phase grouped by step_index
         var allSteps = (await _stepRepo.GetByPhaseExecutionAsync(message.PhaseExecutionId))
@@ -154,6 +171,99 @@ public class PhaseDueHandler : IPhaseDueHandler
             message.PhaseExecutionId);
         await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
         await CheckBatchCompletionAsync(message.BatchId);
+    }
+
+    private async Task CreateStepExecutionsAsync(PhaseDueMessage message, PhaseExecutionRecord phase)
+    {
+        // Check if steps already exist (idempotent — scheduler may have pre-created them during transition)
+        var existingSteps = await _stepRepo.GetByPhaseExecutionAsync(message.PhaseExecutionId);
+        if (existingSteps.Any())
+            return;
+
+        // Load runbook definition
+        var runbook = await _runbookRepo.GetByNameAndVersionAsync(message.RunbookName, message.RunbookVersion);
+        if (runbook is null)
+        {
+            _logger.LogError("Runbook {RunbookName} v{Version} not found for step creation",
+                message.RunbookName, message.RunbookVersion);
+            return;
+        }
+
+        var definition = _runbookParser.Parse(runbook.YamlContent);
+        var phaseDefinition = definition.Phases.FirstOrDefault(p => p.Name == message.PhaseName);
+        if (phaseDefinition is null)
+        {
+            _logger.LogError("Phase definition '{PhaseName}' not found in runbook {RunbookName} v{Version}",
+                message.PhaseName, message.RunbookName, message.RunbookVersion);
+            return;
+        }
+
+        // Load batch and members
+        var batch = await _batchRepo.GetByIdAsync(message.BatchId);
+        var members = (await _memberRepo.GetActiveByBatchAsync(message.BatchId)).ToList();
+        if (members.Count == 0)
+        {
+            _logger.LogInformation("No active members for phase {PhaseExecutionId}, skipping step creation",
+                message.PhaseExecutionId);
+            return;
+        }
+
+        // Load member data from dynamic table
+        var memberKeys = members.Select(m => m.MemberKey).ToList();
+        var memberData = await _dynamicTableReader.GetMembersDataAsync(runbook.DataTableName, memberKeys);
+
+        // Create step executions in a transaction
+        using var conn = _db.CreateConnection();
+        conn.Open();
+        using var transaction = ((SqlConnection)conn).BeginTransaction();
+        try
+        {
+            foreach (var member in members)
+            {
+                if (!memberData.TryGetValue(member.MemberKey, out var dataRow))
+                {
+                    _logger.LogWarning("No data found for member {MemberKey} in table {TableName}",
+                        member.MemberKey, runbook.DataTableName);
+                    continue;
+                }
+
+                for (int i = 0; i < phaseDefinition.Steps.Count; i++)
+                {
+                    var step = phaseDefinition.Steps[i];
+                    var resolvedParams = _templateResolver.ResolveParams(
+                        step.Params, dataRow, message.BatchId, batch?.BatchStartTime);
+                    var resolvedFunction = _templateResolver.ResolveString(
+                        step.Function, dataRow, message.BatchId, batch?.BatchStartTime);
+
+                    await _stepRepo.InsertAsync(new StepExecutionRecord
+                    {
+                        PhaseExecutionId = phase.Id,
+                        BatchMemberId = member.Id,
+                        StepName = step.Name,
+                        StepIndex = i,
+                        WorkerId = step.WorkerId,
+                        FunctionName = resolvedFunction,
+                        ParamsJson = JsonSerializer.Serialize(resolvedParams),
+                        IsPollStep = step.Poll is not null,
+                        PollIntervalSec = step.Poll is not null
+                            ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
+                        PollTimeoutSec = step.Poll is not null
+                            ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
+                        OnFailure = step.OnFailure
+                    }, transaction);
+                }
+            }
+
+            transaction.Commit();
+            _logger.LogInformation(
+                "Created step executions for phase {PhaseExecutionId} ({PhaseName}): {MemberCount} members × {StepCount} steps",
+                message.PhaseExecutionId, message.PhaseName, members.Count, phaseDefinition.Steps.Count);
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 
     private async Task CheckBatchCompletionAsync(int batchId)

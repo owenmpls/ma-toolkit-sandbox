@@ -11,7 +11,8 @@ public class AdminApiSettings
 
     /// <summary>
     /// Service Bus namespace FQDN (e.g., matoolkit-sb.servicebus.windows.net).
-    /// Optional - if not set, manual batch advancement won't dispatch events.
+    /// Required - used to dispatch phase/init events to the orchestrator.
     /// </summary>
-    public string? ServiceBusNamespace { get; set; }
+    [Required]
+    public string ServiceBusNamespace { get; set; } = string.Empty;
 }

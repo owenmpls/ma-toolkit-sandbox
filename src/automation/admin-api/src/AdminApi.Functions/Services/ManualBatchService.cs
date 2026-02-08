@@ -53,7 +53,7 @@ public class ManualBatchService : IManualBatchService
     private readonly IDynamicTableManager _dynamicTableManager;
     private readonly IPhaseEvaluator _phaseEvaluator;
     private readonly IDbConnectionFactory _db;
-    private readonly ServiceBusClient? _serviceBusClient;
+    private readonly ServiceBusClient _serviceBusClient;
     private readonly ILogger<ManualBatchService> _logger;
 
     public ManualBatchService(
@@ -65,7 +65,7 @@ public class ManualBatchService : IManualBatchService
         IPhaseEvaluator phaseEvaluator,
         IDbConnectionFactory db,
         ILogger<ManualBatchService> logger,
-        ServiceBusClient? serviceBusClient = null)
+        ServiceBusClient serviceBusClient)
     {
         _batchRepo = batchRepo;
         _memberRepo = memberRepo;
@@ -232,10 +232,7 @@ public class ManualBatchService : IManualBatchService
             if (hasInitSteps && batch.Status == BatchStatus.Detected)
             {
                 // Dispatch init steps
-                if (_serviceBusClient != null)
-                {
-                    await PublishBatchInitAsync(batch, runbook, initExecs.Count());
-                }
+                await PublishBatchInitAsync(batch, runbook, initExecs.Count());
                 await _batchRepo.SetInitDispatchedAsync(batch.Id);
 
                 result.Success = true;
@@ -285,14 +282,11 @@ public class ManualBatchService : IManualBatchService
             }
 
             // Get active members
-            var members = await _memberRepo.GetActiveByBatchAsync(batch.Id);
-            var memberCount = members.Count();
+            var members = (await _memberRepo.GetActiveByBatchAsync(batch.Id)).ToList();
+            var memberCount = members.Count;
 
-            // Dispatch the phase via Service Bus if available
-            if (_serviceBusClient != null)
-            {
-                await PublishPhaseDueAsync(pendingPhase, batch, runbook);
-            }
+            // Dispatch the phase via Service Bus
+            await PublishPhaseDueAsync(pendingPhase, batch, runbook, members);
 
             // Update phase status
             await _phaseRepo.SetDispatchedAsync(pendingPhase.Id);
@@ -327,7 +321,7 @@ public class ManualBatchService : IManualBatchService
 
     private async Task PublishBatchInitAsync(BatchRecord batch, RunbookRecord runbook, int memberCount)
     {
-        await using var sender = _serviceBusClient!.CreateSender("orchestrator-events");
+        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
         var message = new BatchInitMessage
         {
             RunbookName = runbook.Name,
@@ -346,16 +340,21 @@ public class ManualBatchService : IManualBatchService
         await sender.SendMessageAsync(sbMessage);
     }
 
-    private async Task PublishPhaseDueAsync(PhaseExecutionRecord phase, BatchRecord batch, RunbookRecord runbook)
+    private async Task PublishPhaseDueAsync(
+        PhaseExecutionRecord phase, BatchRecord batch, RunbookRecord runbook,
+        List<BatchMemberRecord> members)
     {
-        await using var sender = _serviceBusClient!.CreateSender("orchestrator-events");
+        await using var sender = _serviceBusClient.CreateSender("orchestrator-events");
         var message = new PhaseDueMessage
         {
             PhaseExecutionId = phase.Id,
             PhaseName = phase.PhaseName,
             BatchId = batch.Id,
             RunbookName = runbook.Name,
-            RunbookVersion = phase.RunbookVersion
+            RunbookVersion = phase.RunbookVersion,
+            OffsetMinutes = phase.OffsetMinutes,
+            DueAt = phase.DueAt,
+            MemberIds = members.Select(m => m.Id).ToList()
         };
 
         var sbMessage = new ServiceBusMessage(JsonSerializer.Serialize(message))

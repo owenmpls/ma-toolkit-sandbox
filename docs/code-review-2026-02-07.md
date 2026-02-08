@@ -146,11 +146,12 @@ Updated `schema.sql` to match the C# models:
 - **File**: `src/automation/admin-api/src/AdminApi.Functions/Services/CsvUploadService.cs`
 - **Resolution**: Added required-column validation after primary key check — compares CSV headers against `GetExpectedColumns()` (primary key, batch time column, multi-valued columns, and template-referenced columns). Missing columns returned as errors with specific column names. Case-insensitive matching. 4 new tests added.
 
-### 4.3 Admin API: Service Bus is optional — manual batch advancement silently skips publishing
+### 4.3 Admin API: Service Bus is optional — manual batch advancement silently skips publishing — **FIXED**
 - `Program.cs`: `ServiceBusClient` is nullable; `ManualBatchService` skips publish if null
 - Batch appears "advanced" to the user but orchestrator never receives the event
 - **Fix**: Make Service Bus required (throw on startup if not configured)
 - **File**: `src/automation/admin-api/src/AdminApi.Functions/Program.cs:48-54`
+- **Resolution**: Made `ServiceBusNamespace` required with `[Required]` annotation (caught by `ValidateOnStart`). Made `ServiceBusClient` non-nullable in DI and `ManualBatchService`. Removed null guards — publish calls are now unconditional. Additionally moved step creation from scheduler's `PhaseDispatcher` into orchestrator's `PhaseDueHandler`, so both scheduler and admin-api are thin dispatchers that send `PhaseDueMessage` and the orchestrator owns all step creation, template resolution, and worker dispatch.
 
 ### 4.4 Scheduler: unresolved template variables passed silently to workers
 - `TemplateResolver.cs`: If a `{{column}}` doesn't match query data, the literal `{{column}}` string is sent to the worker
@@ -214,9 +215,9 @@ These are worth tracking but can be addressed post-initial-deployment:
 
 ## Progress Summary
 
-- **Fixed**: 14 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 4.1, 4.2)
+- **Fixed**: 15 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 4.1, 4.2, 4.3)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 19 items (3.3, 4.3–4.9, 11 Tier 5 items) — recommended before production load
+- **Open**: 18 items (3.3, 4.4–4.9, 11 Tier 5 items) — recommended before production load
 
 ## Verification
 
