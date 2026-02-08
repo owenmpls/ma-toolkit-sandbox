@@ -168,7 +168,8 @@ az deployment group create \
   --parameters infra/shared/deploy.parameters.json
 
 # 2. Deploy components (creates SQL, storage accounts, Function Apps, ACA)
-# These can run in parallel with each other:
+# Admin API depends on scheduler-orchestrator (needs SQL server FQDN + DB name).
+# Scheduler-orchestrator and cloud-worker can run in parallel.
 
 # 2a. Scheduler + orchestrator
 az deployment group create \
@@ -176,14 +177,16 @@ az deployment group create \
   --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
   --parameters infra/automation/scheduler-orchestrator/deploy.parameters.json \
   --parameters sqlAdminPassword="your-password" \
+  --parameters sqlEntraAdminObjectId="your-entra-admin-group-object-id" \
   --parameters schedulerSubnetId="" orchestratorSubnetId=""
 
-# 2b. Admin API
+# 2b. Admin API (after 2a — uses SQL server FQDN + DB name from scheduler-orchestrator)
 az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/admin-api/deploy.bicep \
   --parameters infra/automation/admin-api/deploy.parameters.json \
-  --parameters sqlConnectionString="your-connection-string" \
+  --parameters sqlServerFqdn="sql-scheduler-dev.database.windows.net" \
+  --parameters sqlDatabaseName="sqldb-scheduler-dev" \
   --parameters entraIdTenantId="your-tenant-id" \
   --parameters entraIdClientId="your-client-id" \
   --parameters entraIdAudience="api://your-client-id" \
@@ -212,14 +215,14 @@ az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
   --parameters infra/automation/scheduler-orchestrator/deploy.parameters.json \
-  --parameters sqlAdminPassword="your-password"
+  --parameters sqlAdminPassword="your-password" \
+  --parameters sqlEntraAdminObjectId="your-entra-admin-group-object-id"
 
 # 4b. Admin API (with VNet)
 az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/admin-api/deploy.bicep \
   --parameters infra/automation/admin-api/deploy.parameters.json \
-  --parameters sqlConnectionString="your-connection-string" \
   --parameters entraIdTenantId="your-tenant-id" \
   --parameters entraIdClientId="your-client-id" \
   --parameters entraIdAudience="api://your-client-id"
@@ -229,6 +232,22 @@ az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/cloud-worker/deploy.bicep \
   --parameters infra/automation/cloud-worker/deploy.parameters.json
+
+# 5. Create SQL contained database users for managed identity auth
+# Run once per environment as the Entra ID admin (set in sqlEntraAdminObjectId).
+# Connect to the SQL database and execute:
+#
+#   CREATE USER [func-scheduler-dev] FROM EXTERNAL PROVIDER;
+#   ALTER ROLE db_datareader ADD MEMBER [func-scheduler-dev];
+#   ALTER ROLE db_datawriter ADD MEMBER [func-scheduler-dev];
+#
+#   CREATE USER [func-orchestrator-dev] FROM EXTERNAL PROVIDER;
+#   ALTER ROLE db_datareader ADD MEMBER [func-orchestrator-dev];
+#   ALTER ROLE db_datawriter ADD MEMBER [func-orchestrator-dev];
+#
+#   CREATE USER [matoolkit-admin-api-func] FROM EXTERNAL PROVIDER;
+#   ALTER ROLE db_datareader ADD MEMBER [matoolkit-admin-api-func];
+#   ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func];
 ```
 
 ## Architecture

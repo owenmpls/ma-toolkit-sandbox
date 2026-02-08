@@ -31,6 +31,12 @@ param sqlAdminLogin string
 @secure()
 param sqlAdminPassword string
 
+@description('Object ID of the Entra ID group or user to set as SQL Server Entra administrator.')
+param sqlEntraAdminObjectId string
+
+@description('Display name for the SQL Server Entra administrator.')
+param sqlEntraAdminName string = 'EntraAdmin'
+
 @description('Subnet resource ID for scheduler VNet integration. Leave empty to skip.')
 param schedulerSubnetId string = ''
 
@@ -124,6 +130,21 @@ resource sqlDatabase 'Microsoft.Sql/databases@2023-08-01-preview' = {
 }
 
 // ---------------------------------------------------------------------------
+// SQL Server Entra ID Administrator
+// ---------------------------------------------------------------------------
+
+resource sqlAdAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = {
+  parent: sqlServer
+  name: 'ActiveDirectory'
+  properties: {
+    administratorType: 'ActiveDirectory'
+    login: sqlEntraAdminName
+    sid: sqlEntraAdminObjectId
+    tenantId: subscription().tenantId
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SQL Diagnostic Settings
 // ---------------------------------------------------------------------------
 
@@ -143,10 +164,10 @@ resource sqlDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-previe
 }
 
 // ---------------------------------------------------------------------------
-// Key Vault Secrets — SQL connection strings
+// Key Vault Secrets — SQL connection strings (managed identity auth, no password)
 // ---------------------------------------------------------------------------
 
-var sqlConnectionStringValue = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${sqlDatabase.name};Persist Security Info=False;User ID=${sqlAdminLogin};Password=${sqlAdminPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+var sqlConnectionStringValue = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${sqlDatabase.name};Authentication=Active Directory Managed Identity;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
 
 resource schedulerSqlSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
@@ -557,3 +578,4 @@ output orchestratorAppInsightsConnectionString string = orchestratorAppInsights.
 
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlDatabaseName string = sqlDatabase.name
+output sqlManagedIdentityConnectionString string = sqlConnectionStringValue

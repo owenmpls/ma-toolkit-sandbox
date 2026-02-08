@@ -5,8 +5,11 @@
     "baseName": {
       "value": "matoolkit-admin-api"
     },
-    "sqlConnectionString": {
-      "value": ""
+    "sqlServerFqdn": {
+      "value": "sql-scheduler-dev.database.windows.net"
+    },
+    "sqlDatabaseName": {
+      "value": "sqldb-scheduler-dev"
     },
     "entraIdTenantId": {
       "value": ""

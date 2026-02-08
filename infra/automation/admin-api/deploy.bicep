@@ -4,9 +4,11 @@ param location string = resourceGroup().location
 @description('Base name for all resources')
 param baseName string = 'matoolkit-admin-api'
 
-@description('SQL Server connection string')
-@secure()
-param sqlConnectionString string
+@description('Fully qualified domain name of the SQL Server (e.g. sql-scheduler-dev.database.windows.net).')
+param sqlServerFqdn string
+
+@description('Name of the SQL database.')
+param sqlDatabaseName string
 
 @description('Entra ID tenant ID for authentication')
 param entraIdTenantId string = ''
@@ -51,14 +53,16 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 }
 
 // ---------------------------------------------------------------------------
-// Key Vault Secret — SQL connection string
+// Key Vault Secret — SQL connection string (managed identity auth, no password)
 // ---------------------------------------------------------------------------
+
+var sqlConnectionStringValue = 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Authentication=Active Directory Managed Identity;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
 
 resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'admin-api-sql-connection-string'
   properties: {
-    value: sqlConnectionString
+    value: sqlConnectionStringValue
   }
 }
 
