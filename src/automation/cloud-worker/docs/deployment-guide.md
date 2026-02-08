@@ -30,11 +30,22 @@ In the **target** tenant (the tenant the worker will manage), create an app regi
 
 Grant admin consent for all permissions.
 
-### Create a Client Secret
+### Create a Certificate
 
-1. Go to **Certificates & secrets > New client secret**
-2. Set an appropriate expiration
-3. Copy the secret value (you'll store it in Key Vault in step 4)
+1. Go to **Certificates & secrets > Certificates > Upload certificate**
+2. Upload the public key portion of a certificate (`.cer` or `.pem`)
+3. Note the thumbprint — you'll import the full PFX (with private key) into Key Vault in step 3
+
+Alternatively, generate a self-signed certificate:
+
+```bash
+# Generate a self-signed certificate (valid for 1 year)
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=migration-worker'
+openssl pkcs12 -export -out worker-cert.pfx -inkey key.pem -in cert.pem
+
+# Upload the public key to the app registration
+# Then import the PFX to Key Vault (step 3)
+```
 
 ### Assign Exchange Admin Role
 
@@ -101,14 +112,16 @@ This creates:
 - Container Registry
 - Role assignments for managed identity
 
-## Step 3: Store the App Secret in Key Vault
+## Step 3: Import the Certificate into Key Vault
 
 ```bash
-az keyvault secret set \
+az keyvault certificate import \
   --vault-name matoolkit-kv \
-  --name worker-app-secret \
-  --value "<client-secret-from-step-1>"
+  --name worker-app-cert \
+  --file worker-cert.pfx
 ```
+
+Key Vault stores the PFX as a certificate object. The worker retrieves it via the associated secret (same name), which returns the base64-encoded PFX with the private key.
 
 ## Step 4: Build and Push the Container Image
 
@@ -216,7 +229,7 @@ Add custom modules to the `modules/CustomFunctions/` directory and rebuild the c
 | `KEY_VAULT_NAME` | Yes | - | Key Vault name |
 | `TARGET_TENANT_ID` | Yes | - | Target M365 tenant ID |
 | `APP_ID` | Yes | - | App registration client ID |
-| `APP_SECRET_NAME` | No | `worker-app-secret` | Key Vault secret name |
+| `CERT_NAME` | No | `worker-app-cert` | Key Vault certificate name |
 | `APPINSIGHTS_CONNECTION_STRING` | No | - | App Insights connection string |
 | `MAX_RETRY_COUNT` | No | `5` | Max throttle retries |
 | `BASE_RETRY_DELAY_SECONDS` | No | `2` | Initial backoff delay |

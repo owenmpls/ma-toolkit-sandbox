@@ -47,7 +47,7 @@ The PowerShell Cloud Worker is a component of the Migration Automation Toolkit's
 1. **Configuration** — Loads environment variables, validates required values
 2. **Logging** — Initializes Application Insights TelemetryClient
 3. **Azure Auth** — Connects to Azure using managed identity (for Key Vault access)
-4. **Secret Retrieval** — Retrieves the target tenant app client secret from Key Vault
+4. **Certificate Retrieval** — Retrieves the target tenant app certificate (PFX) from Key Vault
 5. **Service Bus** — Loads .NET assemblies, creates client/receiver/sender
 6. **Runspace Pool** — Creates pool, authenticates each runspace to MgGraph and EXO
 7. **Shutdown Handler** — Registers SIGTERM/SIGINT handlers for graceful shutdown
@@ -106,8 +106,8 @@ The worker uses a PowerShell `RunspacePool` for parallel job execution. This was
 
 Each runspace in the pool maintains its own authenticated sessions:
 
-- **Microsoft Graph**: `Connect-MgGraph` with client secret credential per runspace. The MgGraph module stores connection context in module-scoped variables, so each runspace needs its own connection.
-- **Exchange Online**: `Connect-ExchangeOnline` with an access token obtained via OAuth client credentials flow. Each runspace gets its own EXO session.
+- **Microsoft Graph**: `Connect-MgGraph -Certificate` with the app's X509 certificate per runspace. The MgGraph module stores connection context in module-scoped variables, so each runspace needs its own connection.
+- **Exchange Online**: `Connect-ExchangeOnline -Certificate` with native certificate-based app-only auth. Each runspace gets its own EXO session. The EXO module handles token lifecycle internally.
 
 This isolation prevents thread-safety issues that would arise from sharing a single connection across concurrent operations.
 
@@ -146,28 +146,26 @@ RBAC role assignments are provisioned by the Bicep template.
 
 ### Target Tenant Auth (App Registration)
 
-A separate app registration in the **target** tenant provides access to Graph and Exchange Online. The client secret is stored in Key Vault.
+A separate app registration in the **target** tenant provides access to Graph and Exchange Online. The certificate (PFX) is stored as a Key Vault Certificate, and the worker retrieves it via the associated secret at startup.
 
 ```
 Worker Container (Azure tenant A)
     │
     ├─ Managed Identity ──► Key Vault (tenant A)
-    │                           └─ Client Secret
+    │                           └─ Certificate (PFX)
     │
     ├─ Managed Identity ──► Service Bus (tenant A)
     │
     └─ App Registration ──► Target Tenant (tenant B)
-        ├─ Graph API
-        └─ Exchange Online
+        ├─ Graph API      (Connect-MgGraph -Certificate)
+        └─ Exchange Online (Connect-ExchangeOnline -Certificate)
 ```
 
-### EXO Token Acquisition
+### Certificate Handling
 
-Exchange Online's `Connect-ExchangeOnline` natively requires certificate-based app-only auth. To use client secrets instead, the worker:
+The certificate PFX is exported to `[byte[]]` once at startup and passed to each runspace. This approach is used because `X509Certificate2` holds a private key handle that may not survive cross-runspace transfer reliably, while byte arrays serialize cleanly. Each runspace reconstructs the `X509Certificate2` from bytes using the `EphemeralKeySet` flag (critical for Linux containers — avoids writing private keys to disk).
 
-1. Sends an OAuth client credentials request to `https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token`
-2. Requests scope `https://outlook.office365.com/.default`
-3. Passes the resulting access token to `Connect-ExchangeOnline -AccessToken`
+Both `Connect-MgGraph` and `Connect-ExchangeOnline` handle token lifecycle internally when using certificate auth, eliminating the need for manual token refresh logic.
 
 ## Throttle Handling
 

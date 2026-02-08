@@ -18,7 +18,7 @@ function Get-WorkerConfiguration {
         KeyVaultName               = $env:KEY_VAULT_NAME
         TargetTenantId             = $env:TARGET_TENANT_ID
         AppId                      = $env:APP_ID
-        AppSecretName              = $env:APP_SECRET_NAME ?? 'worker-app-secret'
+        CertificateName            = $env:CERT_NAME ?? 'worker-app-cert'
         AppInsightsConnectionString = $env:APPINSIGHTS_CONNECTION_STRING
         DotNetLibPath              = $env:DOTNET_LIB_PATH ?? '/opt/dotnet-libs'
         CustomModulesPath          = $env:CUSTOM_MODULES_PATH ?? '/app/modules/CustomFunctions'

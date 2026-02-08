@@ -18,7 +18,7 @@ function Initialize-RunspacePool {
         [PSCustomObject]$Config,
 
         [Parameter(Mandatory)]
-        [string]$AppSecret
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
     )
 
     Write-WorkerLog -Message "Initializing runspace pool with MaxParallelism=$($Config.MaxParallelism)..."
@@ -73,19 +73,22 @@ function Initialize-RunspacePool {
 
     Write-WorkerLog -Message "Runspace pool opened (Min=1, Max=$($Config.MaxParallelism))."
 
+    # Export PFX bytes once for passing to runspaces (byte arrays serialize cleanly across runspace boundaries)
+    $certBytes = $Certificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx)
+
     # Authenticate each runspace by running auth init in parallel
     $authHandles = @()
     for ($i = 0; $i -lt $Config.MaxParallelism; $i++) {
         $ps = [PowerShell]::Create()
         $ps.RunspacePool = $pool
 
-        $authScript = Get-RunspaceAuthScriptBlock -TenantId $Config.TargetTenantId -AppId $Config.AppId -AppSecret $AppSecret
+        $authScript = Get-RunspaceAuthScriptBlock -TenantId $Config.TargetTenantId -AppId $Config.AppId -CertificateBytes $certBytes
 
         $ps.AddScript($authScript).AddParameters(@{
-            TenantId      = $Config.TargetTenantId
-            AppId         = $Config.AppId
-            AppSecret     = $AppSecret
-            RunspaceIndex = $i
+            TenantId         = $Config.TargetTenantId
+            AppId            = $Config.AppId
+            CertificateBytes = $certBytes
+            RunspaceIndex    = $i
         }) | Out-Null
 
         $handle = $ps.BeginInvoke()
@@ -165,33 +168,24 @@ function Invoke-InRunspace {
     $executionScript = {
         param($FunctionName, $Parameters, $MaxRetries, $BaseDelaySeconds, $MaxDelaySeconds)
 
-        # Inline helper: refresh EXO connection with a new OAuth token
-        function Refresh-EXOConnection {
-            $cfg = $global:EXOAuthConfig
-            $tokenUrl = 'https://login.microsoftonline.com/{0}/oauth2/v2.0/token' -f $cfg.TenantId
-            $body = @{
-                client_id     = $cfg.AppId
-                client_secret = $cfg.AppSecret
-                scope         = 'https://outlook.office365.com/.default'
-                grant_type    = 'client_credentials'
-            }
-            $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType 'application/x-www-form-urlencoded' -ErrorAction Stop
+        # Inline helper: reconnect Graph and EXO using stored certificate bytes
+        function Reconnect-WorkerAuth {
+            $cfg = $global:WorkerAuthConfig
+            $certBytes = $global:WorkerCertBytes
+            $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+                $certBytes,
+                [string]::Empty,
+                [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+            )
+            Connect-MgGraph -ClientId $cfg.AppId -TenantId $cfg.TenantId -Certificate $cert -NoWelcome -ErrorAction Stop
             $exoParams = @{
-                AccessToken  = $response.access_token
+                Certificate = $cert
+                AppId       = $cfg.AppId
                 Organization = $cfg.TenantId
                 ShowBanner   = $false
                 ErrorAction  = 'Stop'
             }
             Connect-ExchangeOnline @exoParams
-            $global:EXOAuthTime = [DateTime]::UtcNow
-        }
-
-        # Proactive EXO token refresh (tokens expire after ~60 min, refresh at 45 min)
-        if ($global:EXOAuthConfig -and $global:EXOAuthTime) {
-            $minutesSinceAuth = ([DateTime]::UtcNow - $global:EXOAuthTime).TotalMinutes
-            if ($minutesSinceAuth -ge 45) {
-                try { Refresh-EXOConnection } catch { }
-            }
         }
 
         $attempt = 0
@@ -219,8 +213,8 @@ function Invoke-InRunspace {
                     }
                 }
 
-                if ($isAuthError -and $global:EXOAuthConfig -and $attempt -lt $MaxRetries) {
-                    try { Refresh-EXOConnection } catch { }
+                if ($isAuthError -and $global:WorkerAuthConfig -and $attempt -lt $MaxRetries) {
+                    try { Reconnect-WorkerAuth } catch { }
                     continue
                 }
 

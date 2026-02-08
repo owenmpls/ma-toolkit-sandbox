@@ -2,8 +2,8 @@
 .SYNOPSIS
     Authentication management for the PowerShell Cloud Worker.
 .DESCRIPTION
-    Handles Azure managed identity login, Key Vault secret retrieval,
-    Microsoft Graph, and Exchange Online authentication.
+    Handles Azure managed identity login, Key Vault certificate retrieval,
+    Microsoft Graph, and Exchange Online authentication using certificates.
 #>
 
 function Connect-WorkerAzure {
@@ -41,10 +41,14 @@ function Connect-WorkerAzure {
     }
 }
 
-function Get-WorkerAppSecret {
+function Get-WorkerCertificate {
     <#
     .SYNOPSIS
-        Retrieves the application client secret from Azure Key Vault.
+        Retrieves a certificate (with private key) from Azure Key Vault.
+    .DESCRIPTION
+        Key Vault Certificates store the PFX as an associated secret (same name).
+        Get-AzKeyVaultSecret returns the base64-encoded PFX which we convert to
+        an X509Certificate2 with EphemeralKeySet (avoids writing keys to disk on Linux).
     #>
     [CmdletBinding()]
     param(
@@ -52,57 +56,25 @@ function Get-WorkerAppSecret {
         [string]$KeyVaultName,
 
         [Parameter(Mandatory)]
-        [string]$SecretName
+        [string]$CertificateName
     )
 
-    Write-WorkerLog -Message "Retrieving secret '$SecretName' from Key Vault '$KeyVaultName'..."
+    Write-WorkerLog -Message "Retrieving certificate '$CertificateName' from Key Vault '$KeyVaultName'..."
 
     try {
-        $secret = Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name $SecretName -ErrorAction Stop
-        $plainText = $secret.SecretValue | ConvertFrom-SecureString -AsPlainText
-        Write-WorkerLog -Message 'Successfully retrieved app secret from Key Vault.'
-        return $plainText
+        $secret = Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name $CertificateName -ErrorAction Stop
+        $base64 = $secret.SecretValue | ConvertFrom-SecureString -AsPlainText
+        $pfxBytes = [Convert]::FromBase64String($base64)
+        $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfxBytes,
+            [string]::Empty,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+        )
+        Write-WorkerLog -Message "Successfully retrieved certificate '$CertificateName' (Thumbprint: $($cert.Thumbprint))."
+        return $cert
     }
     catch {
-        throw "Failed to retrieve secret '$SecretName' from Key Vault '$KeyVaultName': $($_.Exception.Message)"
-    }
-}
-
-function Get-ExchangeOnlineAccessToken {
-    <#
-    .SYNOPSIS
-        Obtains an OAuth access token for Exchange Online using client credentials.
-    .DESCRIPTION
-        Uses direct HTTP OAuth token endpoint since EXO module app-only auth
-        natively requires certificate auth. We obtain a token with client secret
-        and pass it to Connect-ExchangeOnline -AccessToken.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$TenantId,
-
-        [Parameter(Mandatory)]
-        [string]$AppId,
-
-        [Parameter(Mandatory)]
-        [string]$AppSecret
-    )
-
-    $tokenUrl = 'https://login.microsoftonline.com/{0}/oauth2/v2.0/token' -f $TenantId
-    $body = @{
-        client_id     = $AppId
-        client_secret = $AppSecret
-        scope         = 'https://outlook.office365.com/.default'
-        grant_type    = 'client_credentials'
-    }
-
-    try {
-        $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType 'application/x-www-form-urlencoded' -ErrorAction Stop
-        return $response.access_token
-    }
-    catch {
-        throw "Failed to obtain Exchange Online access token: $($_.Exception.Message)"
+        throw "Failed to retrieve certificate '$CertificateName' from Key Vault '$KeyVaultName': $($_.Exception.Message)"
     }
 }
 
@@ -111,8 +83,8 @@ function Initialize-RunspaceAuth {
     .SYNOPSIS
         Initializes MgGraph and ExchangeOnline connections within a runspace.
     .DESCRIPTION
-        Called during runspace initialization to establish authenticated sessions.
-        Returns a scriptblock that can be invoked inside the runspace.
+        Called during runspace initialization to establish authenticated sessions
+        using certificate-based authentication.
     #>
     [CmdletBinding()]
     param(
@@ -123,7 +95,7 @@ function Initialize-RunspaceAuth {
         [string]$AppId,
 
         [Parameter(Mandatory)]
-        [string]$AppSecret,
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 
         [Parameter(Mandatory)]
         [int]$RunspaceIndex
@@ -131,13 +103,9 @@ function Initialize-RunspaceAuth {
 
     Write-WorkerLog -Message "Initializing auth for runspace $RunspaceIndex..." -Properties @{ RunspaceIndex = $RunspaceIndex }
 
-    # Build MgGraph credential
-    $secureSecret = ConvertTo-SecureString $AppSecret -AsPlainText -Force
-    $clientCredential = [System.Management.Automation.PSCredential]::new($AppId, $secureSecret)
-
     # Connect to Microsoft Graph
     try {
-        Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $clientCredential -NoWelcome -ErrorAction Stop
+        Connect-MgGraph -ClientId $AppId -TenantId $TenantId -Certificate $Certificate -NoWelcome -ErrorAction Stop
         Write-WorkerLog -Message "Runspace ${RunspaceIndex}: MgGraph connected." -Properties @{ RunspaceIndex = $RunspaceIndex }
     }
     catch {
@@ -146,9 +114,9 @@ function Initialize-RunspaceAuth {
 
     # Connect to Exchange Online
     try {
-        $exoToken = Get-ExchangeOnlineAccessToken -TenantId $TenantId -AppId $AppId -AppSecret $AppSecret
         $connectParams = @{
-            AccessToken  = $exoToken
+            Certificate = $Certificate
+            AppId       = $AppId
             Organization = $TenantId
             ShowBanner   = $false
             ErrorAction  = 'Stop'
@@ -165,6 +133,10 @@ function Get-RunspaceAuthScriptBlock {
     <#
     .SYNOPSIS
         Returns a scriptblock that initializes auth sessions inside a runspace.
+    .DESCRIPTION
+        Uses certificate bytes (PFX) instead of X509Certificate2 because byte arrays
+        serialize cleanly across runspace boundaries, while X509Certificate2 holds a
+        private key handle that may not survive cross-runspace transfer reliably.
     #>
     [CmdletBinding()]
     param(
@@ -175,41 +147,38 @@ function Get-RunspaceAuthScriptBlock {
         [string]$AppId,
 
         [Parameter(Mandatory)]
-        [string]$AppSecret
+        [byte[]]$CertificateBytes
     )
 
     $authScript = {
-        param($TenantId, $AppId, $AppSecret, $RunspaceIndex)
+        param($TenantId, $AppId, $CertificateBytes, $RunspaceIndex)
 
-        # Connect MgGraph
-        $secureSecret = ConvertTo-SecureString $AppSecret -AsPlainText -Force
-        $clientCredential = [System.Management.Automation.PSCredential]::new($AppId, $secureSecret)
-        Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $clientCredential -NoWelcome -ErrorAction Stop
+        # Reconstruct certificate from PFX bytes (EphemeralKeySet avoids writing keys to disk)
+        $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $CertificateBytes,
+            [string]::Empty,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+        )
 
-        # Get EXO token and connect
-        $tokenUrl = 'https://login.microsoftonline.com/{0}/oauth2/v2.0/token' -f $TenantId
-        $body = @{
-            client_id     = $AppId
-            client_secret = $AppSecret
-            scope         = 'https://outlook.office365.com/.default'
-            grant_type    = 'client_credentials'
-        }
-        $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType 'application/x-www-form-urlencoded' -ErrorAction Stop
+        # Connect MgGraph with certificate
+        Connect-MgGraph -ClientId $AppId -TenantId $TenantId -Certificate $cert -NoWelcome -ErrorAction Stop
+
+        # Connect Exchange Online with certificate
         $exoParams = @{
-            AccessToken  = $response.access_token
+            Certificate = $cert
+            AppId       = $AppId
             Organization = $TenantId
             ShowBanner   = $false
             ErrorAction  = 'Stop'
         }
         Connect-ExchangeOnline @exoParams
 
-        # Store auth config for mid-lifetime EXO token refresh
-        $global:EXOAuthConfig = @{
-            TenantId  = $TenantId
-            AppId     = $AppId
-            AppSecret = $AppSecret
+        # Store auth config for reactive reconnection on auth errors
+        $global:WorkerAuthConfig = @{
+            TenantId = $TenantId
+            AppId    = $AppId
         }
-        $global:EXOAuthTime = [DateTime]::UtcNow
+        $global:WorkerCertBytes = $CertificateBytes
     }
 
     return $authScript

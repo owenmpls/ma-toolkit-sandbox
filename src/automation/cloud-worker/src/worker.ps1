@@ -78,13 +78,13 @@ catch {
     exit 1
 }
 
-# --- Phase 4: Retrieve App Secret ---
-Write-WorkerLog -Message 'Phase 4: Retrieving application secret from Key Vault...'
+# --- Phase 4: Retrieve Certificate ---
+Write-WorkerLog -Message 'Phase 4: Retrieving application certificate from Key Vault...'
 try {
-    $appSecret = Get-WorkerAppSecret -KeyVaultName $config.KeyVaultName -SecretName $config.AppSecretName
+    $certificate = Get-WorkerCertificate -KeyVaultName $config.KeyVaultName -CertificateName $config.CertificateName
 }
 catch {
-    Write-WorkerLog -Message "Secret retrieval failed: $($_.Exception.Message)" -Severity Critical
+    Write-WorkerLog -Message "Certificate retrieval failed: $($_.Exception.Message)" -Severity Critical
     Flush-WorkerTelemetry
     exit 1
 }
@@ -107,7 +107,7 @@ catch {
 # --- Phase 6: Initialize Runspace Pool ---
 Write-WorkerLog -Message 'Phase 6: Initializing runspace pool with authenticated sessions...'
 try {
-    $runspacePool = Initialize-RunspacePool -Config $config -AppSecret $appSecret
+    $runspacePool = Initialize-RunspacePool -Config $config -Certificate $certificate
 }
 catch {
     Write-WorkerLog -Message "Runspace pool initialization failed: $($_.Exception.Message)" -Severity Critical

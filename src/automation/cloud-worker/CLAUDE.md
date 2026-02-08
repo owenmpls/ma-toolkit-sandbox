@@ -16,7 +16,7 @@ cloud-worker/
 ├── src/
 │   ├── worker.ps1                         # Main entry point (8-phase boot sequence)
 │   ├── config.ps1                         # Env var loader + validation
-│   ├── auth.ps1                           # Managed identity, AKV, MgGraph + EXO auth
+│   ├── auth.ps1                           # Managed identity, AKV cert retrieval, MgGraph + EXO cert auth
 │   ├── servicebus.ps1                     # .NET SDK for send/receive (Azure.Messaging.ServiceBus)
 │   ├── runspace-manager.ps1               # RunspacePool creation, per-runspace auth, async dispatch
 │   ├── job-dispatcher.ps1                 # Main loop: receive → validate → dispatch → collect → send results
@@ -32,7 +32,7 @@ cloud-worker/
 ├── tests/
 │   ├── Submit-TestJob.ps1                 # CSV-driven test job submitter
 │   ├── sample-jobs.csv
-│   └── Test-WorkerLocal.ps1              # Parse + structure validation (18 tests)
+│   └── Test-WorkerLocal.ps1              # Parse + structure validation (20 tests)
 └── docs/
     ├── architecture.md
     ├── deployment-guide.md
@@ -43,7 +43,7 @@ cloud-worker/
 
 - **Parallelism**: RunspacePool (not ThreadJobs, not ForEach-Object -Parallel). Each runspace gets its own MgGraph + EXO session to avoid thread-safety issues with shared connections.
 - **Service Bus SDK**: Azure.Messaging.ServiceBus .NET assembly loaded directly in PowerShell (Az.ServiceBus is management-plane only).
-- **EXO auth**: Client secret → OAuth token via REST → `Connect-ExchangeOnline -AccessToken` (EXO app-only natively requires certs, we work around it).
+- **Certificate auth**: Certificate (PFX) stored in Key Vault, retrieved at startup. Both MgGraph and EXO use native certificate-based auth (`Connect-MgGraph -Certificate`, `Connect-ExchangeOnline -Certificate`). PFX bytes are passed to runspaces (byte arrays serialize cleanly across runspace boundaries) and reconstructed with `EphemeralKeySet` flag (avoids writing private keys to disk on Linux).
 - **Scale-to-zero**: ACA configured min=0 / max=1 with KEDA `azure-servicebus` scaler monitoring the worker's subscription. Worker has idle timeout (default 300s) — when no messages and no active jobs for that duration, it exits gracefully so ACA scales to zero.
 - **Throttle handling**: Retry with exponential backoff + jitter happens *inside* each runspace. Throttling exceptions are not reported as failures unless retries are exhausted.
 - **Module system**: Standard functions ship with the container. Custom functions are discovered from `CustomFunctions/` directory (volume mount or baked into image).
@@ -104,7 +104,7 @@ cloud-worker/
 
 ## Tests
 
-Run `pwsh -File tests/Test-WorkerLocal.ps1` — validates parse correctness for all .ps1 files, module structure, manifest exports (14 functions), and function definitions. Currently 18/18 passing.
+Run `pwsh -File tests/Test-WorkerLocal.ps1` — validates parse correctness for all .ps1 files, module structure, manifest exports (14 functions), function definitions, and certificate auth migration (removed functions, no client_secret references). Currently 20/20 passing.
 
 ## What's Not Built Yet
 

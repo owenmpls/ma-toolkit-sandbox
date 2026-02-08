@@ -268,7 +268,7 @@ The worker follows a **scale-to-zero pattern**:
 
 Key design choices:
 - Service Bus .NET SDK loaded directly (`Az.ServiceBus` is management-plane only)
-- EXO auth workaround: client secret → OAuth token via REST → `Connect-ExchangeOnline -AccessToken`
+- Certificate-based auth: PFX from Key Vault, `Connect-MgGraph -Certificate` + `Connect-ExchangeOnline -Certificate` (native app-only auth)
 - Throttle handling: exponential backoff + jitter, respects `Retry-After` headers
 
 ## Code Review Recommendations

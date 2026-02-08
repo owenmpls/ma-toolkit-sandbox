@@ -14,7 +14,7 @@ services:
       - KEY_VAULT_NAME=your-keyvault-name
       - TARGET_TENANT_ID=your-target-tenant-id
       - APP_ID=your-app-registration-id
-      - APP_SECRET_NAME=worker-app-secret
+      - CERT_NAME=worker-app-cert
       - APPINSIGHTS_CONNECTION_STRING=InstrumentationKey=your-key;IngestionEndpoint=https://your-region.in.applicationinsights.azure.com/
       - IDLE_TIMEOUT_SECONDS=0  # Disable idle shutdown for local dev
       - SHUTDOWN_GRACE_SECONDS=30

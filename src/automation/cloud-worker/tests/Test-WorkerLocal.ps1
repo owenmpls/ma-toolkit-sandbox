@@ -164,6 +164,37 @@ Test-Step 'logging.ps1 exports logging functions' {
     }
 }
 
+# --- Test 7: Certificate-based auth functions ---
+Write-Host ''
+Write-Host 'Certificate auth validation:' -ForegroundColor Yellow
+
+Test-Step 'auth.ps1 exports Get-WorkerCertificate' {
+    . (Join-Path $srcPath 'auth.ps1')
+    $cmd = Get-Command Get-WorkerCertificate -ErrorAction Stop
+    if ($cmd.CommandType -ne 'Function') { throw 'Not a function' }
+}
+
+Test-Step 'auth.ps1 does not export Get-ExchangeOnlineAccessToken (removed)' {
+    . (Join-Path $srcPath 'auth.ps1')
+    $cmd = Get-Command Get-ExchangeOnlineAccessToken -ErrorAction SilentlyContinue
+    if ($null -ne $cmd) { throw 'Get-ExchangeOnlineAccessToken should have been removed' }
+}
+
+Test-Step 'auth.ps1 does not export Get-WorkerAppSecret (removed)' {
+    . (Join-Path $srcPath 'auth.ps1')
+    $cmd = Get-Command Get-WorkerAppSecret -ErrorAction SilentlyContinue
+    if ($null -ne $cmd) { throw 'Get-WorkerAppSecret should have been removed' }
+}
+
+Test-Step 'Auth scriptblock does not contain client_secret' {
+    . (Join-Path $srcPath 'auth.ps1')
+    $scriptBlock = Get-RunspaceAuthScriptBlock -TenantId 'test' -AppId 'test' -CertificateBytes ([byte[]]@(0))
+    $scriptText = $scriptBlock.ToString()
+    if ($scriptText -match 'client_secret') {
+        throw 'Auth scriptblock still contains client_secret reference'
+    }
+}
+
 # --- Summary ---
 Write-Host ''
 Write-Host '======================================' -ForegroundColor Cyan
