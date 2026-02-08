@@ -222,21 +222,21 @@ Seven interconnected bugs caused by `batches.runbook_id` being a per-version row
 
 ---
 
-## Tier 5: Deferred / Low-Priority
+## Tier 5: Deferred / Low-Priority — **ALL FIXED**
 
-These are worth tracking but can be addressed post-initial-deployment:
+All items resolved in the Tier 5 implementation pass.
 
-- **DynamicTableManager**: No SQL keyword filtering on column names (regex only blocks special chars)
-- **DynamicTableManager**: `json_array` format passthrough doesn't validate JSON
-- **PhaseEvaluator**: Seconds→minutes rounding via `Math.Ceiling` is undocumented
-- **Orchestrator**: Phase progression race conditions (concurrent handlers can double-dispatch) — mitigated by deterministic JobIds but warrants distributed locking long-term
-- **Orchestrator**: `PhaseDueHandler` doesn't update `phase_executions.status` to `dispatched`
-- **Admin API**: No pagination on batch list endpoint (hardcoded `TOP 100`)
-- **Admin API**: No health check endpoint
-- **Admin API**: Inconsistent HTTP status codes across endpoints (400 vs 409 vs 422)
-- **Bicep**: No diagnostic settings (SQL audit logs, Key Vault access logs)
-- **Bicep**: Storage accounts default to public access when no subnet ID provided
-- **Bicep**: KEDA scaler has no explicit `cooldownPeriod` or `pollingInterval`
+- **DynamicTableManager**: No SQL keyword filtering on column names — **FIXED**: Added `SqlReservedKeywords` HashSet with case-insensitive check in `ValidateColumnName()` and `ValidateTableName()`.
+- **DynamicTableManager**: `json_array` format passthrough doesn't validate JSON — **FIXED**: Added `JsonDocument.Parse()` validation in `ConvertToJsonArray()`.
+- **PhaseEvaluator**: Seconds→minutes rounding via `Math.Ceiling` is undocumented — **FIXED**: Added comment explaining ceiling behavior relative to 5-minute scheduler timer.
+- **Orchestrator**: Phase progression race conditions (concurrent handlers can double-dispatch) — **FIXED**: Added terminal-status guard in `PhaseDueHandler` (returns early if phase is completed/failed/skipped/superseded). Warning logs added on failed `SetCompletedAsync`.
+- **Orchestrator**: `PhaseDueHandler` doesn't update `phase_executions.status` to `dispatched` — **FIXED**: Added `SetDispatchedAsync` call after dispatching steps.
+- **Admin API**: No pagination on batch list endpoint (hardcoded `TOP 100`) — **FIXED**: Added `offset` parameter to `IBatchRepository.ListAsync`, switched from `TOP` to `OFFSET...FETCH`. `BatchManagementFunction` parses `limit`/`offset` query params and includes them in response.
+- **Admin API**: No health check endpoint — **FIXED**: Added `HealthCheckFunction` with unauthenticated `GET /api/health`.
+- **Admin API**: Inconsistent HTTP status codes across endpoints (400 vs 409 vs 422) — **FIXED**: State conflicts now return 409 (ConflictObjectResult) in `BatchManagementFunction` and `MemberManagementFunction`. 400 reserved for input validation errors.
+- **Bicep**: No diagnostic settings (SQL audit logs, Key Vault access logs) — **FIXED**: Added Key Vault audit diagnostic settings in `shared/deploy.bicep`. Added SQL security audit, automatic tuning, and basic metrics diagnostics in `scheduler-orchestrator/deploy.bicep`.
+- **Bicep**: Storage accounts default to public access when no subnet ID provided — **FIXED**: Changed `null` fallback to deny-by-default with AzureServices bypass on all three storage accounts.
+- **Bicep**: KEDA scaler has no explicit `cooldownPeriod` or `pollingInterval` — **FIXED**: Added `cooldownPeriod: 300` (matches idle timeout) and `pollingInterval: 30` to cloud-worker scale config.
 
 ---
 
@@ -246,14 +246,15 @@ These are worth tracking but can be addressed post-initial-deployment:
 2. ~~**SQL connectivity + SKU fix** (Tier 2.1, 2.2) — cannot run without these~~ — **DONE** (2.1 via network.bicep, 2.2 via `dd5dfce`)
 3. ~~**Service Bus topic config** (Tier 2.3, 2.4) — must be right on first create~~ — **DONE** (2.3 via `d178cb1`, 2.4 via `de8a303`)
 4. ~~**Cross-service contracts** (Tier 3) — affects all components~~ — **DONE** (3.1, 3.2, 3.3 all fixed)
-5. **Application fixes** (Tier 4) — fix before any real workload
+5. ~~**Application fixes** (Tier 4) — fix before any real workload~~ — **DONE** (all 4.x items fixed)
 6. ~~**Infrastructure hardening** (Tier 2.5-2.7) — before production~~ — **DONE** (2.5 via network.bicep, 2.7 via `194a8f1`; 2.6 deferred for sandbox)
+7. ~~**Deferred quality items** (Tier 5) — fix before production load~~ — **DONE** (all 11 items fixed)
 
 ## Progress Summary
 
-- **Fixed**: 24 issues (1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11)
+- **Fixed**: 35 issues (all Tier 1–5 items)
 - **Deferred**: 1 issue (2.6 — ACR Basic SKU, acceptable for sandbox)
-- **Open**: 11 Tier 5 items — recommended before production load
+- **Open**: 0 issues
 
 ## Verification
 

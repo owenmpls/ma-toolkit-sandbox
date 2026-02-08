@@ -71,6 +71,14 @@ public class PhaseDueHandler : IPhaseDueHandler
             return;
         }
 
+        if (phaseExecution.Status is PhaseStatus.Completed or PhaseStatus.Failed or PhaseStatus.Skipped or PhaseStatus.Superseded)
+        {
+            _logger.LogInformation(
+                "Phase {PhaseExecutionId} already in terminal status '{Status}', skipping",
+                message.PhaseExecutionId, phaseExecution.Status);
+            return;
+        }
+
         // Create step executions for this phase (idempotent — skips if steps already exist)
         await CreateStepExecutionsAsync(message, phaseExecution);
 
@@ -85,7 +93,9 @@ public class PhaseDueHandler : IPhaseDueHandler
             _logger.LogInformation(
                 "No step executions for phase {PhaseExecutionId}, marking complete",
                 message.PhaseExecutionId);
-            await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
+            var completedEmpty = await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
+            if (!completedEmpty)
+                _logger.LogWarning("Phase {PhaseExecutionId} was not in dispatched status when marking complete", message.PhaseExecutionId);
             await CheckBatchCompletionAsync(message.BatchId);
             return;
         }
@@ -163,6 +173,8 @@ public class PhaseDueHandler : IPhaseDueHandler
                 await _stepRepo.SetDispatchedAsync(step.Id, job.JobId);
             }
 
+            await _phaseRepo.SetDispatchedAsync(message.PhaseExecutionId);
+
             return; // Only dispatch one step_index at a time
         }
 
@@ -170,7 +182,9 @@ public class PhaseDueHandler : IPhaseDueHandler
         _logger.LogInformation(
             "All steps completed for phase {PhaseExecutionId}, marking complete",
             message.PhaseExecutionId);
-        await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
+        var completed = await _phaseRepo.SetCompletedAsync(message.PhaseExecutionId);
+        if (!completed)
+            _logger.LogWarning("Phase {PhaseExecutionId} was not in dispatched status when marking complete", message.PhaseExecutionId);
         await CheckBatchCompletionAsync(message.BatchId);
     }
 

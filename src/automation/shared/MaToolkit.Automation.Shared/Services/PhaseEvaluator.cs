@@ -36,6 +36,10 @@ public class PhaseEvaluator : IPhaseEvaluator
             'd' => number * 24 * 60,
             'h' => number * 60,
             'm' => number,
+            // Seconds are rounded UP to the nearest minute because the scheduler
+            // evaluates phases on a 5-minute timer — sub-minute precision isn't
+            // achievable, and rounding up ensures the phase is never dispatched
+            // before its intended offset.
             's' => (int)Math.Ceiling(number / 60.0),
             _ => throw new ArgumentException($"Invalid offset suffix: {suffix}")
         };

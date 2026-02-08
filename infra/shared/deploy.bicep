@@ -144,6 +144,21 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
 }
 
 // ---------------------------------------------------------------------------
+// Diagnostic Settings
+// ---------------------------------------------------------------------------
+
+resource kvDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: keyVault
+  name: 'kv-diagnostics'
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      { categoryGroup: 'audit', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Outputs
 // ---------------------------------------------------------------------------
 

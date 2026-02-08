@@ -95,10 +95,10 @@ public class MemberManagementFunction
             return new NotFoundObjectResult(new { error = $"Batch {id} not found" });
 
         if (!batch.IsManual)
-            return new BadRequestObjectResult(new { error = "Members can only be added to manual batches via API" });
+            return new ConflictObjectResult(new { error = "Members can only be added to manual batches via API" });
 
         if (batch.Status is BatchStatus.Completed or BatchStatus.Failed)
-            return new BadRequestObjectResult(new { error = $"Cannot add members to a batch with status '{batch.Status}'" });
+            return new ConflictObjectResult(new { error = $"Cannot add members to a batch with status '{batch.Status}'" });
 
         // Get runbook
         var runbook = await _runbookRepo.GetByIdAsync(batch.RunbookId);
@@ -226,10 +226,10 @@ public class MemberManagementFunction
             return new BadRequestObjectResult(new { error = $"Member {memberId} does not belong to batch {batchId}" });
 
         if (member.Status == MemberStatus.Removed)
-            return new BadRequestObjectResult(new { error = $"Member {memberId} is already removed" });
+            return new ConflictObjectResult(new { error = $"Member {memberId} is already removed" });
 
         if (!batch.IsManual)
-            return new BadRequestObjectResult(new { error = "Members can only be removed from manual batches via API" });
+            return new ConflictObjectResult(new { error = "Members can only be removed from manual batches via API" });
 
         await _memberRepo.MarkRemovedAsync(memberId);
 

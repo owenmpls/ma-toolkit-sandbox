@@ -21,6 +21,9 @@ param keyVaultName string
 @description('Resource ID of the existing Log Analytics workspace (from shared deployment).')
 param logAnalyticsWorkspaceId string
 
+@description('Name of the existing Log Analytics workspace (from shared deployment).')
+param logAnalyticsWorkspaceName string
+
 @description('SQL Server administrator login.')
 param sqlAdminLogin string
 
@@ -81,6 +84,10 @@ resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-p
   name: 'worker-results'
 }
 
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
+  name: logAnalyticsWorkspaceName
+}
+
 // ---------------------------------------------------------------------------
 // Azure SQL Server + Database
 // ---------------------------------------------------------------------------
@@ -111,6 +118,25 @@ resource sqlDatabase 'Microsoft.Sql/databases@2023-08-01-preview' = {
     maxSizeBytes: 34359738368 // 32 GB (serverless minimum)
     autoPauseDelay: 60 // minutes – serverless auto-pause
     minCapacity: json('0.5') // minimum vCores when active
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SQL Diagnostic Settings
+// ---------------------------------------------------------------------------
+
+resource sqlDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: sqlDatabase
+  name: 'sql-diagnostics'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      { category: 'SQLSecurityAuditEvents', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'AutomaticTuning', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+    metrics: [
+      { category: 'Basic', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
   }
 }
 
@@ -158,7 +184,10 @@ resource schedulerStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       virtualNetworkRules: [
         { id: schedulerSubnetId, action: 'Allow' }
       ]
-    } : null
+    } : {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 
@@ -263,7 +292,10 @@ resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       virtualNetworkRules: [
         { id: orchestratorSubnetId, action: 'Allow' }
       ]
-    } : null
+    } : {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 

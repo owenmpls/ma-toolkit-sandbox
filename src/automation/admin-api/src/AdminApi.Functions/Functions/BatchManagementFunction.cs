@@ -61,8 +61,12 @@ public class BatchManagementFunction
         string? status = req.Query.TryGetValue("status", out var st) ? st.ToString() : null;
         bool? isManual = req.Query.TryGetValue("manual", out var manual) && bool.TryParse(manual, out var manualVal)
             ? manualVal : null;
+        int limit = req.Query.TryGetValue("limit", out var lim) && int.TryParse(lim, out var limVal) && limVal > 0 && limVal <= 100
+            ? limVal : 100;
+        int offset = req.Query.TryGetValue("offset", out var off) && int.TryParse(off, out var offVal) && offVal >= 0
+            ? offVal : 0;
 
-        var batches = await _batchRepo.ListAsync(runbookId, status, isManual);
+        var batches = await _batchRepo.ListAsync(runbookId, status, isManual, limit, offset);
 
         return new OkObjectResult(new
         {
@@ -77,7 +81,9 @@ public class BatchManagementFunction
                 b.CurrentPhase,
                 b.DetectedAt,
                 b.InitDispatchedAt
-            })
+            }),
+            limit,
+            offset
         });
     }
 
@@ -299,7 +305,7 @@ public class BatchManagementFunction
             return new NotFoundObjectResult(new { error = $"Batch {id} not found" });
 
         if (!batch.IsManual)
-            return new BadRequestObjectResult(new { error = "Only manual batches can be advanced via API" });
+            return new ConflictObjectResult(new { error = "Only manual batches can be advanced via API" });
 
         // Get runbook
         var runbook = await _runbookRepo.GetByIdAsync(batch.RunbookId);
@@ -341,7 +347,7 @@ public class BatchManagementFunction
             return new NotFoundObjectResult(new { error = $"Batch {id} not found" });
 
         if (batch.Status is BatchStatus.Completed or BatchStatus.Failed)
-            return new BadRequestObjectResult(new { error = $"Batch is already {batch.Status}" });
+            return new ConflictObjectResult(new { error = $"Batch is already {batch.Status}" });
 
         await _batchRepo.UpdateStatusAsync(id, BatchStatus.Failed);
 

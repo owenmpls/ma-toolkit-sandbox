@@ -79,7 +79,10 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
       virtualNetworkRules: [
         { id: adminApiSubnetId, action: 'Allow' }
       ]
-    } : null
+    } : {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 

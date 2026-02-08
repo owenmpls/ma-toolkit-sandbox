@@ -11,6 +11,21 @@ namespace MaToolkit.Automation.Shared.Services;
 public class DynamicTableManager : IDynamicTableManager
 {
     private static readonly Regex ValidColumnName = new(@"^[a-zA-Z0-9_]+$", RegexOptions.Compiled);
+    private static readonly HashSet<string> SqlReservedKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ADD", "ALTER", "AND", "AS", "ASC", "BACKUP", "BEGIN", "BETWEEN", "BREAK",
+        "BY", "CASCADE", "CASE", "CHECK", "CLOSE", "COLUMN", "COMMIT", "CONSTRAINT",
+        "CREATE", "CROSS", "CURSOR", "DATABASE", "DECLARE", "DEFAULT", "DELETE",
+        "DESC", "DISTINCT", "DROP", "ELSE", "END", "EXEC", "EXECUTE", "EXISTS",
+        "FETCH", "FOR", "FOREIGN", "FROM", "FULL", "FUNCTION", "GOTO", "GRANT",
+        "GROUP", "HAVING", "IDENTITY", "IF", "IN", "INDEX", "INNER", "INSERT",
+        "INTO", "IS", "JOIN", "KEY", "LEFT", "LIKE", "NOT", "NULL", "OF", "OFF",
+        "ON", "OPEN", "OR", "ORDER", "OUTER", "OVER", "PRIMARY", "PRINT", "PROC",
+        "PROCEDURE", "RAISERROR", "REFERENCES", "RETURN", "REVOKE", "RIGHT",
+        "ROLLBACK", "SCHEMA", "SELECT", "SET", "TABLE", "THEN", "TOP", "TRAN",
+        "TRANSACTION", "TRIGGER", "TRUNCATE", "UNION", "UNIQUE", "UPDATE", "USE",
+        "VALUES", "VIEW", "WHEN", "WHERE", "WHILE"
+    };
     private readonly IDbConnectionFactory _db;
     private readonly ILogger<DynamicTableManager> _logger;
 
@@ -137,7 +152,17 @@ public class DynamicTableManager : IDynamicTableManager
             return null;
 
         if (string.Equals(format, "json_array", StringComparison.OrdinalIgnoreCase))
-            return value; // already JSON
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(value);
+                return value;
+            }
+            catch (JsonException)
+            {
+                throw new ArgumentException($"Value is not valid JSON for json_array column: {value}");
+            }
+        }
 
         string[] parts = format.ToLowerInvariant() switch
         {
@@ -153,11 +178,15 @@ public class DynamicTableManager : IDynamicTableManager
     {
         if (!ValidColumnName.IsMatch(name))
             throw new ArgumentException($"Invalid table name: {name}");
+        if (SqlReservedKeywords.Contains(name))
+            throw new ArgumentException($"Table name is a SQL reserved keyword: {name}");
     }
 
     private static void ValidateColumnName(string name)
     {
         if (!ValidColumnName.IsMatch(name))
             throw new ArgumentException($"Invalid column name: {name}");
+        if (SqlReservedKeywords.Contains(name))
+            throw new ArgumentException($"Column name is a SQL reserved keyword: {name}");
     }
 }

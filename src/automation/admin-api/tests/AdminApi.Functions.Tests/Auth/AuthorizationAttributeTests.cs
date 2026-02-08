@@ -29,9 +29,13 @@ public class AuthorizationAttributeTests
 
         foreach (var method in methods)
         {
+            // Health check and other explicitly anonymous endpoints use [AllowAnonymous]
+            if (method.GetCustomAttribute<AllowAnonymousAttribute>() != null)
+                continue;
+
             var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
             authorize.Should().NotBeNull(
-                $"Function method '{method.DeclaringType!.Name}.{method.Name}' should have [Authorize] attribute");
+                $"Function method '{method.DeclaringType!.Name}.{method.Name}' should have [Authorize] or [AllowAnonymous] attribute");
         }
     }
 

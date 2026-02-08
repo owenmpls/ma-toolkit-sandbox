@@ -62,13 +62,14 @@ public class BatchRepository : IBatchRepository
             new { RunbookName = runbookName, Completed = BatchStatus.Completed, Failed = BatchStatus.Failed });
     }
 
-    public async Task<IEnumerable<BatchRecord>> ListAsync(int? runbookId = null, string? status = null, bool? isManual = null, int limit = 100)
+    public async Task<IEnumerable<BatchRecord>> ListAsync(int? runbookId = null, string? status = null, bool? isManual = null, int limit = 100, int offset = 0)
     {
         using var conn = _db.CreateConnection();
 
-        var sql = "SELECT TOP (@Limit) * FROM batches WHERE 1=1";
+        var sql = "SELECT * FROM batches WHERE 1=1";
         var parameters = new DynamicParameters();
         parameters.Add("@Limit", limit);
+        parameters.Add("@Offset", offset);
 
         if (runbookId.HasValue)
         {
@@ -88,7 +89,7 @@ public class BatchRepository : IBatchRepository
             parameters.Add("@IsManual", isManual.Value);
         }
 
-        sql += " ORDER BY detected_at DESC";
+        sql += " ORDER BY detected_at DESC OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY";
 
         return await conn.QueryAsync<BatchRecord>(sql, parameters);
     }
