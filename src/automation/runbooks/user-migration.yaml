@@ -80,7 +80,7 @@ phases:
         params:
           Identity: "{{SourceUPN}}"
           NewPrimaryEmail: "{{TargetUPN}}"
-        on_failure: rollback-email
+        on_failure: rollback-cutover
 
 on_member_removed:
   - name: revert-primary-email
@@ -98,10 +98,24 @@ rollbacks:
       params:
         UserId: "{{TargetObjectId}}"
 
-  rollback-email:
-    - name: revert-email
+  rollback-cutover:
+    - name: revert-primary-email
       worker_id: cloud-worker
       function: Set-ExchangePrimaryEmail
       params:
         Identity: "{{SourceUPN}}"
         NewPrimaryEmail: "{{SourceUPN}}"
+
+    - name: clear-exchange-guids
+      worker_id: cloud-worker
+      function: Set-ExchangeMailUserGuids
+      params:
+        Identity: "{{TargetUPN}}"
+        ExchangeGuid: "00000000-0000-0000-0000-000000000000"
+
+    - name: notify-cutover-failure
+      worker_id: cloud-worker
+      function: Send-AdminAlert
+      params:
+        Subject: "Cutover rollback triggered for {{DisplayName}} ({{SourceUPN}})"
+        BatchId: "{{_batch_id}}"
