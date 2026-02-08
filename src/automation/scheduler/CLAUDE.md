@@ -17,6 +17,19 @@ cd src/automation/scheduler/src/Scheduler.Functions && func start
 dotnet publish src/automation/scheduler/src/Scheduler.Functions/ -c Release -o src/automation/scheduler/src/Scheduler.Functions/publish
 ```
 
+## Tests
+
+```bash
+# Run tests
+dotnet test src/automation/scheduler/tests/Scheduler.Functions.Tests/
+
+# Run with verbose output
+dotnet test src/automation/scheduler/tests/Scheduler.Functions.Tests/ --verbosity normal
+```
+
+**Test coverage (5 tests):**
+- `MemberSynchronizerTests` (5 tests) -- Data refresh on active members, status guard for removed/failed, skip members not in query results, multi-valued column handling
+
 ## Directory Structure
 
 ```
@@ -27,6 +40,11 @@ scheduler/
     deployment-guide.md          # Azure deployment and local dev setup
     runbook-format.md            # Complete YAML schema reference
     orchestrator-contract.md     # Service Bus messages, SQL tables, protocols
+  tests/
+    Scheduler.Functions.Tests/
+      Scheduler.Functions.Tests.csproj
+      Services/
+        MemberSynchronizerTests.cs   # Member data refresh tests
   src/
     Scheduler.Functions/
       Scheduler.Functions.csproj
@@ -96,7 +114,7 @@ scheduler/
 
 - **Dapper for data access**: All SQL operations use Dapper with raw SQL. No Entity Framework. Repositories are scoped, DbConnectionFactory is singleton.
 - **YamlDotNet for runbook parsing**: Runbooks are stored as raw YAML in the `runbooks.yaml_content` column and parsed on every timer tick. The parser uses `UnderscoredNamingConvention` and `IgnoreUnmatchedProperties`.
-- **Member data storage**: Member data is stored as a JSON document (`data_json` column) on each `batch_members` row, snapshotted at insertion time via `MemberDataSerializer`. This gives each batch a point-in-time snapshot of the data that was current when the member entered the batch.
+- **Member data storage**: Member data is stored as a JSON document (`data_json` column) on each `batch_members` row via `MemberDataSerializer`. Data is refreshed on every scheduler tick for active members still present in query results, so downstream phases always use the latest attribute values.
 - **Template resolution**: Step params use `{{ColumnName}}` syntax resolved from member data dictionaries via the shared `ITemplateResolver`. Special vars: `{{_batch_id}}`, `{{_batch_start_time}}`.
 - **Service Bus publishing**: All 5 message types (`batch-init`, `phase-due`, `member-added`, `member-removed`, `poll-check`) go to a single topic (`orchestrator-events`) with a `MessageType` application property for filtering.
 - **Offset-based scheduling**: Phase offsets like `T-5d` are parsed to minutes. `due_at = batch_start_time - offset_minutes`. The timer evaluates `due_at <= now AND status = 'pending'`.
@@ -108,7 +126,7 @@ scheduler/
 
 The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`. See `docs/orchestrator-contract.md` for full column definitions.
 
-Member data is stored as a JSON document in the `batch_members.data_json` column, snapshotted at insertion time. The shared `MemberDataSerializer` handles `DataRow` → JSON conversion including multi-valued column handling.
+Member data is stored as a JSON document in the `batch_members.data_json` column, refreshed on every scheduler tick for active members. The shared `MemberDataSerializer` handles `DataRow` → JSON conversion including multi-valued column handling.
 
 ## Configuration
 
