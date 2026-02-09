@@ -36,48 +36,48 @@ The system follows a strict separation of concerns:
 All inter-component communication (except the admin API/CLI HTTP interface) flows through Azure Service Bus, providing durability, decoupling, and resilience to component restarts.
 
 ```
-                                  VNet 10.0.0.0/16
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │                                                                         │
-  │  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐            │
-  │  │  Scheduler   │      │ Orchestrator │      │  Admin API   │            │
-  │  │ (Azure Funcs)│      │ (Azure Funcs)│      │ (Azure Funcs)│            │
-  │  │ snet-sched.  │      │ snet-orch.   │      │ snet-admin.  │            │
-  │  │ 10.0.1.0/24  │      │ 10.0.2.0/24  │      │ 10.0.3.0/24  │            │
-  │  └──┬──┬──┬─────┘      └──┬──┬──┬─────┘      └──┬──┬──┬─────┘            │
-  │     │  │  │                │  │  │                │  │  │                  │
-  │     │  │  └── SB ──────────┘  │  └── SB ─────────┘  │  │                  │
-  │     │  │      (topics)        │      (topics)        │  │                  │
-  │     │  └── SQL ───────────────┘                      │  │                  │
-  │     │      (shared DB)  ──────────── SQL ────────────┘  │                  │
-  │     │                                                   │                  │
-  │     └── query ──┐                                       └── HTTPS/JWT ──┐  │
-  │                 v                                                       │  │
-  │   ┌────────────────────┐  ┌───────────────┐    ┌──────────────────┐    │  │
-  │   │   Data Sources     │  │  snet-PEs      │    │  Cloud Worker    │    │  │
-  │   │  Dataverse (TDS)   │  │  10.0.10.0/24  │    │  (PowerShell)    │    │  │
-  │   │  Databricks (REST) │  │                │    │  snet-cloud-wkr  │    │  │
-  │   └────────────────────┘  │ SQL PE         │    │  10.0.4.0/23     │    │  │
-  │                           │ KV PE          │    │                  │    │  │
-  │   ┌──────────────┐       │ SB PE          │    │ SB ──── topics   │    │  │
-  │   │   SQL DB     │◄──PE──│ 9x Storage PEs │    │ KV ──── certs    │    │  │
-  │   │  7 tables    │       │ (blob/queue/   │    │ Graph ── target  │    │  │
-  │   └──────────────┘       │  table per app)│    │ EXO ──── tenant  │    │  │
-  │                           └───────────────┘    └──────────────────┘    │  │
-  │                                                                        │  │
-  └────────────────────────────────────────────────────────────────────────┘  │
-                                                                              │
-                                                  ┌──────────────────┐       │
-                                                  │   Admin CLI      │───────┘
-                                                  │   (matoolkit)    │
-                                                  └──────────────────┘
++----------------+                              +----------------+
+| Data Sources   |                              | Admin CLI      |
+| Dataverse/     |                              | (matoolkit)    |
+| Databricks     |                              +-------+--------+
++-------+--------+                                      |
+        ^                                          HTTPS/JWT
+        | query                                         |
+        |                                               v
++-------+--------+                              +----------------+
+|   Scheduler    |--- read/write batches, --->  |   Admin API    |
+| (Azure Funcs,  |    members, phases           | (Azure Funcs)  |
+|  5-min timer)  |                              +-------+--------+
++--+----+--------+                                      |
+   |    |    ^                                    read/write
+   |    |    | read YAML,                          SQL DB
+   |    |    | write batches/members/phases              |
+   |    |    v                                          |
+   |    |  +------------------------------------------+-+
+   |    |  |              SQL DB                        |
+   |    |  |  runbooks, batches, members, phases,       |
+   |    |  |  step_executions, init_executions,         |
+   |    |  |  runbook_automation_settings               |
+   |    |  +------------------------------------------+-+
+   |    |                                      ^        ^
+   |    |                          read YAML,  |        |
+   |    |                        write steps,  |        |
+   |    |                     update statuses  |        |
+   |    |                                      |        |
+   |    |  orchestrator-events     +-----------+--------+
+   |    +------------------------->|   Orchestrator      |
+   |                               | (Azure Funcs)      |
+   |  (batch-init, phase-due,      +--+---------+-------+
+   |   poll-check, retry-check,       |         ^
+   |   member-added/removed)          |         |
+   |                       worker-jobs|         |worker-results
+   |                                  v         |
+   |                               +--+---------+-------+
+   |                               |   Cloud Worker      |
+   +--- no DB connection -----X   | (PowerShell, ACA)   |
+                                   |   Graph + EXO ops   |
+                                   +---------------------+
 ```
-
-**Key observations:**
-- Scheduler, orchestrator, and admin API all connect to the shared SQL database.
-- Cloud worker does NOT connect to SQL — it only uses Service Bus (jobs/results) and Key Vault (certificates).
-- All private endpoints (SQL, KV, SB, Storage) reside in `snet-private-endpoints`.
-- Cloud worker communicates with external Microsoft APIs (Graph, EXO) over the Azure backbone.
 
 ---
 
