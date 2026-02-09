@@ -38,44 +38,49 @@ All inter-component communication (except the admin API/CLI HTTP interface) flow
 ```
 +----------------+
 | Data Sources   |
-| Dataverse/     |
-| Databricks     |
-+-------+--------+
-        ^
-        | query
-        |
-+-------+--------+         orchestrator-events        +---------------------+
-|   Scheduler    | ----------------------------------> |   Orchestrator      |
-| (Azure Funcs,  |  (batch-init, phase-due,           | (Azure Funcs)      |
-|  5-min timer)  |   poll-check, retry-check,         |                     |
-+-------+--------+   member-added/removed)            +--+----------+------+
-        |                                                 |          ^
-        | read YAML,                           worker-jobs|          |worker-results
-        | write batches/                                  v          |
-        | members/phases                         +--------+----------+--+
-        |                                        |   Cloud Worker       |
-        v                                        | (PowerShell, ACA)    |
-+-------+-------------------------------------------+   Graph + EXO ops |
-|              SQL DB                               |                    |
-|  runbooks, batches, members, phases,              +--------------------+
-|  step_executions, init_executions,    ^       ^
-|  runbook_automation_settings          |       |
-+---------------------------------------+-------+
-        ^               read YAML,      |
-        |               write steps,    |
-        | read/write    update statuses |
-        |                               |
-+-------+--------+   orchestrator-events (manual batch dispatch)
-|   Admin API    | -------------------------+
-| (Azure Funcs)  |
-+-------+--------+
-        ^
-        | HTTPS/JWT
-        |
-+-------+--------+
-| Admin CLI      |
-| (matoolkit)    |
-+----------------+
+| Dataverse/     |                      +--------------------+
+| Databricks     |                      |   Cloud Worker     |
++-------+--------+                      | (PowerShell, ACA)  |
+        ^                               | Graph + EXO ops    |
+        | query                         +--+-------------+---+
+        |                                  ^             |
++-------+--------+                         |             |
+|   Scheduler    |              worker-jobs|             |worker-results
+| (Azure Funcs,  |                         |             |
+|  5-min timer)  |                  +------+-------------+---+
++--+----------+--+  orchestrator-  |                         |
+   |          +---->  events  ---->|      Orchestrator       |
+   |                               |    (Azure Funcs)       |
+   |          +---->  events  ---->|                         |
+   |          |     (manual batch  +------------+------------+
+   |          |      dispatch)                  |
+   |          |                                 |
+   |          |                                 | read YAML,
+   |          |                                 | write steps,
+   |          |                                 | update statuses
+   |          |                                 |
+   |  +-------+------+                         |
+   |  |   Admin API  |                         |
+   |  | (Azure Funcs)|                         |
+   |  +------+-------+                         |
+   |         ^                                  |
+   |         | HTTPS/JWT                        |
+   |         |                                  |
+   |  +------+-------+                         |
+   |  |  Admin CLI   |                         |
+   |  | (matoolkit)  |                         |
+   |  +--------------+                         |
+   |                                            |
+   | read YAML, write                          |
+   | batches/members/phases                    |
+   |                                            |
+   v            read/write                      v
++--+--------------------------------------------+--+
+|                     SQL DB                       |
+|  runbooks, batches, members, phases,             |
+|  step_executions, init_executions,               |
+|  runbook_automation_settings                     |
++--------------------------------------------------+
 ```
 
 ---
