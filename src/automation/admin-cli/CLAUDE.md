@@ -57,7 +57,6 @@ admin-cli/
   src/
     AdminCli/
       AdminCli.csproj
-      README.md                      # User documentation
       Program.cs                     # Entry point, command registration
       Services/
         AdminApiClient.cs            # HTTP client for Admin API (async auth token injection)

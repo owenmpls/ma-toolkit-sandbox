@@ -1,93 +1,100 @@
 # Admin CLI Usage Guide
 
+## Overview
+
+`matoolkit` is a cross-platform .NET CLI tool for managing the M&A Toolkit automation subsystem. It provides full coverage of the Admin API for runbook management, batch creation, automation control, and execution monitoring.
+
 ## Installation
 
 ### As a .NET Global Tool
 
 ```bash
+# Build and install from source
 cd src/automation/admin-cli/src/AdminCli
 dotnet pack
 dotnet tool install --global --add-source ./bin/Release MaToolkit.AdminCli
+
+# Then use from anywhere
+matoolkit --help
 ```
 
 ### As a Standalone Executable
 
 ```bash
 # macOS (Apple Silicon)
-dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r osx-arm64 --self-contained -o publish/osx-arm64
+dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r osx-arm64 --self-contained
+
+# macOS (Intel)
+dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r osx-x64 --self-contained
 
 # Windows
-dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r win-x64 --self-contained -o publish/win-x64
+dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r win-x64 --self-contained
 
 # Linux
-dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r linux-x64 --self-contained -o publish/linux-x64
+dotnet publish src/automation/admin-cli/src/AdminCli/ -c Release -r linux-x64 --self-contained
 ```
 
-## Initial Setup
+## Configuration
 
-### 1. Configure the API URL
+### Config File Location
 
-```bash
-matoolkit config set api-url https://your-admin-api.azurewebsites.net
+```
+~/.matoolkit/config.json
 ```
 
-### 2. Configure Authentication
+### Available Keys
+
+| Key | Environment Variable | Description |
+|-----|---------------------|-------------|
+| `api-url` | `MATOOLKIT_API_URL` | Admin API base URL |
+| `tenant-id` | `MATOOLKIT_TENANT_ID` | Entra ID tenant ID |
+| `client-id` | `MATOOLKIT_CLIENT_ID` | App registration client ID |
+| `api-scope` | `MATOOLKIT_API_SCOPE` | API scope (default: `api://{client-id}/.default`) |
+
+### Priority Order
+
+1. Command-line option (`--api-url`)
+2. Environment variable (`MATOOLKIT_*`)
+3. Config file (`~/.matoolkit/config.json`)
+
+### Commands
 
 ```bash
-matoolkit config set tenant-id YOUR_ENTRA_TENANT_ID
-matoolkit config set client-id YOUR_APP_CLIENT_ID
+# Show all settings and their sources
+matoolkit config show
 
-# Optional: override the default scope
+# Set a configuration value
+matoolkit config set api-url https://your-api.azurewebsites.net
+matoolkit config set tenant-id YOUR_TENANT_ID
+matoolkit config set client-id YOUR_CLIENT_ID
 matoolkit config set api-scope api://YOUR_CLIENT_ID/.default
-```
 
-### 3. Sign In
-
-```bash
-matoolkit auth login
-```
-
-This triggers the device code flow — open the URL shown in the terminal and enter the code. After signing in, your token is cached and you won't need to sign in again until it expires.
-
-### 4. Verify Setup
-
-```bash
-matoolkit config show     # Check all settings
-matoolkit auth status     # Check auth configuration
-matoolkit runbook list    # Test API connectivity
+# Show config file path
+matoolkit config path
 ```
 
 ## Authentication
 
-### Device Code Flow
-
-The CLI uses Entra ID device code flow for interactive authentication. When you run `matoolkit auth login`:
-
-1. The CLI displays a URL and a code
-2. Open the URL in a browser and enter the code
-3. Sign in with your Entra ID account
-4. The CLI receives and caches your token
-
-Tokens are cached persistently on the OS credential store. You only need to sign in once per session (tokens are refreshed automatically).
-
-### Environment Variables
-
-For CI/CD or scripting, you can set auth via environment variables:
+The CLI uses Entra ID device code flow for authentication. Tokens are cached persistently via MSAL -- you only need to sign in once.
 
 ```bash
-export MATOOLKIT_API_URL=https://your-api.azurewebsites.net
+# Configure auth settings
+matoolkit config set tenant-id YOUR_TENANT_ID
+matoolkit config set client-id YOUR_CLIENT_ID
+
+# Sign in (opens browser for device code flow)
+matoolkit auth login
+
+# Check auth status
+matoolkit auth status
+```
+
+For CI/CD, use environment variables:
+```bash
 export MATOOLKIT_TENANT_ID=your-tenant-id
 export MATOOLKIT_CLIENT_ID=your-client-id
 export MATOOLKIT_API_SCOPE=api://your-client-id/.default
 ```
-
-### Checking Auth Status
-
-```bash
-matoolkit auth status
-```
-
-Shows tenant ID, client ID, API scope, and whether auth is configured.
 
 ## Command Reference
 
@@ -100,19 +107,19 @@ matoolkit runbook publish migration.yaml --name my-runbook
 
 # List all active runbooks
 matoolkit runbook list
-matoolkit runbook ls                              # alias
+matoolkit runbook ls
 
 # Get a runbook definition
 matoolkit runbook get my-runbook
-matoolkit runbook get my-runbook --version 2      # specific version
-matoolkit runbook get my-runbook --output out.yaml # save to file
+matoolkit runbook get my-runbook --version 2
+matoolkit runbook get my-runbook --output my-runbook.yaml
 
 # List all versions of a runbook
 matoolkit runbook versions my-runbook
 
 # Deactivate a runbook version
 matoolkit runbook delete my-runbook --version 2
-matoolkit runbook delete my-runbook --version 2 --force  # skip confirmation
+matoolkit runbook delete my-runbook --version 2 --force
 ```
 
 ### Automation Control
@@ -121,10 +128,10 @@ matoolkit runbook delete my-runbook --version 2 --force  # skip confirmation
 # Check automation status
 matoolkit automation status my-runbook
 
-# Enable automated batch creation (scheduler will query data sources)
+# Enable automated batch creation
 matoolkit automation enable my-runbook
 
-# Disable automated batch creation (existing batches continue processing)
+# Disable automated batch creation
 matoolkit automation disable my-runbook
 ```
 
@@ -133,8 +140,8 @@ matoolkit automation disable my-runbook
 ```bash
 # Preview query results without creating a batch
 matoolkit query preview my-runbook
-matoolkit query preview my-runbook --limit 20     # limit sample rows
-matoolkit query preview my-runbook --json         # JSON output
+matoolkit query preview my-runbook --limit 20
+matoolkit query preview my-runbook --json
 ```
 
 ### CSV Templates
@@ -152,9 +159,9 @@ matoolkit template download my-runbook --output members.csv
 matoolkit batch list
 matoolkit batch list --runbook my-runbook
 matoolkit batch list --status active
-matoolkit batch ls                                # alias
+matoolkit batch ls
 
-# Get batch details (includes phases and init steps)
+# Get batch details
 matoolkit batch get 123
 
 # Create a manual batch from CSV
@@ -196,23 +203,7 @@ matoolkit batch steps 123 --status failed          # filter by status
 matoolkit batch steps 123 --limit 100             # limit results
 ```
 
-### Configuration
-
-```bash
-# Show all settings and their sources
-matoolkit config show
-
-# Set a configuration value
-matoolkit config set api-url https://your-api.azurewebsites.net
-matoolkit config set tenant-id YOUR_TENANT_ID
-matoolkit config set client-id YOUR_CLIENT_ID
-matoolkit config set api-scope api://YOUR_CLIENT_ID/.default
-
-# Show config file path
-matoolkit config path
-```
-
-## Workflows
+## Common Workflows
 
 ### First-Time Setup
 
@@ -240,26 +231,22 @@ matoolkit runbook list
 matoolkit template download my-runbook --output members.csv
 
 # 2. Edit members.csv with your migration members
-#    (fill in primary key + required columns)
 
 # 3. Create the batch
 matoolkit batch create my-runbook members.csv
-# Output: batchId=123, status=pending_init, memberCount=25
 
 # 4. Advance through init steps
 matoolkit batch advance 123
-# Output: action=init_dispatched
 
 # 5. Wait for init to complete, then advance each phase
 matoolkit batch get 123          # check status
 matoolkit batch advance 123      # dispatch next phase
 matoolkit batch advance 123      # dispatch next phase
-# ... repeat until all phases complete
 
 # 6. Monitor progress
-matoolkit batch phases 123       # see phase status
-matoolkit batch steps 123        # see individual step results
-matoolkit batch steps 123 --status failed  # check failures
+matoolkit batch phases 123
+matoolkit batch steps 123
+matoolkit batch steps 123 --status failed
 ```
 
 ### Automated Migration Setup
@@ -271,7 +258,7 @@ matoolkit runbook publish my-runbook.yaml
 # 2. Preview what the query returns
 matoolkit query preview my-runbook
 
-# 3. Enable automation (scheduler creates batches every 5 min)
+# 3. Enable automation
 matoolkit automation enable my-runbook
 
 # 4. Monitor
@@ -292,44 +279,22 @@ matoolkit template download my-runbook --output new-members.csv
 
 # 3. Add to existing batch
 matoolkit batch add-members 123 new-members.csv
-# Output: addedCount=10, skippedCount=2 (duplicates)
 ```
 
 ### Investigate Failed Steps
 
 ```bash
-# List failed steps for a batch
 matoolkit batch steps 123 --status failed
-
-# Get full batch details
 matoolkit batch get 123
-
-# Check phase status
 matoolkit batch phases 123
 ```
 
-## Configuration Reference
+## Exit Codes
 
-### Config File Location
-
-```
-~/.matoolkit/config.json
-```
-
-### Available Keys
-
-| Key | Environment Variable | Description |
-|-----|---------------------|-------------|
-| `api-url` | `MATOOLKIT_API_URL` | Admin API base URL |
-| `tenant-id` | `MATOOLKIT_TENANT_ID` | Entra ID tenant ID |
-| `client-id` | `MATOOLKIT_CLIENT_ID` | App registration client ID |
-| `api-scope` | `MATOOLKIT_API_SCOPE` | API scope (default: `api://{client-id}/.default`) |
-
-### Priority Order
-
-1. Command-line option (`--api-url`)
-2. Environment variable (`MATOOLKIT_*`)
-3. Config file (`~/.matoolkit/config.json`)
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error (details on stderr) |
 
 ## Troubleshooting
 
@@ -351,7 +316,7 @@ matoolkit auth login
 
 ### 401 Unauthorized
 
-- Token may have expired — run `matoolkit auth login` again
+- Token may have expired -- run `matoolkit auth login` again
 - Verify tenant-id and client-id match the API's app registration
 - Check `matoolkit auth status` for current configuration
 
@@ -367,10 +332,3 @@ matoolkit auth login
 export MATOOLKIT_DEBUG=1
 matoolkit runbook list          # will show stack traces on errors
 ```
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Error (details on stderr) |

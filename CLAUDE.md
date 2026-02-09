@@ -53,9 +53,7 @@ C# Azure Functions project (isolated worker, .NET 8). Comprehensive admin API fo
 | GET | `/api/batches/{id}/phases` | List phase executions | Authenticated |
 | GET | `/api/batches/{id}/steps` | List step executions | Authenticated |
 
-See `src/automation/admin-api/CLAUDE.md` for project context. Additional docs:
-- [`docs/architecture.md`](src/automation/admin-api/docs/architecture.md) — Auth flow, request processing layers, DI tree, data model, key flows
-- [`docs/usage-guide.md`](src/automation/admin-api/docs/usage-guide.md) — Full API reference with request/response examples, common workflows
+See `src/automation/admin-api/CLAUDE.md` for project context. Full API reference: [`docs/automation/admin-api.md`](docs/automation/admin-api.md)
 
 ### orchestrator (`src/automation/orchestrator/`)
 
@@ -86,9 +84,7 @@ matoolkit batch advance 123
 
 Key commands: `runbook`, `automation`, `query`, `template`, `batch`, `auth`, `config`
 
-See `src/automation/admin-cli/CLAUDE.md` for project context. Additional docs:
-- [`docs/architecture.md`](src/automation/admin-cli/docs/architecture.md) — Component diagram, auth token caching, config system, testing strategy
-- [`docs/usage-guide.md`](src/automation/admin-cli/docs/usage-guide.md) — Installation, setup, full command reference, workflows, troubleshooting
+See `src/automation/admin-cli/CLAUDE.md` for project context. Full CLI reference: [`docs/automation/admin-cli.md`](docs/automation/admin-cli.md)
 
 ## Common Commands
 

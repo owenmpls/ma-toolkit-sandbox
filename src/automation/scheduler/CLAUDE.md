@@ -35,11 +35,6 @@ dotnet test src/automation/scheduler/tests/Scheduler.Functions.Tests/ --verbosit
 ```
 scheduler/
   Scheduler.sln
-  docs/
-    architecture.md              # System architecture and data flow
-    deployment-guide.md          # Azure deployment and local dev setup
-    runbook-format.md            # Complete YAML schema reference
-    orchestrator-contract.md     # Service Bus messages, SQL tables, protocols
   tests/
     Scheduler.Functions.Tests/
       Scheduler.Functions.Tests.csproj
@@ -124,7 +119,7 @@ scheduler/
 
 ## SQL Tables
 
-The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`. See `docs/orchestrator-contract.md` for full column definitions.
+The core tables are: `runbooks`, `batches`, `batch_members`, `phase_executions`, `step_executions`, `init_executions`. See `docs/automation/architecture.md` for full column definitions.
 
 Member data is stored as a JSON document in the `batch_members.data_json` column, refreshed on every scheduler tick for active members. The shared `MemberDataSerializer` handles `DataRow` → JSON conversion including multi-valued column handling.
 

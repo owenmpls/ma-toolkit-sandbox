@@ -11,7 +11,6 @@ Refer to the architecture sketch titled "Automation subsystem architecture" for 
 ```
 cloud-worker/
 ├── Dockerfile, .dockerignore, docker-compose.yml
-├── README.md
 ├── CLAUDE.md                              ← this file
 ├── src/
 │   ├── worker.ps1                         # Main entry point (8-phase boot sequence)
@@ -27,16 +26,12 @@ cloud-worker/
 │   │   ├── EntraFunctions.ps1             # 8 functions: user, group, B2B, validation
 │   │   └── ExchangeFunctions.ps1          # 6 functions: mail user, validation
 │   └── CustomFunctions/
-│       ├── ExampleCustomModule/           # Sample custom function module
-│       └── README.md
+│       └── ExampleCustomModule/           # Sample custom function module
 ├── tests/
 │   ├── Submit-TestJob.ps1                 # CSV-driven test job submitter
 │   ├── sample-jobs.csv
 │   └── Test-WorkerLocal.ps1              # Parse + structure validation (20 tests)
-└── docs/
-    ├── architecture.md
-    ├── deployment-guide.md
-    └── job-submission-guide.md
+└── (subsystem docs at docs/automation/)
 ```
 
 ## Key Architecture Decisions

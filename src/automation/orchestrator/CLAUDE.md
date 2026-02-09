@@ -26,8 +26,6 @@ dotnet publish src/automation/orchestrator/src/Orchestrator.Functions/ -c Releas
 orchestrator/
   Orchestrator.sln
   CLAUDE.md
-  docs/
-    architecture.md              # System architecture and data flow
   src/
     Orchestrator.Functions/
       Orchestrator.Functions.csproj
