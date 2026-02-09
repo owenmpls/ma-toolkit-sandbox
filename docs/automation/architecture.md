@@ -36,51 +36,50 @@ The system follows a strict separation of concerns:
 All inter-component communication (except the admin API/CLI HTTP interface) flows through Azure Service Bus, providing durability, decoupling, and resilience to component restarts.
 
 ```
-+----------------+
-| Data Sources   |
-| Dataverse/     |                      +--------------------+
-| Databricks     |                      |   Cloud Worker     |
-+-------+--------+                      | (PowerShell, ACA)  |
-        ^                               | Graph + EXO ops    |
-        | query                         +--+-------------+---+
-        |                                  ^             |
-+-------+--------+                         |             |
-|   Scheduler    |              worker-jobs|             |worker-results
-| (Azure Funcs,  |                         |             |
-|  5-min timer)  |                  +------+-------------+---+
-+--+----------+--+  orchestrator-  |                         |
-   |          +---->  events  ---->|      Orchestrator       |
-   |                               |    (Azure Funcs)       |
-   |          +---->  events  ---->|                         |
-   |          |     (manual batch  +------------+------------+
-   |          |      dispatch)                  |
-   |          |                                 |
-   |          |                                 | read YAML,
-   |          |                                 | write steps,
-   |          |                                 | update statuses
-   |          |                                 |
-   |  +-------+------+                         |
-   |  |   Admin API  |                         |
-   |  | (Azure Funcs)|                         |
-   |  +------+-------+                         |
-   |         ^                                  |
-   |         | HTTPS/JWT                        |
-   |         |                                  |
-   |  +------+-------+                         |
-   |  |  Admin CLI   |                         |
-   |  | (matoolkit)  |                         |
-   |  +--------------+                         |
-   |                                            |
-   | read YAML, write                          |
-   | batches/members/phases                    |
-   |                                            |
-   v            read/write                      v
-+--+--------------------------------------------+--+
-|                     SQL DB                       |
-|  runbooks, batches, members, phases,             |
-|  step_executions, init_executions,               |
-|  runbook_automation_settings                     |
-+--------------------------------------------------+
+                                           +--------------+
+                  +----------------+       | Admin CLI    |
+                  | Data Sources   |       | (matoolkit)  |
+                  | Dataverse/     |       +------+-------+
+                  | Databricks     |              |
+                  +------+---------+         HTTPS/JWT
+                         ^                        |
+                         | query                  v
+                         |              +---------+--------+
+                  +------+--------+     |    Admin API     |
+                  |   Scheduler   |     |  (Azure Funcs)   |
+                  | (Azure Funcs, |     +--+------------+--+
+                  |  5-min timer) |        |            |
+                  +--+----+-------+        |            |
+                     |    |                |            |
+  orchestrator-events|    |read YAML,      |read/write  |orchestrator-events
+  (batch-init,       |    |write batches/  |            |(manual batch
+   phase-due,        |    |members/phases  |            | dispatch)
+   poll-check, ...)  |    |                |            |
+                     |    v                v            |
+                     | +--+----------------+--+         |
+                     | |        SQL DB        |         |
+                     | | runbooks, batches,   |         |
+                     | | members, phases,     |         |
+                     | | step_executions,     |         |
+                     | | init_executions      |         |
+                     | +----------+-----------+         |
+                     |            ^                     |
+                     |            | read YAML,          |
+                     |            | write steps,        |
+                     |            | update statuses     |
+                     |            |                     |
+                     v            |                     v
+                  +--+------------+--+------------------+--+
+                  |              Orchestrator               |
+                  |            (Azure Funcs)                |
+                  +---+---------------------------+--------+
+                      |                           ^
+                      | worker-jobs               | worker-results
+                      v                           |
+                  +---+---------------------------+--------+
+                  |             Cloud Worker                |
+                  |     (PowerShell, ACA, Graph + EXO)     |
+                  +----------------------------------------+
 ```
 
 ---
