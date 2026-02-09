@@ -141,16 +141,15 @@ docker-compose up
 ```
 infra/
 ├── shared/                              ← shared across all subsystems
-│   ├── deploy.bicep                     ← Log Analytics, Service Bus, Key Vault, ACR
-│   ├── deploy.parameters.json
-│   ├── network.bicep                    ← VNet, subnets, private endpoints, DNS zones
-│   └── network.parameters.json
+│   ├── deploy.bicep                     ← Log Analytics, Service Bus, Key Vault, ACR,
+│   │                                      VNet, subnets, DNS zones, KV/SB private endpoints
+│   └── deploy.parameters.json
 └── automation/                          ← per-component templates
     ├── scheduler-orchestrator/
-    │   ├── deploy.bicep                 ← SQL, storage, Function Apps (scheduler + orchestrator)
+    │   ├── deploy.bicep                 ← SQL, storage, Function Apps + SQL/storage PEs
     │   └── deploy.parameters.json
     ├── admin-api/
-    │   ├── deploy.bicep                 ← storage, Function App
+    │   ├── deploy.bicep                 ← storage, Function App + storage PEs
     │   └── deploy.parameters.json
     └── cloud-worker/
         ├── deploy.bicep                 ← ACA environment + app
@@ -159,68 +158,35 @@ infra/
 
 ### Deploy infrastructure (Azure)
 
-Deploy in four stages. The network template must come after component templates (it references their storage accounts) and the components must be re-deployed with subnet IDs to enable VNet integration.
+Deploy in two stages. The shared template creates VNet/subnets/DNS zones first, then component templates consume subnet IDs and create their own private endpoints in a single deployment.
+
+Automated deployment is available via GitHub Actions — see `.github/workflows/deploy-infra.yml` (infrastructure) and `.github/workflows/deploy-apps.yml` (application code).
 
 ```bash
-# 1. Deploy shared infrastructure (Service Bus, Key Vault, Log Analytics, ACR)
+# Stage 1: Deploy shared infrastructure
+# (Service Bus, Key Vault, Log Analytics, ACR, VNet, subnets, DNS zones, KV/SB PEs)
 az deployment group create \
+  --name shared-infra \
   --resource-group your-rg \
   --template-file infra/shared/deploy.bicep \
   --parameters infra/shared/deploy.parameters.json
 
-# 2. Deploy components (creates SQL, storage accounts, Function Apps, ACA)
+# Stage 2: Deploy components (with VNet integration + private endpoints in one pass)
 # Admin API depends on scheduler-orchestrator (needs SQL server FQDN + DB name).
-# Scheduler-orchestrator and cloud-worker can run in parallel.
+# Pass subnet IDs + DNS zone IDs from shared-infra outputs.
 
 # 2a. Scheduler + orchestrator
 az deployment group create \
-  --resource-group your-rg \
-  --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
-  --parameters infra/automation/scheduler-orchestrator/deploy.parameters.json \
-  --parameters sqlAdminPassword="your-password" \
-  --parameters sqlEntraAdminObjectId="your-entra-admin-group-object-id" \
-  --parameters schedulerSubnetId="" orchestratorSubnetId=""
-
-# 2b. Admin API (after 2a — uses SQL server FQDN + DB name from scheduler-orchestrator)
-az deployment group create \
-  --resource-group your-rg \
-  --template-file infra/automation/admin-api/deploy.bicep \
-  --parameters infra/automation/admin-api/deploy.parameters.json \
-  --parameters sqlServerFqdn="sql-scheduler-dev.database.windows.net" \
-  --parameters sqlDatabaseName="sqldb-scheduler-dev" \
-  --parameters entraIdTenantId="your-tenant-id" \
-  --parameters entraIdClientId="your-client-id" \
-  --parameters entraIdAudience="api://your-client-id" \
-  --parameters adminApiSubnetId=""
-
-# 2c. Cloud worker
-az deployment group create \
-  --resource-group your-rg \
-  --template-file infra/automation/cloud-worker/deploy.bicep \
-  --parameters infra/automation/cloud-worker/deploy.parameters.json \
-  --parameters cloudWorkerSubnetId=""
-
-# 3. Deploy network (VNet, subnets, private endpoints, DNS zones)
-# Must run after step 2 — references storage accounts created by component templates
-az deployment group create \
-  --resource-group your-rg \
-  --template-file infra/shared/network.bicep \
-  --parameters infra/shared/network.parameters.json
-
-# 4. Re-deploy components with subnet IDs to enable VNet integration
-# Use the same commands as step 2, but with subnet IDs populated in parameter files
-# (the parameter files already contain the correct subnet references)
-
-# 4a. Scheduler + orchestrator (with VNet)
-az deployment group create \
+  --name scheduler-orchestrator \
   --resource-group your-rg \
   --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
   --parameters infra/automation/scheduler-orchestrator/deploy.parameters.json \
   --parameters sqlAdminPassword="your-password" \
   --parameters sqlEntraAdminObjectId="your-entra-admin-group-object-id"
 
-# 4b. Admin API (with VNet)
+# 2b. Admin API (after 2a — uses SQL server FQDN + DB name from scheduler-orchestrator)
 az deployment group create \
+  --name admin-api \
   --resource-group your-rg \
   --template-file infra/automation/admin-api/deploy.bicep \
   --parameters infra/automation/admin-api/deploy.parameters.json \
@@ -228,13 +194,14 @@ az deployment group create \
   --parameters entraIdClientId="your-client-id" \
   --parameters entraIdAudience="api://your-client-id"
 
-# 4c. Cloud worker (with VNet — internal CAE)
+# 2c. Cloud worker
 az deployment group create \
+  --name cloud-worker \
   --resource-group your-rg \
   --template-file infra/automation/cloud-worker/deploy.bicep \
   --parameters infra/automation/cloud-worker/deploy.parameters.json
 
-# 5. Create SQL contained database users for managed identity auth
+# 3. Create SQL contained database users for managed identity auth
 # Run once per environment as the Entra ID admin (set in sqlEntraAdminObjectId).
 # Connect to the SQL database and execute:
 #

@@ -43,6 +43,21 @@ param schedulerSubnetId string = ''
 @description('Subnet resource ID for orchestrator VNet integration. Leave empty to skip.')
 param orchestratorSubnetId string = ''
 
+@description('Subnet resource ID for private endpoints. Leave empty to skip private endpoint creation.')
+param privateEndpointsSubnetId string = ''
+
+@description('Resource ID of the SQL private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param sqlDnsZoneId string = ''
+
+@description('Resource ID of the blob storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param stBlobDnsZoneId string = ''
+
+@description('Resource ID of the queue storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param stQueueDnsZoneId string = ''
+
+@description('Resource ID of the table storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param stTableDnsZoneId string = ''
+
 @description('Tags to apply to all resources.')
 param tags object = {
   project: 'ma-toolkit'
@@ -64,6 +79,8 @@ var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0' // Azu
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key Vault Secrets User
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'  // Storage Blob Data Owner
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aafa' // Storage Table Data Contributor
+
+var createPrivateEndpoints = !empty(privateEndpointsSubnetId)
 
 // ---------------------------------------------------------------------------
 // Existing resources (from shared deployment)
@@ -100,7 +117,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
 // Azure SQL Server + Database
 // ---------------------------------------------------------------------------
 
-resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
+resource sqlServer 'Microsoft.Sql/servers@2023-05-01-preview' = {
   name: 'sql-${schedulerBaseName}'
   location: location
   tags: schedulerTags
@@ -112,7 +129,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   }
 }
 
-resource sqlDatabase 'Microsoft.Sql/databases@2023-08-01-preview' = {
+resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-05-01-preview' = {
   parent: sqlServer
   name: 'sqldb-${schedulerBaseName}'
   location: location
@@ -133,7 +150,7 @@ resource sqlDatabase 'Microsoft.Sql/databases@2023-08-01-preview' = {
 // SQL Server Entra ID Administrator
 // ---------------------------------------------------------------------------
 
-resource sqlAdAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = {
+resource sqlAdAdmin 'Microsoft.Sql/servers/administrators@2023-05-01-preview' = {
   parent: sqlServer
   name: 'ActiveDirectory'
   properties: {
@@ -141,6 +158,21 @@ resource sqlAdAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = 
     login: sqlEntraAdminName
     sid: sqlEntraAdminObjectId
     tenantId: subscription().tenantId
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SQL Server Entra-Only Authentication
+// ---------------------------------------------------------------------------
+// Disables SQL auth after Entra admin is set. The sqlAdminPassword above is
+// required by ARM at server creation time but becomes permanently inert.
+
+resource sqlEntraOnlyAuth 'Microsoft.Sql/servers/azureADOnlyAuthentications@2023-05-01-preview' = {
+  parent: sqlServer
+  name: 'Default'
+  dependsOn: [sqlAdAdmin]
+  properties: {
+    azureADOnlyAuthentication: true
   }
 }
 
@@ -559,6 +591,258 @@ resource orchestratorStorageTableContributorAssignment 'Microsoft.Authorization/
     principalId: orchestratorFunctionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRoleId)
+  }
+}
+
+// ===========================================================================
+// PRIVATE ENDPOINTS (conditional — only when privateEndpointsSubnetId is set)
+// ===========================================================================
+
+// --- SQL Server Private Endpoint ---
+resource sqlPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${schedulerBaseName}-pe-sql'
+  location: location
+  tags: schedulerTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${schedulerBaseName}-plsc-sql'
+        properties: {
+          privateLinkServiceId: sqlServer.id
+          groupIds: ['sqlServer']
+        }
+      }
+    ]
+  }
+}
+
+resource sqlDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: sqlPrivateEndpoint
+  name: 'sql-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'sql-config'
+        properties: {
+          privateDnsZoneId: sqlDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+// --- Scheduler Storage Private Endpoints (blob, queue, table) ---
+resource schedulerStBlobPe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${schedulerBaseName}-pe-st-blob'
+  location: location
+  tags: schedulerTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${schedulerBaseName}-plsc-st-blob'
+        properties: {
+          privateLinkServiceId: schedulerStorage.id
+          groupIds: ['blob']
+        }
+      }
+    ]
+  }
+}
+
+resource schedulerStBlobDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: schedulerStBlobPe
+  name: 'st-blob-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-blob-config'
+        properties: {
+          privateDnsZoneId: stBlobDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+resource schedulerStQueuePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${schedulerBaseName}-pe-st-queue'
+  location: location
+  tags: schedulerTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${schedulerBaseName}-plsc-st-queue'
+        properties: {
+          privateLinkServiceId: schedulerStorage.id
+          groupIds: ['queue']
+        }
+      }
+    ]
+  }
+}
+
+resource schedulerStQueueDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: schedulerStQueuePe
+  name: 'st-queue-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-queue-config'
+        properties: {
+          privateDnsZoneId: stQueueDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+resource schedulerStTablePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${schedulerBaseName}-pe-st-table'
+  location: location
+  tags: schedulerTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${schedulerBaseName}-plsc-st-table'
+        properties: {
+          privateLinkServiceId: schedulerStorage.id
+          groupIds: ['table']
+        }
+      }
+    ]
+  }
+}
+
+resource schedulerStTableDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: schedulerStTablePe
+  name: 'st-table-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-table-config'
+        properties: {
+          privateDnsZoneId: stTableDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+// --- Orchestrator Storage Private Endpoints (blob, queue, table) ---
+resource orchestratorStBlobPe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${orchestratorBaseName}-pe-st-blob'
+  location: location
+  tags: orchestratorTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${orchestratorBaseName}-plsc-st-blob'
+        properties: {
+          privateLinkServiceId: orchestratorStorage.id
+          groupIds: ['blob']
+        }
+      }
+    ]
+  }
+}
+
+resource orchestratorStBlobDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: orchestratorStBlobPe
+  name: 'st-blob-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-blob-config'
+        properties: {
+          privateDnsZoneId: stBlobDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+resource orchestratorStQueuePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${orchestratorBaseName}-pe-st-queue'
+  location: location
+  tags: orchestratorTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${orchestratorBaseName}-plsc-st-queue'
+        properties: {
+          privateLinkServiceId: orchestratorStorage.id
+          groupIds: ['queue']
+        }
+      }
+    ]
+  }
+}
+
+resource orchestratorStQueueDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: orchestratorStQueuePe
+  name: 'st-queue-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-queue-config'
+        properties: {
+          privateDnsZoneId: stQueueDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+resource orchestratorStTablePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${orchestratorBaseName}-pe-st-table'
+  location: location
+  tags: orchestratorTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${orchestratorBaseName}-plsc-st-table'
+        properties: {
+          privateLinkServiceId: orchestratorStorage.id
+          groupIds: ['table']
+        }
+      }
+    ]
+  }
+}
+
+resource orchestratorStTableDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: orchestratorStTablePe
+  name: 'st-table-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-table-config'
+        properties: {
+          privateDnsZoneId: stTableDnsZoneId
+        }
+      }
+    ]
   }
 }
 

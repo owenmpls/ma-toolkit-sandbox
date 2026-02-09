@@ -1,0 +1,188 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Deployment stage'
+        required: true
+        type: choice
+        options:
+          - all
+          - shared
+          - scheduler-orchestrator
+          - admin-api
+          - cloud-worker
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP_NAME }}
+  LOCATION: ${{ vars.AZURE_LOCATION }}
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      # ---------------------------------------------------------------
+      # Stage 1: Shared Infrastructure
+      # ---------------------------------------------------------------
+      - name: Deploy shared infrastructure
+        if: inputs.stage == 'all' || inputs.stage == 'shared'
+        run: |
+          az deployment group create \
+            --name shared-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/shared/deploy.bicep \
+            --parameters infra/shared/deploy.parameters.json \
+            --parameters location="$LOCATION"
+
+      # ---------------------------------------------------------------
+      # Stage 2: Component deployments
+      # ---------------------------------------------------------------
+
+      # --- Fetch shared outputs (needed by all components) ---
+      - name: Fetch shared deployment outputs
+        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator' || inputs.stage == 'admin-api' || inputs.stage == 'cloud-worker'
+        id: shared
+        run: |
+          outputs=$(az deployment group show \
+            --name shared-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+
+          echo "log_analytics_workspace_id=$(echo "$outputs" | jq -r '.logAnalyticsWorkspaceId.value')" >> "$GITHUB_OUTPUT"
+          echo "log_analytics_workspace_name=$(echo "$outputs" | jq -r '.logAnalyticsWorkspaceName.value')" >> "$GITHUB_OUTPUT"
+          echo "service_bus_name=$(echo "$outputs" | jq -r '.serviceBusNamespaceName.value')" >> "$GITHUB_OUTPUT"
+          echo "key_vault_name=$(echo "$outputs" | jq -r '.keyVaultName.value')" >> "$GITHUB_OUTPUT"
+          echo "container_registry_name=$(echo "$outputs" | jq -r '.containerRegistryName.value')" >> "$GITHUB_OUTPUT"
+          echo "container_registry_login_server=$(echo "$outputs" | jq -r '.containerRegistryLoginServer.value')" >> "$GITHUB_OUTPUT"
+          echo "scheduler_subnet_id=$(echo "$outputs" | jq -r '.schedulerSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "orchestrator_subnet_id=$(echo "$outputs" | jq -r '.orchestratorSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "admin_api_subnet_id=$(echo "$outputs" | jq -r '.adminApiSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "cloud_worker_subnet_id=$(echo "$outputs" | jq -r '.cloudWorkerSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "pe_subnet_id=$(echo "$outputs" | jq -r '.privateEndpointsSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "sql_dns_zone_id=$(echo "$outputs" | jq -r '.sqlDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+          echo "st_blob_dns_zone_id=$(echo "$outputs" | jq -r '.stBlobDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+          echo "st_queue_dns_zone_id=$(echo "$outputs" | jq -r '.stQueueDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+          echo "st_table_dns_zone_id=$(echo "$outputs" | jq -r '.stTableDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+
+      # --- Scheduler + Orchestrator ---
+      - name: Deploy scheduler-orchestrator
+        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator'
+        run: |
+          az deployment group create \
+            --name scheduler-orchestrator \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
+            --parameters \
+              environmentName=dev \
+              location="$LOCATION" \
+              serviceBusNamespaceName="${{ steps.shared.outputs.service_bus_name }}" \
+              keyVaultName="${{ steps.shared.outputs.key_vault_name }}" \
+              logAnalyticsWorkspaceId="${{ steps.shared.outputs.log_analytics_workspace_id }}" \
+              logAnalyticsWorkspaceName="${{ steps.shared.outputs.log_analytics_workspace_name }}" \
+              sqlAdminLogin=schedulerAdmin \
+              sqlAdminPassword="${{ secrets.SQL_ADMIN_PASSWORD }}" \
+              sqlEntraAdminObjectId="${{ secrets.SQL_ENTRA_ADMIN_OBJECT_ID }}" \
+              schedulerSubnetId="${{ steps.shared.outputs.scheduler_subnet_id }}" \
+              orchestratorSubnetId="${{ steps.shared.outputs.orchestrator_subnet_id }}" \
+              privateEndpointsSubnetId="${{ steps.shared.outputs.pe_subnet_id }}" \
+              sqlDnsZoneId="${{ steps.shared.outputs.sql_dns_zone_id }}" \
+              stBlobDnsZoneId="${{ steps.shared.outputs.st_blob_dns_zone_id }}" \
+              stQueueDnsZoneId="${{ steps.shared.outputs.st_queue_dns_zone_id }}" \
+              stTableDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}"
+
+      # --- Admin API ---
+      - name: Fetch scheduler-orchestrator outputs
+        if: inputs.stage == 'all' || inputs.stage == 'admin-api'
+        id: sched-orch
+        run: |
+          outputs=$(az deployment group show \
+            --name scheduler-orchestrator \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+
+          echo "sql_server_fqdn=$(echo "$outputs" | jq -r '.sqlServerFqdn.value')" >> "$GITHUB_OUTPUT"
+          echo "sql_database_name=$(echo "$outputs" | jq -r '.sqlDatabaseName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy admin-api
+        if: inputs.stage == 'all' || inputs.stage == 'admin-api'
+        run: |
+          az deployment group create \
+            --name admin-api \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/automation/admin-api/deploy.bicep \
+            --parameters \
+              location="$LOCATION" \
+              sqlServerFqdn="${{ steps.sched-orch.outputs.sql_server_fqdn }}" \
+              sqlDatabaseName="${{ steps.sched-orch.outputs.sql_database_name }}" \
+              entraIdTenantId="${{ secrets.ENTRA_ID_TENANT_ID }}" \
+              entraIdClientId="${{ secrets.ENTRA_ID_CLIENT_ID }}" \
+              entraIdAudience="${{ secrets.ENTRA_ID_AUDIENCE }}" \
+              keyVaultName="${{ steps.shared.outputs.key_vault_name }}" \
+              serviceBusNamespaceName="${{ steps.shared.outputs.service_bus_name }}" \
+              adminApiSubnetId="${{ steps.shared.outputs.admin_api_subnet_id }}" \
+              privateEndpointsSubnetId="${{ steps.shared.outputs.pe_subnet_id }}" \
+              stBlobDnsZoneId="${{ steps.shared.outputs.st_blob_dns_zone_id }}" \
+              stQueueDnsZoneId="${{ steps.shared.outputs.st_queue_dns_zone_id }}" \
+              stTableDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}" \
+              logAnalyticsWorkspaceId="${{ steps.shared.outputs.log_analytics_workspace_id }}"
+
+      # --- Cloud Worker (madev1) ---
+      - name: Deploy cloud-worker-madev1
+        if: inputs.stage == 'all' || inputs.stage == 'cloud-worker'
+        run: |
+          az deployment group create \
+            --name cloud-worker-madev1 \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/automation/cloud-worker/deploy.bicep \
+            --parameters \
+              baseName=matoolkit \
+              location="$LOCATION" \
+              targetTenantId="${{ secrets.MADEV1_TENANT_ID }}" \
+              appId="${{ secrets.MADEV1_APP_ID }}" \
+              workerId=worker-madev1 \
+              containerImage="${{ steps.shared.outputs.container_registry_login_server }}/cloud-worker:latest" \
+              cloudWorkerSubnetId="${{ steps.shared.outputs.cloud_worker_subnet_id }}" \
+              serviceBusNamespaceName="${{ steps.shared.outputs.service_bus_name }}" \
+              keyVaultName="${{ steps.shared.outputs.key_vault_name }}" \
+              containerRegistryName="${{ steps.shared.outputs.container_registry_name }}" \
+              logAnalyticsWorkspaceName="${{ steps.shared.outputs.log_analytics_workspace_name }}"
+
+      # --- Cloud Worker (madev2) ---
+      - name: Deploy cloud-worker-madev2
+        if: inputs.stage == 'all' || inputs.stage == 'cloud-worker'
+        run: |
+          az deployment group create \
+            --name cloud-worker-madev2 \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/automation/cloud-worker/deploy.bicep \
+            --parameters \
+              baseName=matoolkit \
+              location="$LOCATION" \
+              targetTenantId="${{ secrets.MADEV2_TENANT_ID }}" \
+              appId="${{ secrets.MADEV2_APP_ID }}" \
+              workerId=worker-madev2 \
+              containerImage="${{ steps.shared.outputs.container_registry_login_server }}/cloud-worker:latest" \
+              cloudWorkerSubnetId="${{ steps.shared.outputs.cloud_worker_subnet_id }}" \
+              serviceBusNamespaceName="${{ steps.shared.outputs.service_bus_name }}" \
+              keyVaultName="${{ steps.shared.outputs.key_vault_name }}" \
+              containerRegistryName="${{ steps.shared.outputs.container_registry_name }}" \
+              logAnalyticsWorkspaceName="${{ steps.shared.outputs.log_analytics_workspace_name }}"

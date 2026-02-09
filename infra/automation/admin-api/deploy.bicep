@@ -28,6 +28,18 @@ param serviceBusNamespaceName string
 @description('Subnet resource ID for VNet integration. Leave empty to skip VNet integration.')
 param adminApiSubnetId string = ''
 
+@description('Subnet resource ID for private endpoints. Leave empty to skip private endpoint creation.')
+param privateEndpointsSubnetId string = ''
+
+@description('Resource ID of the blob storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param stBlobDnsZoneId string = ''
+
+@description('Resource ID of the queue storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param stQueueDnsZoneId string = ''
+
+@description('Resource ID of the table storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
+param stTableDnsZoneId string = ''
+
 @description('Resource ID of the existing Log Analytics workspace (from shared deployment). Leave empty to skip workspace linkage.')
 param logAnalyticsWorkspaceId string = ''
 
@@ -47,6 +59,8 @@ var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key 
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'  // Storage Blob Data Owner
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aafa' // Storage Table Data Contributor
 var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'       // Azure Service Bus Data Sender
+
+var createPrivateEndpoints = !empty(privateEndpointsSubnetId)
 
 // ---------------------------------------------------------------------------
 // Existing resources
@@ -238,6 +252,116 @@ resource serviceBusSenderAssignment 'Microsoft.Authorization/roleAssignments@202
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataSenderRoleId)
+  }
+}
+
+// ===========================================================================
+// PRIVATE ENDPOINTS (conditional — only when privateEndpointsSubnetId is set)
+// ===========================================================================
+
+// --- Admin-API Storage Private Endpoints (blob, queue, table) ---
+resource stBlobPe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${baseName}-pe-st-blob'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${baseName}-plsc-st-blob'
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: ['blob']
+        }
+      }
+    ]
+  }
+}
+
+resource stBlobDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: stBlobPe
+  name: 'st-blob-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-blob-config'
+        properties: {
+          privateDnsZoneId: stBlobDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+resource stQueuePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${baseName}-pe-st-queue'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${baseName}-plsc-st-queue'
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: ['queue']
+        }
+      }
+    ]
+  }
+}
+
+resource stQueueDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: stQueuePe
+  name: 'st-queue-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-queue-config'
+        properties: {
+          privateDnsZoneId: stQueueDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+resource stTablePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createPrivateEndpoints) {
+  name: '${baseName}-pe-st-table'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: '${baseName}-plsc-st-table'
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: ['table']
+        }
+      }
+    ]
+  }
+}
+
+resource stTableDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createPrivateEndpoints) {
+  parent: stTablePe
+  name: 'st-table-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-table-config'
+        properties: {
+          privateDnsZoneId: stTableDnsZoneId
+        }
+      }
+    ]
   }
 }
 

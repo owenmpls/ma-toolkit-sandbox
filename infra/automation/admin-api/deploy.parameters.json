@@ -29,6 +29,18 @@
     "adminApiSubnetId": {
       "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/virtualNetworks/matoolkit-vnet/subnets/snet-admin-api"
     },
+    "privateEndpointsSubnetId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/virtualNetworks/matoolkit-vnet/subnets/snet-private-endpoints"
+    },
+    "stBlobDnsZoneId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+    },
+    "stQueueDnsZoneId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
+    },
+    "stTableDnsZoneId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/privateDnsZones/privatelink.table.core.windows.net"
+    },
     "logAnalyticsWorkspaceId": {
       "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.OperationalInsights/workspaces/<WORKSPACE_NAME>"
     },

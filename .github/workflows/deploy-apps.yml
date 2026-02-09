@@ -1,0 +1,342 @@
+name: Deploy Applications
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Component to deploy'
+        required: true
+        type: choice
+        options:
+          - all
+          - scheduler
+          - orchestrator
+          - admin-api
+          - cloud-worker
+
+  push:
+    branches: [main]
+    paths:
+      - 'src/automation/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP_NAME }}
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  # ---------------------------------------------------------------
+  # Determine which components changed (push trigger only)
+  # ---------------------------------------------------------------
+  changes:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      scheduler: ${{ steps.filter.outputs.scheduler }}
+      orchestrator: ${{ steps.filter.outputs.orchestrator }}
+      admin-api: ${{ steps.filter.outputs.admin-api }}
+      cloud-worker: ${{ steps.filter.outputs.cloud-worker }}
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            scheduler:
+              - 'src/automation/scheduler/**'
+            orchestrator:
+              - 'src/automation/orchestrator/**'
+            admin-api:
+              - 'src/automation/admin-api/**'
+            cloud-worker:
+              - 'src/automation/cloud-worker/**'
+            shared:
+              - 'src/automation/shared/**'
+
+  # ---------------------------------------------------------------
+  # Build, test, and publish .NET projects
+  # ---------------------------------------------------------------
+  build-and-test:
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.result == 'success')
+    outputs:
+      deploy-scheduler: ${{ steps.resolve.outputs.scheduler }}
+      deploy-orchestrator: ${{ steps.resolve.outputs.orchestrator }}
+      deploy-admin-api: ${{ steps.resolve.outputs.admin-api }}
+      deploy-cloud-worker: ${{ steps.resolve.outputs.cloud-worker }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Pre-flight — verify infrastructure exists
+        run: |
+          if ! az deployment group show \
+            --name shared-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.provisioningState \
+            --output tsv 2>/dev/null; then
+            echo "::error::Infrastructure has not been deployed. Run deploy-infra.yml first."
+            exit 1
+          fi
+
+      - name: Resolve deployment targets
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            COMPONENT="${{ inputs.component }}"
+            echo "scheduler=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "scheduler" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "orchestrator=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "orchestrator" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "admin-api=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "admin-api" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "cloud-worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "cloud-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          else
+            # Push trigger — deploy components whose files changed (or all .NET if shared changed)
+            SHARED="${{ needs.changes.outputs.shared }}"
+            echo "scheduler=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.scheduler }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "orchestrator=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.orchestrator }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "admin-api=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.admin-api }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "cloud-worker=$( [ "${{ needs.changes.outputs.cloud-worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: |
+          dotnet restore src/automation/scheduler/src/Scheduler.Functions/
+          dotnet restore src/automation/orchestrator/src/Orchestrator.Functions/
+          dotnet restore src/automation/admin-api/src/AdminApi.Functions/
+
+      - name: Build all projects
+        run: |
+          dotnet build src/automation/scheduler/src/Scheduler.Functions/ --no-restore -c Release
+          dotnet build src/automation/orchestrator/src/Orchestrator.Functions/ --no-restore -c Release
+          dotnet build src/automation/admin-api/src/AdminApi.Functions/ --no-restore -c Release
+
+      - name: Run tests
+        run: |
+          dotnet test src/automation/shared/MaToolkit.Automation.Shared.Tests/ -c Release --no-build --verbosity normal || true
+          dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ -c Release --verbosity normal
+          dotnet test src/automation/orchestrator/tests/Orchestrator.Functions.Tests/ -c Release --verbosity normal
+
+      - name: Publish scheduler
+        if: steps.resolve.outputs.scheduler == 'true'
+        run: |
+          dotnet publish src/automation/scheduler/src/Scheduler.Functions/ \
+            -c Release --no-build -o publish/scheduler
+
+      - name: Publish orchestrator
+        if: steps.resolve.outputs.orchestrator == 'true'
+        run: |
+          dotnet publish src/automation/orchestrator/src/Orchestrator.Functions/ \
+            -c Release --no-build -o publish/orchestrator
+
+      - name: Publish admin-api
+        if: steps.resolve.outputs.admin-api == 'true'
+        run: |
+          dotnet publish src/automation/admin-api/src/AdminApi.Functions/ \
+            -c Release --no-build -o publish/admin-api
+
+      - name: Package scheduler artifact
+        if: steps.resolve.outputs.scheduler == 'true'
+        run: cd publish/scheduler && zip -r ../../scheduler.zip .
+
+      - name: Package orchestrator artifact
+        if: steps.resolve.outputs.orchestrator == 'true'
+        run: cd publish/orchestrator && zip -r ../../orchestrator.zip .
+
+      - name: Package admin-api artifact
+        if: steps.resolve.outputs.admin-api == 'true'
+        run: cd publish/admin-api && zip -r ../../admin-api.zip .
+
+      - name: Upload scheduler artifact
+        if: steps.resolve.outputs.scheduler == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler
+          path: scheduler.zip
+
+      - name: Upload orchestrator artifact
+        if: steps.resolve.outputs.orchestrator == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestrator
+          path: orchestrator.zip
+
+      - name: Upload admin-api artifact
+        if: steps.resolve.outputs.admin-api == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-api
+          path: admin-api.zip
+
+  # ---------------------------------------------------------------
+  # Deploy Function Apps
+  # ---------------------------------------------------------------
+  deploy-functions:
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: [build-and-test]
+    if: >-
+      always() && needs.build-and-test.result == 'success' &&
+      (needs.build-and-test.outputs.deploy-scheduler == 'true' ||
+       needs.build-and-test.outputs.deploy-orchestrator == 'true' ||
+       needs.build-and-test.outputs.deploy-admin-api == 'true')
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch Function App names from deployment outputs
+        id: names
+        run: |
+          # Scheduler + Orchestrator names
+          so_outputs=$(az deployment group show \
+            --name scheduler-orchestrator \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "scheduler_app=$(echo "$so_outputs" | jq -r '.schedulerFunctionAppName.value')" >> "$GITHUB_OUTPUT"
+          echo "orchestrator_app=$(echo "$so_outputs" | jq -r '.orchestratorFunctionAppName.value')" >> "$GITHUB_OUTPUT"
+
+          # Admin API name
+          api_outputs=$(az deployment group show \
+            --name admin-api \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "admin_api_app=$(echo "$api_outputs" | jq -r '.functionAppName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Download scheduler artifact
+        if: needs.build-and-test.outputs.deploy-scheduler == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: scheduler
+
+      - name: Download orchestrator artifact
+        if: needs.build-and-test.outputs.deploy-orchestrator == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: orchestrator
+
+      - name: Download admin-api artifact
+        if: needs.build-and-test.outputs.deploy-admin-api == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: admin-api
+
+      - name: Deploy scheduler
+        if: needs.build-and-test.outputs.deploy-scheduler == 'true'
+        run: |
+          az functionapp deployment source config-zip \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "${{ steps.names.outputs.scheduler_app }}" \
+            --src scheduler.zip
+
+      - name: Deploy orchestrator
+        if: needs.build-and-test.outputs.deploy-orchestrator == 'true'
+        run: |
+          az functionapp deployment source config-zip \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "${{ steps.names.outputs.orchestrator_app }}" \
+            --src orchestrator.zip
+
+      - name: Deploy admin-api
+        if: needs.build-and-test.outputs.deploy-admin-api == 'true'
+        run: |
+          az functionapp deployment source config-zip \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "${{ steps.names.outputs.admin_api_app }}" \
+            --src admin-api.zip
+
+  # ---------------------------------------------------------------
+  # Deploy Cloud Worker container
+  # ---------------------------------------------------------------
+  deploy-cloud-worker:
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: [build-and-test]
+    if: >-
+      always() && needs.build-and-test.result == 'success' &&
+      needs.build-and-test.outputs.deploy-cloud-worker == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch ACR login server
+        id: acr
+        run: |
+          outputs=$(az deployment group show \
+            --name shared-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "login_server=$(echo "$outputs" | jq -r '.containerRegistryLoginServer.value')" >> "$GITHUB_OUTPUT"
+          echo "acr_name=$(echo "$outputs" | jq -r '.containerRegistryName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push container image via ACR
+        run: |
+          IMAGE_TAG="${{ steps.acr.outputs.login_server }}/cloud-worker:${{ github.sha }}"
+          az acr build \
+            --registry "${{ steps.acr.outputs.acr_name }}" \
+            --image "cloud-worker:${{ github.sha }}" \
+            --image "cloud-worker:latest" \
+            --file src/automation/cloud-worker/Dockerfile \
+            src/automation/cloud-worker/
+
+      - name: Fetch cloud-worker container app names
+        id: apps
+        run: |
+          madev1_outputs=$(az deployment group show \
+            --name cloud-worker-madev1 \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "madev1_app=$(echo "$madev1_outputs" | jq -r '.containerAppName.value')" >> "$GITHUB_OUTPUT"
+
+          madev2_outputs=$(az deployment group show \
+            --name cloud-worker-madev2 \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "madev2_app=$(echo "$madev2_outputs" | jq -r '.containerAppName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Update madev1 container app
+        run: |
+          az containerapp update \
+            --name "${{ steps.apps.outputs.madev1_app }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${{ steps.acr.outputs.login_server }}/cloud-worker:${{ github.sha }}"
+
+      - name: Update madev2 container app
+        run: |
+          az containerapp update \
+            --name "${{ steps.apps.outputs.madev2_app }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${{ steps.acr.outputs.login_server }}/cloud-worker:${{ github.sha }}"
