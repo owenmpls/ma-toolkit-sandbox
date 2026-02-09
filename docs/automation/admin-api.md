@@ -199,7 +199,7 @@ The CSV must include the primary key column defined in the runbook. Duplicate ke
 ```json
 {
   "batchId": 123,
-  "status": "pending_init",
+  "status": "detected",
   "memberCount": 25,
   "availablePhases": ["preparation", "migration", "cleanup"],
   "warnings": []
@@ -218,7 +218,7 @@ POST /api/batches/{id}/advance
 ```
 
 Advances the batch to the next step:
-1. **First call** -- dispatches init steps (if defined). Status becomes `init_in_progress`.
+1. **First call** -- dispatches init steps (if defined). Status becomes `init_dispatched`.
 2. **After init completes** -- dispatches the first phase. Status becomes `active`.
 3. **After each phase completes** -- dispatches the next phase.
 4. **After all phases complete** -- returns `action: "all_phases_complete"`.

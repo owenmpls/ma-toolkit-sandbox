@@ -50,7 +50,7 @@ data_source:
 
 ### primary_key
 
-The column in the query results that uniquely identifies each migration member. This value is stored as `_member_key` in the dynamic data table and in `batch_members.member_key`. It is used for member diff detection (adds and removes).
+The column in the query results that uniquely identifies each migration member. This value is stored in `batch_members.member_key`. It is used for member diff detection (adds and removes).
 
 ### batch_time_column vs. batch_time: immediate
 
@@ -81,7 +81,7 @@ data_source:
 
 ### multi_valued_columns
 
-Some columns may contain multiple values packed into a single string. The scheduler normalizes these to JSON arrays during upsert into the dynamic table.
+Some columns may contain multiple values packed into a single string. The scheduler normalizes these to JSON arrays during serialization into `batch_members.data_json`.
 
 | Format | Input | Stored Value |
 |---|---|---|

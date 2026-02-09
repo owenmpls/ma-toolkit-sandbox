@@ -36,36 +36,48 @@ The system follows a strict separation of concerns:
 All inter-component communication (except the admin API/CLI HTTP interface) flows through Azure Service Bus, providing durability, decoupling, and resilience to component restarts.
 
 ```
-                           +-------------------+
-                           |   Data Sources    |
-                           | Dataverse / Bricks|
-                           +--------+----------+
-                                    |
-                                    | query results
-                                    v
-+----------+    YAML    +-------------------+  orchestrator-events  +----------------+
-|  SQL DB  | ---------> |    Scheduler      | -------------------> | Orchestrator   |
-| runbooks |            | (Azure Functions) |                      | (Azure Funcs)  |
-| batches  | <--------- |  5-min timer      |                      +-------+--------+
-| phases   |   upsert   +-------------------+                              |
-| steps    |                                                      worker-jobs topic
-| members  |                                                               |
-| dynamic  |                                                               v
-| tables   |                                                      +----------------+
-+----------+                                                      | Cloud Worker   |
-      ^                                                           | (PowerShell,   |
-      |                                                           |  ACA container)|
-      |                                                           +-------+--------+
-      |                                                                   |
-      +-------------------------------------------------------------------+
-                                                              worker-results topic
-                                                              (back to orchestrator)
-
-+----------+    HTTPS/JWT    +----------------+
-| Admin CLI| -------------> | Admin API      |
-| (matoolkit)               | (Azure Funcs)  |
-+----------+                +----------------+
+                                  VNet 10.0.0.0/16
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                                                                         │
+  │  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐            │
+  │  │  Scheduler   │      │ Orchestrator │      │  Admin API   │            │
+  │  │ (Azure Funcs)│      │ (Azure Funcs)│      │ (Azure Funcs)│            │
+  │  │ snet-sched.  │      │ snet-orch.   │      │ snet-admin.  │            │
+  │  │ 10.0.1.0/24  │      │ 10.0.2.0/24  │      │ 10.0.3.0/24  │            │
+  │  └──┬──┬──┬─────┘      └──┬──┬──┬─────┘      └──┬──┬──┬─────┘            │
+  │     │  │  │                │  │  │                │  │  │                  │
+  │     │  │  └── SB ──────────┘  │  └── SB ─────────┘  │  │                  │
+  │     │  │      (topics)        │      (topics)        │  │                  │
+  │     │  └── SQL ───────────────┘                      │  │                  │
+  │     │      (shared DB)  ──────────── SQL ────────────┘  │                  │
+  │     │                                                   │                  │
+  │     └── query ──┐                                       └── HTTPS/JWT ──┐  │
+  │                 v                                                       │  │
+  │   ┌────────────────────┐  ┌───────────────┐    ┌──────────────────┐    │  │
+  │   │   Data Sources     │  │  snet-PEs      │    │  Cloud Worker    │    │  │
+  │   │  Dataverse (TDS)   │  │  10.0.10.0/24  │    │  (PowerShell)    │    │  │
+  │   │  Databricks (REST) │  │                │    │  snet-cloud-wkr  │    │  │
+  │   └────────────────────┘  │ SQL PE         │    │  10.0.4.0/23     │    │  │
+  │                           │ KV PE          │    │                  │    │  │
+  │   ┌──────────────┐       │ SB PE          │    │ SB ──── topics   │    │  │
+  │   │   SQL DB     │◄──PE──│ 9x Storage PEs │    │ KV ──── certs    │    │  │
+  │   │  7 tables    │       │ (blob/queue/   │    │ Graph ── target  │    │  │
+  │   └──────────────┘       │  table per app)│    │ EXO ──── tenant  │    │  │
+  │                           └───────────────┘    └──────────────────┘    │  │
+  │                                                                        │  │
+  └────────────────────────────────────────────────────────────────────────┘  │
+                                                                              │
+                                                  ┌──────────────────┐       │
+                                                  │   Admin CLI      │───────┘
+                                                  │   (matoolkit)    │
+                                                  └──────────────────┘
 ```
+
+**Key observations:**
+- Scheduler, orchestrator, and admin API all connect to the shared SQL database.
+- Cloud worker does NOT connect to SQL — it only uses Service Bus (jobs/results) and Key Vault (certificates).
+- All private endpoints (SQL, KV, SB, Storage) reside in `snet-private-endpoints`.
+- Cloud worker communicates with external Microsoft APIs (Graph, EXO) over the Azure backbone.
 
 ---
 
@@ -134,8 +146,7 @@ The end-to-end data flow covers automated batch discovery through the scheduler,
 
 1. **Admin publishes runbook** (YAML) via Admin API. Stored in the `runbooks` SQL table.
 2. **Scheduler timer fires** (every 5 minutes). Reads all active runbooks, parses YAML, queries configured data sources.
-3. **Dynamic table upsert.** Query results are merged into a per-runbook-version dynamic table (`runbook_{name}_v{version}`). Members no longer present have `_is_current` set to 0.
-4. **Batch detection.** Query results are grouped by batch time. New batch groups create batch, member, and phase execution records. Existing batches get member diffs (adds/removes).
+3. **Batch detection.** Query results are grouped by batch time. New batch groups create batch, member, and phase execution records. Existing batches get member diffs (adds/removes).
 5. **Init dispatch.** If the runbook defines `init` steps, the scheduler publishes a `batch-init` message. Otherwise, the batch goes directly to `active` status.
 6. **Orchestrator processes batch-init.** Creates init_executions on demand, dispatches init steps sequentially to the `worker-jobs` topic.
 7. **Worker executes function.** Returns result to `worker-results` topic.
@@ -175,7 +186,62 @@ All infrastructure is defined in Bicep templates and deployed in two stages.
 | `snet-cloud-worker` | 10.0.4.0/23 | ACA environment | None |
 | `snet-private-endpoints` | 10.0.10.0/24 | Private endpoints | None |
 
-VNet address space: `10.0.0.0/16`.
+VNet address space: `10.0.0.0/16`. Function App subnets have `Microsoft.Storage` service endpoints enabled for storage account network rules.
+
+### Private Endpoints
+
+All private endpoints reside in `snet-private-endpoints` (10.0.10.0/24).
+
+| Endpoint | Target Resource | Group ID | Created In |
+|----------|----------------|----------|------------|
+| `*-pe-kv` | Key Vault | vault | shared |
+| `*-pe-sb` | Service Bus | namespace | shared |
+| `*-pe-sql` | SQL Server | sqlServer | scheduler-orchestrator |
+| `*-pe-st-blob` (x3) | Storage Account (per app) | blob | scheduler-orchestrator, admin-api |
+| `*-pe-st-queue` (x3) | Storage Account (per app) | queue | scheduler-orchestrator, admin-api |
+| `*-pe-st-table` (x3) | Storage Account (per app) | table | scheduler-orchestrator, admin-api |
+
+Total: 1 KV + 1 SB + 1 SQL + 9 Storage = **12 private endpoints**.
+
+### Private DNS Zones
+
+6 zones created in the shared template and linked to the VNet:
+
+| Zone | Resolves |
+|------|----------|
+| `privatelink.database.windows.net` | SQL Server PE |
+| `privatelink.vaultcore.azure.net` | Key Vault PE |
+| `privatelink.servicebus.windows.net` | Service Bus PE |
+| `privatelink.blob.core.windows.net` | Storage blob PEs |
+| `privatelink.queue.core.windows.net` | Storage queue PEs |
+| `privatelink.table.core.windows.net` | Storage table PEs |
+
+### Network Traffic Flows
+
+**VNet-internal (via private endpoints + private DNS):**
+- SQL queries — scheduler, orchestrator, admin API to SQL Server
+- Storage operations — each Function App to its own storage account (blob, queue, table)
+- Key Vault secret retrieval — all components to Key Vault (connection strings, certificates)
+- Service Bus messaging — all components to Service Bus (topics/subscriptions)
+
+**Azure backbone (not routed through VNet):**
+- ACR image pulls — ACA pulls cloud worker container images from Container Registry
+- Log Analytics / Application Insights — telemetry from all components
+- Microsoft Graph API — cloud worker to target tenant (Entra ID operations)
+- Exchange Online — cloud worker to target tenant (mailbox operations)
+- Dataverse TDS endpoint — scheduler data source queries
+- Databricks SQL Statements API — scheduler data source queries
+
+### Network Access Controls
+
+| Resource | Public Access | Firewall Rule |
+|----------|-------------|---------------|
+| SQL Server | `publicNetworkAccess: Disabled` | Private endpoint only |
+| Key Vault | `publicNetworkAccess: Enabled` (firewall enforced) | `defaultAction: Deny`, `bypass: AzureServices` |
+| Storage Accounts (x3) | Firewall enforced | `defaultAction: Deny`, `bypass: AzureServices`, subnet allow-list + PEs |
+| Service Bus | Private endpoint | PE in shared subnet |
+| Function Apps (x3) | `publicNetworkAccess: Disabled` (when VNet-integrated) | `vnetRouteAllEnabled: true` |
+| ACA Environment | `internal: true` (when VNet-integrated) | No public ingress |
 
 ### Shared Resources (Stage 1)
 
@@ -397,12 +463,11 @@ Error structure (on failure):
 Automated:  detected --> init_dispatched --> active --> completed
                                                    \-> failed
 
-Manual:     pending_init --> init_dispatched --> active --> completed
-                                                       \-> failed
+Manual:     detected --> init_dispatched --> active --> completed
+                                                   \-> failed
 ```
 
-- `detected`: Scheduler created the batch from query results.
-- `pending_init`: Manual batch created, init not yet dispatched.
+- `detected`: Batch created (by scheduler from query results, or by admin API for manual batches). Init not yet dispatched.
 - `init_dispatched`: Init steps dispatched to orchestrator.
 - `active`: Init complete (or no init steps), ready for phase processing.
 - `completed`: All phases reached terminal status with at least one success.
@@ -448,7 +513,7 @@ Retry loop: `failed` -> `pending` (via `SetRetryPendingAsync`, guarded by `WHERE
 
 ## SQL Schema
 
-The system uses 7 core tables plus per-runbook dynamic data tables.
+The system uses 7 core tables.
 
 ### runbooks
 
@@ -458,7 +523,7 @@ The system uses 7 core tables plus per-runbook dynamic data tables.
 | Name | NVARCHAR | Runbook name |
 | Version | INT | Version number (incremented on each publish) |
 | YamlContent | NVARCHAR(MAX) | Raw YAML definition |
-| DataTableName | NVARCHAR | Name of the associated dynamic data table |
+| DataTableName | NVARCHAR | Vestigial — populated on publish but unused at runtime |
 | IsActive | BIT | Whether this version is the current active version |
 | OverdueBehavior | NVARCHAR | `"rerun"` or `"ignore"` -- controls past-due phase handling on version transitions |
 | IgnoreOverdueApplied | BIT | Whether the ignore behavior was already applied |
@@ -566,23 +631,6 @@ Init steps run once per batch (not per member) and are dispatched sequentially.
 
 Disabling automation only stops new batch creation. Existing in-flight batches continue processing.
 
-### Dynamic Data Tables
-
-Named `runbook_{sanitized_name}_v{version}`. Created by `DynamicTableManager` when the scheduler first encounters a runbook. Schema varies per runbook based on data source query columns.
-
-**System columns (always present):**
-
-| Column | Type | Description |
-|--------|------|-------------|
-| _row_id | INT IDENTITY (PK) | Auto-increment primary key |
-| _member_key | NVARCHAR(256) | Unique member identifier (unique constraint) |
-| _batch_time | DATETIME2 | Batch time from data source |
-| _first_seen_at | DATETIME2 | First time this member appeared in query results |
-| _last_seen_at | DATETIME2 | Most recent time this member was seen |
-| _is_current | BIT | 1 if member is in the latest query results |
-
-**Data columns:** One `NVARCHAR(MAX)` column per column returned by the data source query. Multi-valued columns (semicolon-delimited, comma-delimited, or JSON array) are normalized to JSON arrays during upsert.
-
 ---
 
 ## Runbook YAML Format
@@ -656,8 +704,8 @@ steps:
     function: <string>          # PowerShell function name (supports templates)
     params:                     # Key-value parameters (values support templates)
       ParamName: "{{ColumnName}}"
-    output_params:              # Optional: named fields extracted from worker result
-      - <string>
+    output_params:              # Optional: maps result fields to template variables
+      TemplateVar: "resultField"
     on_failure: <string>        # Optional: rollback sequence name
     poll:                       # Optional: polling configuration
       interval: <duration>      # e.g., 15m, 24h, 30s
@@ -757,7 +805,7 @@ params:
   Name: "{{FirstName}} {{LastName}}"
 ```
 
-Values are looked up from the member's `data_json` (stored on `batch_members`) or the dynamic data table.
+Values are looked up from the member's `data_json` (stored on `batch_members`).
 
 ### Special Variables
 
@@ -883,15 +931,22 @@ When a new runbook version is published while batches are active:
 
 ## Security Model
 
-### Authentication and Authorization
+### Authentication Inventory
 
-| Component | Auth Method | Details |
-|-----------|-------------|---------|
-| Admin API | Entra ID JWT bearer | `Microsoft.Identity.Web`; `Admin` role for writes, any authenticated user for reads |
-| Admin CLI | Entra ID device code flow | `Azure.Identity` with persistent MSAL token cache (`matoolkit-cli`) |
-| Cloud Worker | Certificate auth | PFX from Key Vault; `Connect-MgGraph -Certificate` + `Connect-ExchangeOnline -Certificate` |
-| SQL Database | Entra-only (no SQL passwords) | Managed identity contained database users |
-| Service Bus (triggers) | Managed identity | `DefaultAzureCredential` for SDK; KEDA uses dedicated Listen-only shared access rule |
+| Component | Auth Method | Identity Type | Details |
+|-----------|-------------|---------------|---------|
+| Admin API | Entra ID JWT bearer | User (Entra ID) | `Microsoft.Identity.Web`; `Admin` role for writes, any authenticated user for reads |
+| Admin CLI | Entra ID device code flow | User (Entra ID) | `Azure.Identity` with persistent MSAL token cache (`matoolkit-cli`) |
+| Scheduler -> SQL | Managed identity | System-assigned MI | `Authentication=Active Directory Managed Identity` in connection string |
+| Orchestrator -> SQL | Managed identity | System-assigned MI | Same as scheduler |
+| Admin API -> SQL | Managed identity | System-assigned MI | Connection string stored in Key Vault, referenced via `@Microsoft.KeyVault(...)` |
+| Scheduler -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via Azure Functions extension |
+| Orchestrator -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via trigger binding + SDK |
+| Cloud Worker -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via .NET SDK loaded in PowerShell |
+| Cloud Worker -> Graph/EXO | Certificate auth | App registration (target tenant) | PFX from Key Vault; `Connect-MgGraph -Certificate` + `Connect-ExchangeOnline -Certificate` |
+| KEDA -> Service Bus | Shared access key | `keda-monitor` auth rule | Listen-only; connection string stored in Key Vault |
+| All components -> Key Vault | Managed identity | System-assigned MI | RBAC: Key Vault Secrets User |
+| All components -> Storage | Managed identity | System-assigned MI | Identity-based connection (`AzureWebJobsStorage__accountName`) |
 
 **Admin API Entra ID app registration requires:**
 - App roles: `Admin` (full read/write) and `Reader` (read-only)
@@ -902,29 +957,31 @@ When a new runbook version is published while batches are active:
 
 ### Managed Identity RBAC
 
-| Component | RBAC Role | Scope |
-|-----------|-----------|-------|
-| Scheduler | Service Bus Data Sender | Service Bus Namespace |
-| Scheduler | Key Vault Secrets User | Key Vault |
-| Scheduler | Storage Blob Data Owner | Storage Account |
-| Scheduler | Storage Table Data Contributor | Storage Account |
-| Orchestrator | Service Bus Data Sender | Service Bus Namespace |
-| Orchestrator | Service Bus Data Receiver | Service Bus Namespace |
-| Orchestrator | Key Vault Secrets User | Key Vault |
-| Orchestrator | Storage Blob Data Owner | Storage Account |
-| Orchestrator | Storage Table Data Contributor | Storage Account |
-| Admin API | Key Vault Secrets User | Key Vault |
-| Admin API | Storage Blob Data Owner | Storage Account |
-| Admin API | Storage Table Data Contributor | Storage Account |
-| Admin API | Service Bus Data Sender | Service Bus Namespace |
-| Cloud Worker | AcrPull | Container Registry |
-| Cloud Worker | Key Vault Secrets User | Key Vault |
-| Cloud Worker | Service Bus Data Receiver | worker-jobs topic |
-| Cloud Worker | Service Bus Data Sender | worker-results topic |
+| Component | RBAC Role | Scope | Purpose |
+|-----------|-----------|-------|---------|
+| Scheduler | Service Bus Data Sender | Service Bus Namespace | Publish orchestrator-events |
+| Scheduler | Key Vault Secrets User | Key Vault | Read SQL connection string |
+| Scheduler | Storage Blob Data Owner | Scheduler Storage Account | Functions runtime (blob leases, deployment) |
+| Scheduler | Storage Table Data Contributor | Scheduler Storage Account | Functions runtime (timer state) |
+| Orchestrator | Service Bus Data Sender | Service Bus Namespace | Publish worker-jobs, self-schedule retries |
+| Orchestrator | Service Bus Data Receiver | Service Bus Namespace | Consume orchestrator-events, worker-results |
+| Orchestrator | Key Vault Secrets User | Key Vault | Read SQL connection string |
+| Orchestrator | Storage Blob Data Owner | Orchestrator Storage Account | Functions runtime |
+| Orchestrator | Storage Table Data Contributor | Orchestrator Storage Account | Functions runtime |
+| Admin API | Key Vault Secrets User | Key Vault | Read SQL connection string |
+| Admin API | Storage Blob Data Owner | Admin API Storage Account | Functions runtime |
+| Admin API | Storage Table Data Contributor | Admin API Storage Account | Functions runtime |
+| Admin API | Service Bus Data Sender | Service Bus Namespace | Dispatch manual batch events |
+| Cloud Worker | AcrPull | Container Registry | Pull container images |
+| Cloud Worker | Key Vault Secrets User | Key Vault | Read PFX certificate, KEDA SB connection string |
+| Cloud Worker | Service Bus Data Receiver | Service Bus Namespace | Consume worker-jobs |
+| Cloud Worker | Service Bus Data Sender | Service Bus Namespace | Publish worker-results |
 
 ### SQL Database Access
 
-All Function Apps and the orchestrator connect to Azure SQL using managed identity (Entra-only authentication, no SQL passwords). Required setup:
+All Function Apps connect to Azure SQL using managed identity (Entra-only authentication, no SQL passwords). Connection strings use `Authentication=Active Directory Managed Identity` and are stored in Key Vault, referenced by Function App settings via `@Microsoft.KeyVault(SecretUri=...)`. The cloud worker does not connect to SQL.
+
+Required setup (run once per environment as the Entra ID admin):
 
 ```sql
 CREATE USER [func-scheduler-dev] FROM EXTERNAL PROVIDER;
@@ -940,6 +997,78 @@ ALTER ROLE db_datareader ADD MEMBER [matoolkit-admin-api-func];
 ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func];
 ```
 
+### Secrets Management
+
+All secrets are stored in Key Vault with RBAC authorization (no access policies). Components retrieve secrets via managed identity.
+
+| Secret | Format | Consumer |
+|--------|--------|----------|
+| `scheduler-sql-connection-string` | `Server=tcp:...;Authentication=Active Directory Managed Identity;...` | Scheduler (via KV reference) |
+| `orchestrator-sql-connection-string` | Same format | Orchestrator (via KV reference) |
+| `admin-api-sql-connection-string` | Same format | Admin API (via KV reference) |
+| `keda-sb-connection-string` | `Endpoint=sb://...;SharedAccessKeyName=keda-monitor;SharedAccessKey=...` | KEDA scaler (via ACA secret with `keyVaultUrl`) |
+| Worker PFX certificate | Key Vault Certificate (retrieved via associated secret) | Cloud worker (at startup) |
+
+**No passwords in connection strings.** SQL uses managed identity auth. Storage uses identity-based connections (`AzureWebJobsStorage__accountName`). Service Bus uses managed identity for all runtime operations. The only shared access key is the KEDA monitor rule.
+
+### KEDA Shared Access Key
+
+KEDA requires a Service Bus connection string to monitor subscription message counts for scaling decisions. Managed identity is not supported by the KEDA Service Bus scaler as of the current version.
+
+- **Scope:** `keda-monitor` authorization rule on the `worker-jobs` topic only (not namespace-level)
+- **Rights:** `Listen` only (read message count metrics, cannot send or manage)
+- **Storage:** Connection string stored in Key Vault, sourced by ACA via `keyVaultUrl` with system-assigned managed identity
+- **Risk:** Compromise of this key allows reading messages on the `worker-jobs` topic but not sending or modifying them
+
+### External API Boundaries
+
+Data flows leaving the VNet to external Microsoft services:
+
+| Destination | Protocol | Consumer | Data Flowing Out |
+|-------------|----------|----------|-----------------|
+| Microsoft Graph API | HTTPS | Cloud worker | Entra ID user/group operations (create, modify, validate) |
+| Exchange Online | HTTPS (PowerShell remoting) | Cloud worker | Mail user configuration, mailbox operations |
+| Dataverse TDS endpoint | TDS (TCP 1433) | Scheduler | SQL queries against Dataverse tables |
+| Databricks SQL Statements API | HTTPS | Scheduler | SQL queries via REST API |
+| Application Insights | HTTPS | All components | Telemetry (traces, exceptions, metrics) |
+| Container Registry | HTTPS | ACA | Container image pulls |
+
+### Sensitive Data
+
+| Data | Location | Protection |
+|------|----------|------------|
+| Member PII (names, UPNs, emails) | `batch_members.data_json`, `step_executions.params_json` | SQL PE (no public access), TDE at rest |
+| Worker output data | `batch_members.worker_data_json`, `step_executions.result_json` | Same as above |
+| Service Bus message payloads | `worker-jobs` / `worker-results` topics | SB PE (no public access), encryption at rest |
+| PFX certificate private key | Key Vault | KV PE, RBAC, soft delete + purge protection |
+| SQL connection strings | Key Vault | KV PE, RBAC, referenced via KV references (never in app settings directly) |
+| JWT tokens (admin API calls) | In-transit only | HTTPS, short-lived tokens |
+| MSAL token cache (CLI) | `~/.matoolkit/` on user's machine | OS credential store (Keychain/DPAPI/libsecret) |
+
+### Attack Surface Summary
+
+| Vector | Risk | Mitigation |
+|--------|------|------------|
+| Worker PFX certificate compromise | Full Graph + EXO access to target tenant | Key Vault with PE, RBAC, purge protection; certificate rotation |
+| KEDA SAS key compromise | Read messages on `worker-jobs` topic | Listen-only scope, stored in KV, topic-level (not namespace) |
+| Runbook query injection | Arbitrary SQL against Dataverse/Databricks | Queries are defined by admins at publish time (not user input); `Admin` role required |
+| Member data exfiltration via runbook | Exfil PII through crafted function params | Runbook publish requires `Admin` role; functions execute in isolated worker |
+| Admin API authorization bypass | Unauthorized batch creation or automation control | Entra ID JWT validation, app role enforcement, no function keys |
+| Service Bus message spoofing | Inject fake worker results | Managed identity auth, no shared keys for send operations |
+
+### Audit Trail
+
+**Recorded:**
+- `batches.created_by` — identity of manual batch creator
+- `runbook_automation_settings.enabled_by` / `disabled_by` — who toggled automation
+- Step execution progression (dispatched_at, completed_at, status transitions)
+- Application Insights traces with `WorkerId`, `BatchId`, `StepExecutionId` dimensions
+
+**Not recorded:**
+- Individual runbook publish identity (no `published_by` column on `runbooks`)
+- Member removal identity for manual batches (API removes, but `removed_at` has no `removed_by`)
+- Detailed audit log of who accessed which batch/member data via read endpoints
+
 ---
 
 ## Component Deep Dives
@@ -953,12 +1082,10 @@ ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func];
    a. Parse stored YAML into `RunbookDefinition`.
    b. Check automation settings -- skip if automation disabled.
    c. Execute data source query (Dataverse or Databricks).
-   d. Ensure dynamic data table exists with correct columns.
-   e. Upsert query results into dynamic table (SQL MERGE by `_member_key`).
-   f. Group query rows by batch time.
-   g. For each batch group: create new batch or diff members against existing batch.
-   h. Evaluate pending phases for active batches where `due_at <= now`.
-   i. Handle runbook version transitions for in-flight batches.
+   d. Group query rows by batch time.
+   e. For each batch group: create new batch or diff members against existing batch.
+   f. Evaluate pending phases for active batches where `due_at <= now`.
+   g. Handle runbook version transitions for in-flight batches.
 3. **Check polling steps** -- Across all runbooks, find `step_executions` and `init_executions` with `status = 'polling'` where `last_polled_at + poll_interval_sec <= now`. Send `poll-check` messages.
 
 #### Key Services
@@ -968,7 +1095,6 @@ ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func];
 | `DataSourceQueryService` | Routes to `DataverseQueryClient` or `DatabricksQueryClient` based on `data_source.type` |
 | `DataverseQueryClient` | Executes SQL via Dataverse TDS endpoint using `SqlConnection` |
 | `DatabricksQueryClient` | Executes SQL via Databricks SQL Statements REST API with `DefaultAzureCredential` |
-| `DynamicTableManager` | Creates and upserts into per-runbook-version dynamic tables |
 | `RunbookParser` | YamlDotNet deserialization with `UnderscoredNamingConvention` and `IgnoreUnmatchedProperties` |
 | `MemberDiffService` | Computes added/removed members between existing batch members and current query results |
 | `PhaseEvaluator` | Parses offset strings, calculates `due_at`, creates phase execution records, handles version transitions |
@@ -1306,7 +1432,6 @@ All .NET components (scheduler, orchestrator, admin API) reference `MaToolkit.Au
 - `IRunbookParser` -- YAML deserialization and validation
 - `ITemplateResolver` -- `{{variable}}` resolution
 - `IPhaseEvaluator` -- Offset parsing and `due_at` calculation
-- `IDynamicTableManager` -- Dynamic table creation and upsert
 - `IDataSourceQueryService` -- Data source routing and query execution
 - `IDatabricksQueryClient` / `IDataverseQueryClient` -- Data source clients
 - `MemberDataSerializer` -- DataRow to JSON conversion with multi-valued column handling

@@ -726,15 +726,10 @@ cloud-worker/
 |   |   +-- ExchangeFunctions.ps1          # 6 functions: mail user, validation
 |   +-- CustomFunctions/
 |       +-- ExampleCustomModule/           # Sample custom function module
-|       +-- README.md
 +-- tests/
 |   +-- Submit-TestJob.ps1                 # CSV-driven test job submitter
 |   +-- sample-jobs.csv
 |   +-- Test-WorkerLocal.ps1               # Parse + structure validation (20 tests)
-+-- docs/
-    +-- architecture.md
-    +-- deployment-guide.md
-    +-- job-submission-guide.md
 ```
 
 ---
