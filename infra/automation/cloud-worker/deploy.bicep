@@ -88,6 +88,26 @@ resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' e
   name: 'worker-jobs'
 }
 
+// --- User-Assigned Managed Identity ---
+// Created before the container app so the AcrPull role can be assigned
+// before the first revision tries to pull the image.
+resource workerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${baseName}-worker-${workerId}-id'
+  location: location
+  tags: tags
+}
+
+// AcrPull must exist before the container app's first revision pulls the image
+resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: containerRegistry
+  name: guid(containerRegistry.id, workerIdentity.id, acrPullRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: workerIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // --- Application Insights ---
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: '${baseName}-ai'
@@ -176,15 +196,21 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
   location: location
   tags: tags
   identity: {
-    type: 'SystemAssigned'
+    type: 'SystemAssigned,UserAssigned'
+    userAssignedIdentities: {
+      '${workerIdentity.id}': {}
+    }
   }
+  dependsOn: [
+    acrPullRole
+  ]
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
       registries: [
         {
           server: containerRegistry.properties.loginServer
-          identity: 'system'
+          identity: workerIdentity.id
         }
       ]
       secrets: [
@@ -249,18 +275,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
-// --- Role Assignments ---
-
-// Worker managed identity -> AcrPull on Container Registry
-resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: containerRegistry
-  name: guid(containerRegistry.id, workerApp.id, acrPullRoleId)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
-    principalId: workerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
+// --- Role Assignments (system-assigned identity for runtime access) ---
 
 // Worker managed identity -> Key Vault Secrets User
 resource kvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
