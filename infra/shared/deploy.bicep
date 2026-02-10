@@ -251,9 +251,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
         name: 'snet-deployment-scripts'
         properties: {
           addressPrefix: '10.0.11.0/24'
-          serviceEndpoints: [
-            { service: 'Microsoft.Storage' }
-          ]
           delegations: [
             {
               name: 'delegation-aci'
