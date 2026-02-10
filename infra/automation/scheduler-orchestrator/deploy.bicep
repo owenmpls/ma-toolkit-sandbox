@@ -51,6 +51,9 @@ param stQueueDnsZoneId string = ''
 @description('Resource ID of the table storage private DNS zone (from shared deployment). Required when privateEndpointsSubnetId is set.')
 param stTableDnsZoneId string = ''
 
+@description('Subnet ID for deployment script ACI containers (ACI delegation required). Leave empty to skip schema deployment.')
+param deploymentScriptsSubnetId string = ''
+
 @description('Tags to apply to all resources.')
 param tags object = {
   project: 'ma-toolkit'
@@ -161,6 +164,52 @@ resource sqlDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-previe
       { category: 'Basic', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
     ]
   }
+}
+
+// ---------------------------------------------------------------------------
+// Schema Deployment — managed identity + deploymentScript (runs sqlcmd in VNet)
+// ---------------------------------------------------------------------------
+
+param deployTimestamp string = utcNow()
+
+resource schemaManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-schema-deploy-${environmentName}'
+  location: location
+  tags: tags
+}
+
+resource schemaDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (!empty(deploymentScriptsSubnetId)) {
+  name: 'deploy-sql-schema-${environmentName}'
+  location: location
+  tags: tags
+  kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${schemaManagedIdentity.id}': {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.60.0'
+    retentionInterval: 'PT1H'
+    timeout: 'PT10M'
+    cleanupPreference: 'OnSuccess'
+    containerSettings: {
+      subnetIds: [
+        { id: deploymentScriptsSubnetId }
+      ]
+    }
+    environmentVariables: [
+      { name: 'SQL_SERVER', value: sqlServer.properties.fullyQualifiedDomainName }
+      { name: 'SQL_DATABASE', value: sqlDatabase.name }
+      { name: 'IDENTITY_CLIENT_ID', value: schemaManagedIdentity.properties.clientId }
+    ]
+    scriptContent: loadTextContent('../../../src/automation/database/deploy-schema.sh')
+    forceUpdateTag: deployTimestamp
+  }
+  dependsOn: [
+    sqlPrivateEndpoint
+  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -881,3 +930,4 @@ output orchestratorAppInsightsConnectionString string = orchestratorAppInsights.
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlDatabaseName string = sqlDatabase.name
 output sqlManagedIdentityConnectionString string = sqlConnectionStringValue
+output schemaManagedIdentityPrincipalId string = schemaManagedIdentity.properties.principalId

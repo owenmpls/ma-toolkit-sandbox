@@ -247,6 +247,20 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
           addressPrefix: '10.0.10.0/24'
         }
       }
+      {
+        name: 'snet-deployment-scripts'
+        properties: {
+          addressPrefix: '10.0.11.0/24'
+          delegations: [
+            {
+              name: 'delegation-aci'
+              properties: {
+                serviceName: 'Microsoft.ContainerInstance/containerGroups'
+              }
+            }
+          ]
+        }
+      }
     ]
   }
 }
@@ -469,6 +483,7 @@ output orchestratorSubnetId string = vnet.properties.subnets[1].id
 output adminApiSubnetId string = vnet.properties.subnets[2].id
 output cloudWorkerSubnetId string = vnet.properties.subnets[3].id
 output privateEndpointsSubnetId string = vnet.properties.subnets[4].id
+output deploymentScriptsSubnetId string = vnet.properties.subnets[5].id
 
 // Private DNS Zone IDs (consumed by component templates for their own PEs)
 output sqlDnsZoneId string = sqlDnsZone.id

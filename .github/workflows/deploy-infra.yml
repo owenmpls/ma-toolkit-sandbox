@@ -81,6 +81,7 @@ jobs:
           echo "st_blob_dns_zone_id=$(echo "$outputs" | jq -r '.stBlobDnsZoneId.value')" >> "$GITHUB_OUTPUT"
           echo "st_queue_dns_zone_id=$(echo "$outputs" | jq -r '.stQueueDnsZoneId.value')" >> "$GITHUB_OUTPUT"
           echo "st_table_dns_zone_id=$(echo "$outputs" | jq -r '.stTableDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+          echo "deployment_scripts_subnet_id=$(echo "$outputs" | jq -r '.deploymentScriptsSubnetId.value')" >> "$GITHUB_OUTPUT"
 
       # --- Scheduler + Orchestrator ---
       - name: Deploy scheduler-orchestrator
@@ -104,7 +105,8 @@ jobs:
               sqlDnsZoneId="${{ steps.shared.outputs.sql_dns_zone_id }}" \
               stBlobDnsZoneId="${{ steps.shared.outputs.st_blob_dns_zone_id }}" \
               stQueueDnsZoneId="${{ steps.shared.outputs.st_queue_dns_zone_id }}" \
-              stTableDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}"
+              stTableDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}" \
+              deploymentScriptsSubnetId="${{ steps.shared.outputs.deployment_scripts_subnet_id }}"
 
       # --- Admin API ---
       - name: Fetch scheduler-orchestrator outputs
