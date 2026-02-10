@@ -114,6 +114,19 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
 }
 
+resource storageBlobServices 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: storageAccount
+  name: 'default'
+}
+
+resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: storageBlobServices
+  name: 'app-package'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 // Application Insights
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
@@ -128,7 +141,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // Flex Consumption Hosting Plan
-resource hostingPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
+resource hostingPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: hostingPlanName
   location: location
   tags: tags
@@ -143,7 +156,7 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
 }
 
 // Function App
-resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
+resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
   tags: tags
@@ -157,7 +170,6 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
     publicNetworkAccess: !empty(adminApiSubnetId) ? 'Disabled' : null
     virtualNetworkSubnetId: !empty(adminApiSubnetId) ? adminApiSubnetId : null
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
       vnetRouteAllEnabled: !empty(adminApiSubnetId)
       appSettings: [
         {
@@ -203,6 +215,23 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
       ]
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
+    }
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${storageAccount.properties.primaryEndpoints.blob}${deploymentContainer.name}'
+          authentication: { type: 'SystemAssignedIdentity' }
+        }
+      }
+      scaleAndConcurrency: {
+        instanceMemoryMB: 2048
+        maximumInstanceCount: 100
+      }
+      runtime: {
+        name: 'dotnet-isolated'
+        version: '8.0'
+      }
     }
   }
 }

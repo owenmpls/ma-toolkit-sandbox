@@ -214,6 +214,19 @@ resource schedulerStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
+resource schedulerStorageBlobServices 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: schedulerStorage
+  name: 'default'
+}
+
+resource schedulerDeploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: schedulerStorageBlobServices
+  name: 'app-package'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 resource schedulerAppInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: 'appi-${schedulerBaseName}'
   location: location
@@ -253,7 +266,6 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
     publicNetworkAccess: !empty(schedulerSubnetId) ? 'Disabled' : null
     virtualNetworkSubnetId: !empty(schedulerSubnetId) ? schedulerSubnetId : null
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
       vnetRouteAllEnabled: !empty(schedulerSubnetId)
       appSettings: [
         {
@@ -290,6 +302,23 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
         }
       ]
     }
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${schedulerStorage.properties.primaryEndpoints.blob}${schedulerDeploymentContainer.name}'
+          authentication: { type: 'SystemAssignedIdentity' }
+        }
+      }
+      scaleAndConcurrency: {
+        instanceMemoryMB: 2048
+        maximumInstanceCount: 100
+      }
+      runtime: {
+        name: 'dotnet-isolated'
+        version: '8.0'
+      }
+    }
   }
 }
 
@@ -319,6 +348,19 @@ resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
     }
+  }
+}
+
+resource orchestratorStorageBlobServices 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: orchestratorStorage
+  name: 'default'
+}
+
+resource orchestratorDeploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: orchestratorStorageBlobServices
+  name: 'app-package'
+  properties: {
+    publicAccess: 'None'
   }
 }
 
@@ -361,7 +403,6 @@ resource orchestratorFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
     publicNetworkAccess: !empty(orchestratorSubnetId) ? 'Disabled' : null
     virtualNetworkSubnetId: !empty(orchestratorSubnetId) ? orchestratorSubnetId : null
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
       vnetRouteAllEnabled: !empty(orchestratorSubnetId)
       appSettings: [
         {
@@ -417,6 +458,23 @@ resource orchestratorFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: 'orchestrator'
         }
       ]
+    }
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${orchestratorStorage.properties.primaryEndpoints.blob}${orchestratorDeploymentContainer.name}'
+          authentication: { type: 'SystemAssignedIdentity' }
+        }
+      }
+      scaleAndConcurrency: {
+        instanceMemoryMB: 2048
+        maximumInstanceCount: 100
+      }
+      runtime: {
+        name: 'dotnet-isolated'
+        version: '8.0'
+      }
     }
   }
 }
