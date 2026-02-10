@@ -263,7 +263,6 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: schedulerAppServicePlan.id
     httpsOnly: true
-    publicNetworkAccess: !empty(schedulerSubnetId) ? 'Disabled' : null
     virtualNetworkSubnetId: !empty(schedulerSubnetId) ? schedulerSubnetId : null
     siteConfig: {
       vnetRouteAllEnabled: !empty(schedulerSubnetId)
@@ -396,7 +395,6 @@ resource orchestratorFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: orchestratorAppServicePlan.id
     httpsOnly: true
-    publicNetworkAccess: !empty(orchestratorSubnetId) ? 'Disabled' : null
     virtualNetworkSubnetId: !empty(orchestratorSubnetId) ? orchestratorSubnetId : null
     siteConfig: {
       vnetRouteAllEnabled: !empty(orchestratorSubnetId)

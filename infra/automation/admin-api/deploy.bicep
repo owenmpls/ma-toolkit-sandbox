@@ -167,7 +167,6 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: hostingPlan.id
     httpsOnly: true
-    publicNetworkAccess: !empty(adminApiSubnetId) ? 'Disabled' : null
     virtualNetworkSubnetId: !empty(adminApiSubnetId) ? adminApiSubnetId : null
     siteConfig: {
       vnetRouteAllEnabled: !empty(adminApiSubnetId)
