@@ -74,6 +74,7 @@ var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'  // Azur
 var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0' // Azure Service Bus Data Receiver
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'   // Key Vault Secrets User
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'  // Storage Blob Data Owner
+var storageFileDataPrivContributorRoleId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage File Data Privileged Contributor
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor
 
 var createPrivateEndpoints = !empty(privateEndpointsSubnetId)
@@ -178,7 +179,10 @@ resource schemaManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
   tags: tags
 }
 
-// Storage account required by deploymentScript when running inside a VNet
+// Storage account required by deploymentScript when running inside a VNet.
+// Must use Deny + VNet rule for the ACI subnet, allowSharedKeyAccess, and
+// Storage File Data Privileged Contributor RBAC for the managed identity.
+// See: https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deployment-script-template#access-private-virtual-network
 resource schemaDeployStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if (!empty(deploymentScriptsSubnetId)) {
   name: take('stds${replace(environmentName, '-', '')}${uniqueString(resourceGroup().id)}', 24)
   location: location
@@ -189,23 +193,29 @@ resource schemaDeployStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
+    allowSharedKeyAccess: true
     networkAcls: {
-      defaultAction: 'Allow'
+      defaultAction: 'Deny'
       bypass: 'AzureServices'
-      virtualNetworkRules: []
+      virtualNetworkRules: [
+        {
+          id: deploymentScriptsSubnetId
+          action: 'Allow'
+        }
+      ]
       ipRules: []
     }
   }
 }
 
-// Storage Blob Data Owner on schema storage for the deployment script identity
-resource schemaStorageBlobOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deploymentScriptsSubnetId)) {
-  name: guid(schemaDeployStorage.id, schemaManagedIdentity.id, storageBlobDataOwnerRoleId)
+// Storage File Data Privileged Contributor on schema storage for the deployment script identity
+resource schemaStorageFileContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deploymentScriptsSubnetId)) {
+  name: guid(schemaDeployStorage.id, schemaManagedIdentity.id, storageFileDataPrivContributorRoleId)
   scope: schemaDeployStorage
   properties: {
     principalId: schemaManagedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataOwnerRoleId)
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageFileDataPrivContributorRoleId)
   }
 }
 
@@ -243,7 +253,7 @@ resource schemaDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-0
   }
   dependsOn: [
     sqlPrivateEndpoint
-    schemaStorageBlobOwnerAssignment
+    schemaStorageFileContributorAssignment
   ]
 }
 
