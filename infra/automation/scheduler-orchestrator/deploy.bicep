@@ -199,7 +199,7 @@ resource orchestratorSqlSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
 // ===========================================================================
 
 resource schedulerStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: replace('st${schedulerBaseName}', '-', '')
+  name: take('${replace('st${schedulerBaseName}', '-', '')}${uniqueString(resourceGroup().id)}', 24)
   location: location
   tags: schedulerTags
   kind: 'StorageV2'
@@ -307,7 +307,7 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
 // ===========================================================================
 
 resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: replace('st${orchestratorBaseName}', '-', '')
+  name: take('${replace('st${orchestratorBaseName}', '-', '')}${uniqueString(resourceGroup().id)}', 24)
   location: location
   tags: orchestratorTags
   kind: 'StorageV2'
