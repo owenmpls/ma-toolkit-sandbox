@@ -106,6 +106,12 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   location: location
   tags: tags
   properties: {
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
     vnetConfiguration: !empty(cloudWorkerSubnetId) ? {
       infrastructureSubnetId: cloudWorkerSubnetId
       internal: true
@@ -191,6 +197,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
       // No ingress needed - this is a background worker
     }
     template: {
+      workloadProfileName: 'Consumption'
       containers: [
         {
           name: 'cloud-worker'
