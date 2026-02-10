@@ -180,7 +180,7 @@ resource schemaManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
 
 // Storage account required by deploymentScript when running inside a VNet
 resource schemaDeployStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if (!empty(deploymentScriptsSubnetId)) {
-  name: take('stschema${replace(environmentName, '-', '')}${uniqueString(resourceGroup().id)}', 24)
+  name: take('stds${replace(environmentName, '-', '')}${uniqueString(resourceGroup().id)}', 24)
   location: location
   tags: tags
   kind: 'StorageV2'
