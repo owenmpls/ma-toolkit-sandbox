@@ -196,8 +196,8 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
       ]
       // No ingress needed - this is a background worker
     }
+    workloadProfileName: 'Consumption'
     template: {
-      workloadProfileName: 'Consumption'
       containers: [
         {
           name: 'cloud-worker'
