@@ -312,18 +312,35 @@ After this, code deployments happen **automatically** on every push to `main` th
 
 ## Step 14: Upload Cloud Worker Certificates to Key Vault
 
-The cloud worker needs PFX certificates in Key Vault for authenticating to Graph and Exchange Online in the target tenants.
+Each cloud-worker instance authenticates to a different target tenant, so each needs its own certificate in Key Vault. The certificate names are derived from the `workerId` parameter: `cert-worker-madev1` and `cert-worker-madev2`.
+
+### Prepare the PEM file
+
+Azure Key Vault expects a single PEM file containing both the private key and the certificate chain. If you have separate files (e.g., `cert.pem` and `key.pem`), combine them:
 
 ```bash
-# Upload certificate for each target tenant
-az keyvault certificate import \
-  --vault-name matoolkit-kv \
-  --name worker-app-cert \
-  --file /path/to/certificate.pfx \
-  --password "<pfx-password-if-any>"
+cat key.pem cert.pem > combined-madev1.pem
 ```
 
-The certificate name `worker-app-cert` must match the `CERT_NAME` environment variable configured in the cloud-worker Bicep template.
+The `.cer` (public certificate only) is what you upload to the app registration in each target tenant — it is not imported into Key Vault.
+
+### Import certificates
+
+```bash
+# Upload certificate for madev1 target tenant
+az keyvault certificate import \
+  --vault-name matoolkit-kv \
+  --name cert-worker-madev1 \
+  --file combined-madev1.pem
+
+# Upload certificate for madev2 target tenant
+az keyvault certificate import \
+  --vault-name matoolkit-kv \
+  --name cert-worker-madev2 \
+  --file combined-madev2.pem
+```
+
+The certificate names must match the `CERT_NAME` environment variable in each ACA container app, which is set automatically by the Bicep template as `cert-${workerId}` (e.g., `cert-worker-madev1` for `workerId = worker-madev1`).
 
 ---
 

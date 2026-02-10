@@ -241,7 +241,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'KEY_VAULT_NAME', value: keyVault.name }
             { name: 'TARGET_TENANT_ID', value: targetTenantId }
             { name: 'APP_ID', value: appId }
-            { name: 'CERT_NAME', value: 'worker-app-cert' }
+            { name: 'CERT_NAME', value: 'cert-${workerId}' }
             { name: 'APPINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
             { name: 'IDLE_TIMEOUT_SECONDS', value: string(idleTimeoutSeconds) }
             { name: 'SHUTDOWN_GRACE_SECONDS', value: string(shutdownGraceSeconds) }
