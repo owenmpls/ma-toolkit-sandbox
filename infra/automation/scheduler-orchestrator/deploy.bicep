@@ -281,10 +281,6 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: '~4'
         }
         {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'dotnet-isolated'
-        }
-        {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: schedulerAppInsights.properties.ConnectionString
         }
@@ -416,10 +412,6 @@ resource orchestratorFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
           value: '~4'
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'dotnet-isolated'
         }
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
