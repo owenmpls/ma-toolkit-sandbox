@@ -191,6 +191,9 @@ resource schemaDeployStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if
     allowBlobPublicAccess: false
     networkAcls: {
       defaultAction: 'Allow'
+      bypass: 'AzureServices'
+      virtualNetworkRules: []
+      ipRules: []
     }
   }
 }
