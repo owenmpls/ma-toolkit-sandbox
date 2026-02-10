@@ -89,8 +89,14 @@ jobs:
           # One-time migration: functionAppConfig is create-only, so existing
           # apps must be deleted before Bicep can recreate them with the new
           # config. Remove this step after the first successful deployment.
-          az functionapp delete --name func-scheduler-dev --resource-group "$RESOURCE_GROUP" || true
-          az functionapp delete --name func-orchestrator-dev --resource-group "$RESOURCE_GROUP" || true
+          az resource delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --resource-type Microsoft.Web/sites \
+            --name func-scheduler-dev || true
+          az resource delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --resource-type Microsoft.Web/sites \
+            --name func-orchestrator-dev || true
 
       - name: Deploy scheduler-orchestrator
         if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator'
@@ -133,7 +139,10 @@ jobs:
         if: inputs.stage == 'all' || inputs.stage == 'admin-api'
         run: |
           # One-time migration: same as above. Remove after first successful deployment.
-          az functionapp delete --name matoolkit-admin-api-func --resource-group "$RESOURCE_GROUP" || true
+          az resource delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --resource-type Microsoft.Web/sites \
+            --name matoolkit-admin-api-func || true
 
       - name: Deploy admin-api
         if: inputs.stage == 'all' || inputs.stage == 'admin-api'
