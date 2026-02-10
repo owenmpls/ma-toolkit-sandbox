@@ -231,6 +231,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
         name: 'snet-cloud-worker'
         properties: {
           addressPrefix: '10.0.4.0/23'
+          delegations: [
+            {
+              name: 'delegation-aca'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
         }
       }
       {
