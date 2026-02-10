@@ -126,6 +126,13 @@ resource sqlServer 'Microsoft.Sql/servers@2023-05-01-preview' = {
     administratorLoginPassword: sqlAdminPassword
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Disabled'
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      login: sqlEntraAdminName
+      sid: sqlEntraAdminObjectId
+      tenantId: subscription().tenantId
+      azureADOnlyAuthentication: true
+    }
   }
 }
 
@@ -143,36 +150,6 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-05-01-preview' = {
     maxSizeBytes: 34359738368 // 32 GB (serverless minimum)
     autoPauseDelay: 60 // minutes – serverless auto-pause
     minCapacity: json('0.5') // minimum vCores when active
-  }
-}
-
-// ---------------------------------------------------------------------------
-// SQL Server Entra ID Administrator
-// ---------------------------------------------------------------------------
-
-resource sqlAdAdmin 'Microsoft.Sql/servers/administrators@2023-05-01-preview' = {
-  parent: sqlServer
-  name: 'ActiveDirectory'
-  properties: {
-    administratorType: 'ActiveDirectory'
-    login: sqlEntraAdminName
-    sid: sqlEntraAdminObjectId
-    tenantId: subscription().tenantId
-  }
-}
-
-// ---------------------------------------------------------------------------
-// SQL Server Entra-Only Authentication
-// ---------------------------------------------------------------------------
-// Disables SQL auth after Entra admin is set. The sqlAdminPassword above is
-// required by ARM at server creation time but becomes permanently inert.
-
-resource sqlEntraOnlyAuth 'Microsoft.Sql/servers/azureADOnlyAuthentications@2023-05-01-preview' = {
-  parent: sqlServer
-  name: 'Default'
-  dependsOn: [sqlAdAdmin]
-  properties: {
-    azureADOnlyAuthentication: true
   }
 }
 
