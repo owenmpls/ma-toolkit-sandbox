@@ -97,8 +97,6 @@ jobs:
               keyVaultName="${{ steps.shared.outputs.key_vault_name }}" \
               logAnalyticsWorkspaceId="${{ steps.shared.outputs.log_analytics_workspace_id }}" \
               logAnalyticsWorkspaceName="${{ steps.shared.outputs.log_analytics_workspace_name }}" \
-              sqlAdminLogin=schedulerAdmin \
-              sqlAdminPassword="${{ secrets.SQL_ADMIN_PASSWORD }}" \
               sqlEntraAdminObjectId="${{ secrets.SQL_ENTRA_ADMIN_OBJECT_ID }}" \
               schedulerSubnetId="${{ steps.shared.outputs.scheduler_subnet_id }}" \
               orchestratorSubnetId="${{ steps.shared.outputs.orchestrator_subnet_id }}" \

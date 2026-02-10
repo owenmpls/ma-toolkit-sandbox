@@ -17,12 +17,6 @@
     "logAnalyticsWorkspaceName": {
       "value": "matoolkit-logs"
     },
-    "sqlAdminLogin": {
-      "value": "schedulerAdmin"
-    },
-    "sqlAdminPassword": {
-      "value": "<REPLACE_WITH_SECURE_PASSWORD>"
-    },
     "sqlEntraAdminObjectId": {
       "value": "<REPLACE_WITH_ENTRA_ADMIN_GROUP_OBJECT_ID>"
     },

@@ -24,13 +24,6 @@ param logAnalyticsWorkspaceId string
 @description('Name of the existing Log Analytics workspace (from shared deployment).')
 param logAnalyticsWorkspaceName string
 
-@description('SQL Server administrator login.')
-param sqlAdminLogin string
-
-@description('SQL Server administrator password.')
-@secure()
-param sqlAdminPassword string
-
 @description('Object ID of the Entra ID group or user to set as SQL Server Entra administrator.')
 param sqlEntraAdminObjectId string
 
@@ -122,8 +115,6 @@ resource sqlServer 'Microsoft.Sql/servers@2023-05-01-preview' = {
   location: location
   tags: schedulerTags
   properties: {
-    administratorLogin: sqlAdminLogin
-    administratorLoginPassword: sqlAdminPassword
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Disabled'
     administrators: {

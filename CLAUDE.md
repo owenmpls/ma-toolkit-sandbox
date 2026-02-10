@@ -177,7 +177,6 @@ az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/scheduler-orchestrator/deploy.bicep \
   --parameters infra/automation/scheduler-orchestrator/deploy.parameters.json \
-  --parameters sqlAdminPassword="your-password" \
   --parameters sqlEntraAdminObjectId="your-entra-admin-group-object-id"
 
 # 2b. Admin API (after 2a — uses SQL server FQDN + DB name from scheduler-orchestrator)
