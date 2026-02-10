@@ -105,8 +105,9 @@ jobs:
               sqlDnsZoneId="${{ steps.shared.outputs.sql_dns_zone_id }}" \
               stBlobDnsZoneId="${{ steps.shared.outputs.st_blob_dns_zone_id }}" \
               stQueueDnsZoneId="${{ steps.shared.outputs.st_queue_dns_zone_id }}" \
-              stTableDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}" \
-              deploymentScriptsSubnetId="${{ steps.shared.outputs.deployment_scripts_subnet_id }}"
+              stTableDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}"
+              # TODO: Re-enable after resolving ACI VNet provisioning timeout
+              # deploymentScriptsSubnetId="${{ steps.shared.outputs.deployment_scripts_subnet_id }}"
 
       # --- Admin API ---
       - name: Fetch scheduler-orchestrator outputs
