@@ -51,7 +51,7 @@ param tags object = {
 
 var storageAccountName = replace('${baseName}st', '-', '')
 var appInsightsName = '${baseName}-ai'
-var functionAppName = '${baseName}-func'
+var functionAppName = '${baseName}-func-${uniqueString(resourceGroup().id)}'
 var hostingPlanName = '${baseName}-plan'
 
 // Built-in role definition IDs

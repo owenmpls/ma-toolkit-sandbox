@@ -253,7 +253,7 @@ resource schedulerAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
 }
 
 resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
-  name: 'func-${schedulerBaseName}'
+  name: 'func-${schedulerBaseName}-${uniqueString(resourceGroup().id)}'
   location: location
   tags: schedulerTags
   kind: 'functionapp,linux'
@@ -386,7 +386,7 @@ resource orchestratorAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
 }
 
 resource orchestratorFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
-  name: 'func-${orchestratorBaseName}'
+  name: 'func-${orchestratorBaseName}-${uniqueString(resourceGroup().id)}'
   location: location
   tags: orchestratorTags
   kind: 'functionapp,linux'
