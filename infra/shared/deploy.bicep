@@ -187,7 +187,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
             {
               name: 'delegation-web'
               properties: {
-                serviceName: 'Microsoft.Web/serverFarms'
+                serviceName: 'Microsoft.App/environments'
               }
             }
           ]
@@ -204,7 +204,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
             {
               name: 'delegation-web'
               properties: {
-                serviceName: 'Microsoft.Web/serverFarms'
+                serviceName: 'Microsoft.App/environments'
               }
             }
           ]
@@ -221,7 +221,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
             {
               name: 'delegation-web'
               properties: {
-                serviceName: 'Microsoft.Web/serverFarms'
+                serviceName: 'Microsoft.App/environments'
               }
             }
           ]
