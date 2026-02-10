@@ -83,15 +83,6 @@ jobs:
           echo "st_table_dns_zone_id=$(echo "$outputs" | jq -r '.stTableDnsZoneId.value')" >> "$GITHUB_OUTPUT"
 
       # --- Scheduler + Orchestrator ---
-      - name: 'Migration: delete existing scheduler + orchestrator Function Apps'
-        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator'
-        run: |
-          # One-time migration: functionAppConfig is create-only, so existing
-          # apps must be deleted before Bicep can recreate them with the new
-          # config. Remove this step after the first successful deployment.
-          az functionapp delete --name func-scheduler-dev --resource-group "$RESOURCE_GROUP" --yes 2>/dev/null || true
-          az functionapp delete --name func-orchestrator-dev --resource-group "$RESOURCE_GROUP" --yes 2>/dev/null || true
-
       - name: Deploy scheduler-orchestrator
         if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator'
         run: |
@@ -128,12 +119,6 @@ jobs:
 
           echo "sql_server_fqdn=$(echo "$outputs" | jq -r '.sqlServerFqdn.value')" >> "$GITHUB_OUTPUT"
           echo "sql_database_name=$(echo "$outputs" | jq -r '.sqlDatabaseName.value')" >> "$GITHUB_OUTPUT"
-
-      - name: 'Migration: delete existing admin-api Function App'
-        if: inputs.stage == 'all' || inputs.stage == 'admin-api'
-        run: |
-          # One-time migration: same as above. Remove after first successful deployment.
-          az functionapp delete --name matoolkit-admin-api-func --resource-group "$RESOURCE_GROUP" --yes 2>/dev/null || true
 
       - name: Deploy admin-api
         if: inputs.stage == 'all' || inputs.stage == 'admin-api'
