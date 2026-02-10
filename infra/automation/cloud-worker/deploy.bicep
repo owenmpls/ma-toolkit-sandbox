@@ -218,8 +218,6 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
       scale: {
         minReplicas: 0
         maxReplicas: 1
-        cooldownPeriod: 300    // 5 minutes — matches IDLE_TIMEOUT_SECONDS default
-        pollingInterval: 30    // 30 seconds — check subscription every 30s
         rules: [
           {
             name: 'service-bus-jobs'
