@@ -178,6 +178,38 @@ resource schemaManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
   tags: tags
 }
 
+// Storage account required by deploymentScript when running inside a VNet
+resource schemaDeployStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if (!empty(deploymentScriptsSubnetId)) {
+  name: take('stschema${replace(environmentName, '-', '')}${uniqueString(resourceGroup().id)}', 24)
+  location: location
+  tags: tags
+  kind: 'StorageV2'
+  sku: { name: 'Standard_LRS' }
+  properties: {
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+      virtualNetworkRules: [
+        { id: deploymentScriptsSubnetId, action: 'Allow' }
+      ]
+    }
+  }
+}
+
+// Storage Blob Data Owner on schema storage for the deployment script identity
+resource schemaStorageBlobOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deploymentScriptsSubnetId)) {
+  name: guid(schemaDeployStorage.id, schemaManagedIdentity.id, storageBlobDataOwnerRoleId)
+  scope: schemaDeployStorage
+  properties: {
+    principalId: schemaManagedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataOwnerRoleId)
+  }
+}
+
 resource schemaDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (!empty(deploymentScriptsSubnetId)) {
   name: 'deploy-sql-schema-${environmentName}'
   location: location
@@ -199,6 +231,9 @@ resource schemaDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-0
         { id: deploymentScriptsSubnetId }
       ]
     }
+    storageAccountSettings: {
+      storageAccountName: schemaDeployStorage.name
+    }
     environmentVariables: [
       { name: 'SQL_SERVER', value: sqlServer.properties.fullyQualifiedDomainName }
       { name: 'SQL_DATABASE', value: sqlDatabase.name }
@@ -209,6 +244,7 @@ resource schemaDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-0
   }
   dependsOn: [
     sqlPrivateEndpoint
+    schemaStorageBlobOwnerAssignment
   ]
 }
 
