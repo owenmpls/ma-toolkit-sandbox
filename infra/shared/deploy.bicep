@@ -16,8 +16,12 @@ param location string = resourceGroup().location
 @description('Enable Key Vault firewall (deny-by-default + trusted Azure service bypass for Arc hybrid workers). VNet resources use the private endpoint created below.')
 param enableKeyVaultFirewall bool = true
 
-@description('Disable public network access on Service Bus. Must remain false on Standard SKU (no private endpoint support).')
+@description('Disable public network access on Service Bus. Only effective when serviceBusSku is Premium.')
 param disableServiceBusPublicAccess bool = false
+
+@description('Service Bus SKU. Use Premium for private endpoint support.')
+@allowed(['Standard', 'Premium'])
+param serviceBusSku string = 'Standard'
 
 @description('Log Analytics workspace data retention in days. Workspace-based App Insights inherit this value.')
 param logAnalyticsRetentionDays int = 30
@@ -53,8 +57,8 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
   location: location
   tags: tags
   sku: {
-    name: 'Standard'
-    tier: 'Standard'
+    name: serviceBusSku
+    tier: serviceBusSku
   }
   properties: {
     publicNetworkAccess: disableServiceBusPublicAccess ? 'Disabled' : null
@@ -402,7 +406,7 @@ resource kvDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@202
   }
 }
 
-resource sbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
+resource sbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = if (serviceBusSku == 'Premium') {
   name: '${baseName}-pe-sb'
   location: location
   tags: tags
@@ -424,7 +428,7 @@ resource sbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
   }
 }
 
-resource sbDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = {
+resource sbDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (serviceBusSku == 'Premium') {
   parent: sbPrivateEndpoint
   name: 'sb-dns-group'
   properties: {
