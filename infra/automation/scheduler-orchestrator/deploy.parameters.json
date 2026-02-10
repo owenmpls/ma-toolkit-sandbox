@@ -6,7 +6,7 @@
       "value": "dev"
     },
     "serviceBusNamespaceName": {
-      "value": "matoolkit-sb"
+      "value": "matoolkit-sbus"
     },
     "keyVaultName": {
       "value": "matoolkit-kv"

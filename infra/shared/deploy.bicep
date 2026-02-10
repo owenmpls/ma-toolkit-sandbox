@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 
 @description('Base name for all resources (e.g. "matoolkit").')
+@minLength(3)
 param baseName string
 
 @description('Azure region for deployment.')
@@ -48,7 +49,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 // ---------------------------------------------------------------------------
 
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
-  name: '${baseName}-sb'
+  name: '${baseName}-sbus'
   location: location
   tags: tags
   sku: {
@@ -63,7 +64,6 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
 resource orchestratorEventsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
   name: 'orchestrator-events'
-  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P7D'
@@ -76,7 +76,6 @@ resource orchestratorEventsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10
 resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
   name: 'worker-jobs'
-  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P7D'
@@ -89,7 +88,6 @@ resource workerJobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-prev
 resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = {
   parent: serviceBus
   name: 'worker-results'
-  tags: tags
   properties: {
     maxSizeInMegabytes: 1024
     defaultMessageTimeToLive: 'P7D'
@@ -246,7 +244,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
 // ===========================================================================
 
 resource sqlDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: 'privatelink.database.windows.net'
+  name: 'privatelink${environment().suffixes.sqlServerHostname}'
   location: 'global'
   tags: tags
 }
