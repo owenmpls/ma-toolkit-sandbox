@@ -198,19 +198,22 @@ az deployment group create \
 
 # 3. Create SQL contained database users for managed identity auth
 # Run once per environment as the Entra ID admin (set in sqlEntraAdminObjectId).
-# Connect to the SQL database and execute:
+# Function App names include a uniqueString suffix — look up the actual names:
+#   az functionapp list --resource-group rg-ma-toolkit-sandbox --query "[].name" -o tsv
 #
-#   CREATE USER [func-scheduler-dev] FROM EXTERNAL PROVIDER;
-#   ALTER ROLE db_datareader ADD MEMBER [func-scheduler-dev];
-#   ALTER ROLE db_datawriter ADD MEMBER [func-scheduler-dev];
+# Connect to the SQL database and execute (replace <suffix> with the actual value):
 #
-#   CREATE USER [func-orchestrator-dev] FROM EXTERNAL PROVIDER;
-#   ALTER ROLE db_datareader ADD MEMBER [func-orchestrator-dev];
-#   ALTER ROLE db_datawriter ADD MEMBER [func-orchestrator-dev];
+#   CREATE USER [func-scheduler-dev-<suffix>] FROM EXTERNAL PROVIDER;
+#   ALTER ROLE db_datareader ADD MEMBER [func-scheduler-dev-<suffix>];
+#   ALTER ROLE db_datawriter ADD MEMBER [func-scheduler-dev-<suffix>];
 #
-#   CREATE USER [matoolkit-admin-api-func] FROM EXTERNAL PROVIDER;
-#   ALTER ROLE db_datareader ADD MEMBER [matoolkit-admin-api-func];
-#   ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func];
+#   CREATE USER [func-orchestrator-dev-<suffix>] FROM EXTERNAL PROVIDER;
+#   ALTER ROLE db_datareader ADD MEMBER [func-orchestrator-dev-<suffix>];
+#   ALTER ROLE db_datawriter ADD MEMBER [func-orchestrator-dev-<suffix>];
+#
+#   CREATE USER [matoolkit-admin-api-func-<suffix>] FROM EXTERNAL PROVIDER;
+#   ALTER ROLE db_datareader ADD MEMBER [matoolkit-admin-api-func-<suffix>];
+#   ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func-<suffix>];
 ```
 
 ## Architecture

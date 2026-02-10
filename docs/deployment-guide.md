@@ -246,25 +246,55 @@ This creates:
 
 ## Step 12: Create SQL Contained Database Users
 
-After infrastructure is deployed, the Function App managed identities need database access. Connect to the SQL database as the Entra admin (from step 5) and run:
+After infrastructure is deployed, the Function App managed identities need database access. The SQL server has `publicNetworkAccess: Disabled` by default, so you'll need to temporarily open access:
 
-```sql
--- Connect to: sql-scheduler-dev.database.windows.net / sqldb-scheduler-dev
-
-CREATE USER [func-scheduler-dev] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [func-scheduler-dev];
-ALTER ROLE db_datawriter ADD MEMBER [func-scheduler-dev];
-
-CREATE USER [func-orchestrator-dev] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [func-orchestrator-dev];
-ALTER ROLE db_datawriter ADD MEMBER [func-orchestrator-dev];
-
-CREATE USER [matoolkit-admin-api-func] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [matoolkit-admin-api-func];
-ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func];
+```bash
+# Temporarily enable public access and add your IP
+az sql server update --name sql-scheduler-dev --resource-group rg-ma-toolkit-sandbox \
+  --set publicNetworkAccess=Enabled
+az sql server firewall-rule create --server sql-scheduler-dev \
+  --resource-group rg-ma-toolkit-sandbox --name temp-admin \
+  --start-ip-address <your-ip> --end-ip-address <your-ip>
 ```
 
-You can connect using Azure Data Studio, SSMS, or `sqlcmd` with Entra authentication.
+Function App names include a `uniqueString` suffix for global uniqueness. Look up the actual names first — the managed identity name matches the Function App name:
+
+```bash
+az functionapp list --resource-group rg-ma-toolkit-sandbox --query "[].name" -o tsv
+```
+
+Then connect and create the contained database users:
+
+```bash
+sqlcmd -S sql-scheduler-dev.database.windows.net -d sqldb-scheduler-dev \
+  --authentication-method ActiveDirectoryInteractive
+```
+
+```sql
+-- Replace <suffix> with the uniqueString suffix from the Function App names above
+
+CREATE USER [func-scheduler-dev-<suffix>] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [func-scheduler-dev-<suffix>];
+ALTER ROLE db_datawriter ADD MEMBER [func-scheduler-dev-<suffix>];
+
+CREATE USER [func-orchestrator-dev-<suffix>] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [func-orchestrator-dev-<suffix>];
+ALTER ROLE db_datawriter ADD MEMBER [func-orchestrator-dev-<suffix>];
+
+CREATE USER [matoolkit-admin-api-func-<suffix>] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [matoolkit-admin-api-func-<suffix>];
+ALTER ROLE db_datawriter ADD MEMBER [matoolkit-admin-api-func-<suffix>];
+GO
+```
+
+After creating the users, lock down the SQL server again:
+
+```bash
+az sql server firewall-rule delete --server sql-scheduler-dev \
+  --resource-group rg-ma-toolkit-sandbox --name temp-admin
+az sql server update --name sql-scheduler-dev --resource-group rg-ma-toolkit-sandbox \
+  --set publicNetworkAccess=Disabled
+```
 
 ## Step 13: Deploy Application Code
 
