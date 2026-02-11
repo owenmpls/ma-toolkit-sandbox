@@ -363,6 +363,7 @@ public class BatchManagementFunction
 
         return new OkObjectResult(new
         {
+            success = true,
             action = result.Action,
             phaseName = result.PhaseName,
             memberCount = result.MemberCount,

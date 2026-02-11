@@ -65,11 +65,9 @@ public class MemberManagementFunction
             {
                 m.Id,
                 m.MemberKey,
-                m.Status,
-                m.AddedAt,
-                m.RemovedAt,
-                m.AddDispatchedAt,
-                m.RemoveDispatchedAt
+                IsActive = m.Status == MemberStatus.Active,
+                JoinedAt = m.AddedAt,
+                LeftAt = m.RemovedAt
             })
         });
     }
@@ -192,6 +190,7 @@ public class MemberManagementFunction
 
         return new OkObjectResult(new
         {
+            success = true,
             batchId = id,
             addedCount,
             skippedCount,
