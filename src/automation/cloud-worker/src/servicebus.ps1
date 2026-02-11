@@ -64,6 +64,21 @@ function New-ServiceBusClient {
     # system-assigned managed identity is used. DefaultAzureCredential can pick up the
     # user-assigned MI (AcrPull only) when both MI types exist on the container app.
     $credential = [Azure.Identity.ManagedIdentityCredential]::new()
+
+    # Pre-warm: explicitly acquire a token to verify MI auth works before creating the
+    # AMQP connection. This surfaces auth failures immediately rather than hiding them
+    # inside ReceiveMessagesAsync timeouts.
+    try {
+        $tokenRequestContext = [Azure.Core.TokenRequestContext]::new(@('https://servicebus.azure.net/.default'))
+        $tokenTask = $credential.GetTokenAsync($tokenRequestContext, [System.Threading.CancellationToken]::None)
+        $token = $tokenTask.GetAwaiter().GetResult()
+        Write-WorkerLog -Message "Service Bus token acquired (expires: $($token.ExpiresOn.ToString('u')))."
+    }
+    catch {
+        Write-WorkerLog -Message "Failed to acquire Service Bus token: $($_.Exception.Message) [$($_.Exception.GetType().FullName)]" -Severity Error
+        throw
+    }
+
     $client = [Azure.Messaging.ServiceBus.ServiceBusClient]::new($Namespace, $credential)
 
     Write-WorkerLog -Message 'Service Bus client created.'
@@ -130,6 +145,20 @@ function New-ServiceBusReceiver {
 
     $receiver = $Client.CreateReceiver($TopicName, $subscriptionName, $receiverOptions)
     Write-WorkerLog -Message "Service Bus receiver created for topic '$TopicName', subscription '$subscriptionName'."
+
+    # Health check: force AMQP connection establishment by peeking at messages.
+    # This surfaces connection/auth errors immediately rather than in the receive loop.
+    try {
+        $peekTask = $receiver.PeekMessagesAsync(1)
+        $peeked = $peekTask.GetAwaiter().GetResult()
+        $peekCount = if ($null -ne $peeked) { $peeked.Count } else { 0 }
+        Write-WorkerLog -Message "Receiver health check: AMQP connection established ($peekCount message(s) peeked)."
+    }
+    catch {
+        Write-WorkerLog -Message "Receiver health check FAILED: $($_.Exception.Message) [$($_.Exception.GetType().FullName)]" -Severity Error
+        throw
+    }
+
     return $receiver
 }
 
