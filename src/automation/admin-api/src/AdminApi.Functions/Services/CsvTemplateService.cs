@@ -102,6 +102,17 @@ public class CsvTemplateService : ICsvTemplateService
             }
         }
 
+        // Collect output_params keys — these are populated at runtime, not from CSV
+        var outputParamKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var phase in definition.Phases)
+        {
+            foreach (var step in phase.Steps)
+            {
+                foreach (var key in step.OutputParams.Keys)
+                    outputParamKeys.Add(key);
+            }
+        }
+
         // Include columns referenced in step params ({{ColumnName}} templates)
         var templatePattern = new Regex(@"\{\{(\w+)\}\}");
         foreach (var phase in definition.Phases)
@@ -114,8 +125,8 @@ public class CsvTemplateService : ICsvTemplateService
                     foreach (Match m in matches)
                     {
                         var colName = m.Groups[1].Value;
-                        // Exclude special variables
-                        if (!colName.StartsWith("_"))
+                        // Exclude special variables and output_params (runtime-populated)
+                        if (!colName.StartsWith("_") && !outputParamKeys.Contains(colName))
                         {
                             columns.Add(colName);
                         }

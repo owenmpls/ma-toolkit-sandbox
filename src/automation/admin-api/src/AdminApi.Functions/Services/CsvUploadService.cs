@@ -224,7 +224,18 @@ public class CsvUploadService : ICsvUploadService
             columns.Add(mvCol.Name);
         }
 
-        // Include columns referenced in templates
+        // Collect output_params keys — these are populated at runtime, not from CSV
+        var outputParamKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var phase in definition.Phases)
+        {
+            foreach (var step in phase.Steps)
+            {
+                foreach (var key in step.OutputParams.Keys)
+                    outputParamKeys.Add(key);
+            }
+        }
+
+        // Include columns referenced in templates (excluding output_params)
         var templatePattern = new Regex(@"\{\{(\w+)\}\}");
         foreach (var phase in definition.Phases)
         {
@@ -236,7 +247,7 @@ public class CsvUploadService : ICsvUploadService
                     foreach (Match m in matches)
                     {
                         var colName = m.Groups[1].Value;
-                        if (!colName.StartsWith("_"))
+                        if (!colName.StartsWith("_") && !outputParamKeys.Contains(colName))
                             columns.Add(colName);
                     }
                 }
