@@ -260,6 +260,34 @@ public class ManualBatchServiceTests
         _batchRepoMock.Verify(x => x.UpdateStatusAsync(1, BatchStatus.Active), Times.Once);
     }
 
+    [Fact]
+    public async Task AdvanceBatchAsync_DispatchedPhaseNoRemaining_ReturnsInProgressError()
+    {
+        var batch = new BatchRecord
+        {
+            Id = 1,
+            IsManual = true,
+            Status = BatchStatus.Active
+        };
+        var runbook = CreateRunbook();
+        var definition = CreateDefinition();
+
+        // phase1 is dispatched (in progress), phase2 is completed — no pending phases
+        _phaseRepoMock.Setup(x => x.GetByBatchAsync(1))
+            .ReturnsAsync(new List<PhaseExecutionRecord>
+            {
+                new() { Id = 1, BatchId = 1, PhaseName = "phase1", OffsetMinutes = 0, Status = PhaseStatus.Dispatched },
+                new() { Id = 2, BatchId = 1, PhaseName = "phase2", OffsetMinutes = 1440, Status = PhaseStatus.Completed }
+            });
+
+        var result = await _sut.AdvanceBatchAsync(batch, runbook, definition);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("phase1");
+        result.ErrorMessage.Should().Contain("still in progress");
+        _batchRepoMock.Verify(x => x.UpdateStatusAsync(1, BatchStatus.Completed), Times.Never);
+    }
+
     #endregion
 
     #region AdvanceBatch - Phase Dispatch Tests

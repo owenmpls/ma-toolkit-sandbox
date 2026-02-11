@@ -225,6 +225,14 @@ public class ManualBatchService : IManualBatchService
             var pendingPhase = phases.FirstOrDefault(p => p.Status == PhaseStatus.Pending);
             if (pendingPhase == null)
             {
+                // Check if any phase is still in progress before completing
+                var inProgress = phases.FirstOrDefault(p => p.Status == PhaseStatus.Dispatched);
+                if (inProgress != null)
+                {
+                    result.ErrorMessage = $"Phase '{inProgress.PhaseName}' still in progress";
+                    return result;
+                }
+
                 // All phases complete
                 await _batchRepo.UpdateStatusAsync(batch.Id, BatchStatus.Completed);
                 result.Success = true;

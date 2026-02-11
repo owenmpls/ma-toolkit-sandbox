@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using MaToolkit.Automation.Shared.Constants;
 using MaToolkit.Automation.Shared.Exceptions;
@@ -230,7 +229,7 @@ public class PhaseDueHandler : IPhaseDueHandler
         // Create step executions in a transaction
         using var conn = _db.CreateConnection();
         conn.Open();
-        using var transaction = ((SqlConnection)conn).BeginTransaction();
+        using var transaction = conn.BeginTransaction();
         try
         {
             foreach (var member in members)
@@ -250,43 +249,46 @@ public class PhaseDueHandler : IPhaseDueHandler
                         dataRow[key] = value;  // Worker wins on collision
                 }
 
-                try
+                for (int i = 0; i < phaseDefinition.Steps.Count; i++)
                 {
-                    for (int i = 0; i < phaseDefinition.Steps.Count; i++)
+                    var step = phaseDefinition.Steps[i];
+                    Dictionary<string, string> resolvedParams;
+                    string resolvedFunction;
+                    try
                     {
-                        var step = phaseDefinition.Steps[i];
-                        var resolvedParams = _templateResolver.ResolveParams(
+                        resolvedParams = _templateResolver.ResolveParams(
                             step.Params, dataRow, message.BatchId, batch?.BatchStartTime);
-                        var resolvedFunction = _templateResolver.ResolveString(
+                        resolvedFunction = _templateResolver.ResolveString(
                             step.Function, dataRow, message.BatchId, batch?.BatchStartTime);
-                        var effectiveRetry = step.Retry ?? definition.Retry;
-
-                        await _stepRepo.InsertAsync(new StepExecutionRecord
-                        {
-                            PhaseExecutionId = phase.Id,
-                            BatchMemberId = member.Id,
-                            StepName = step.Name,
-                            StepIndex = i,
-                            WorkerId = step.WorkerId,
-                            FunctionName = resolvedFunction,
-                            ParamsJson = JsonSerializer.Serialize(resolvedParams),
-                            IsPollStep = step.Poll is not null,
-                            PollIntervalSec = step.Poll is not null
-                                ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
-                            PollTimeoutSec = step.Poll is not null
-                                ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
-                            OnFailure = step.OnFailure,
-                            MaxRetries = effectiveRetry?.MaxRetries,
-                            RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
-                                ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
-                        }, transaction);
                     }
-                }
-                catch (TemplateResolutionException ex)
-                {
-                    _logger.LogWarning(
-                        "Skipping member {MemberKey}: unresolved template variables [{Variables}]",
-                        member.MemberKey, string.Join(", ", ex.UnresolvedVariables));
+                    catch (TemplateResolutionException)
+                    {
+                        // Store raw params — will be re-resolved at dispatch time
+                        // when output_params from prior steps are available
+                        resolvedParams = step.Params;
+                        resolvedFunction = step.Function;
+                    }
+                    var effectiveRetry = step.Retry ?? definition.Retry;
+
+                    await _stepRepo.InsertAsync(new StepExecutionRecord
+                    {
+                        PhaseExecutionId = phase.Id,
+                        BatchMemberId = member.Id,
+                        StepName = step.Name,
+                        StepIndex = i,
+                        WorkerId = step.WorkerId,
+                        FunctionName = resolvedFunction,
+                        ParamsJson = JsonSerializer.Serialize(resolvedParams),
+                        IsPollStep = step.Poll is not null,
+                        PollIntervalSec = step.Poll is not null
+                            ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Interval) : null,
+                        PollTimeoutSec = step.Poll is not null
+                            ? _phaseEvaluator.ParseDurationSeconds(step.Poll.Timeout) : null,
+                        OnFailure = step.OnFailure,
+                        MaxRetries = effectiveRetry?.MaxRetries,
+                        RetryIntervalSec = effectiveRetry is { MaxRetries: > 0 }
+                            ? _phaseEvaluator.ParseDurationSeconds(effectiveRetry.Interval) : null
+                    }, transaction);
                 }
             }
 
