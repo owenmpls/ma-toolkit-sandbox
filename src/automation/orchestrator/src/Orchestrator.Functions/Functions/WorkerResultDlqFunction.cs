@@ -16,8 +16,8 @@ public class WorkerResultDlqFunction
     [Function("WorkerResultDlqFunction")]
     public async Task RunAsync(
         [ServiceBusTrigger(
-            "%Orchestrator__WorkerResultsTopicName%",
-            "%Orchestrator__WorkerResultsSubscriptionName%/$DeadLetterQueue",
+            "%Orchestrator:WorkerResultsTopicName%",
+            "%Orchestrator:WorkerResultsSubscriptionName%/$DeadLetterQueue",
             Connection = "ServiceBusConnection")]
         ServiceBusReceivedMessage message,
         ServiceBusMessageActions messageActions)

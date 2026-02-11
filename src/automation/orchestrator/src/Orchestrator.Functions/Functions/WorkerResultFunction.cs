@@ -28,8 +28,8 @@ public class WorkerResultFunction
     [Function("WorkerResultFunction")]
     public async Task RunAsync(
         [ServiceBusTrigger(
-            "%Orchestrator__WorkerResultsTopicName%",
-            "%Orchestrator__WorkerResultsSubscriptionName%",
+            "%Orchestrator:WorkerResultsTopicName%",
+            "%Orchestrator:WorkerResultsSubscriptionName%",
             Connection = "ServiceBusConnection")]
         ServiceBusReceivedMessage message,
         ServiceBusMessageActions messageActions)

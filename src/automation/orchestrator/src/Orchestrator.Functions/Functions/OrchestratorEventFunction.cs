@@ -38,8 +38,8 @@ public class OrchestratorEventFunction
     [Function("OrchestratorEventFunction")]
     public async Task RunAsync(
         [ServiceBusTrigger(
-            "%Orchestrator__OrchestratorEventsTopicName%",
-            "%Orchestrator__OrchestratorSubscriptionName%",
+            "%Orchestrator:OrchestratorEventsTopicName%",
+            "%Orchestrator:OrchestratorSubscriptionName%",
             Connection = "ServiceBusConnection")]
         ServiceBusReceivedMessage message,
         ServiceBusMessageActions messageActions)
