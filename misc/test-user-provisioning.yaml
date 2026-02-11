@@ -17,7 +17,7 @@ data_source:
 init: []
 
 phases:
-  - name: provision
+  - name: provision-madev1
     offset: T-0
     steps:
       - name: create-user
@@ -43,12 +43,48 @@ phases:
           max_retries: 2
           interval: 15s
 
-      - name: add-to-distribution-group
+      - name: add-to-xtsync-group
         worker_id: worker-madev1
         function: Add-EntraGroupMember
         params:
           GroupId: "e0b9cd3b-593e-46eb-9ad0-548797d9a76b"
           UserId: "{{CreatedUserId}}"
+        retry:
+          max_retries: 2
+          interval: 15s
+
+  - name: provision-madev2
+    offset: T-0
+    steps:
+      - name: create-user-madev2
+        worker_id: worker-madev2
+        function: New-EntraUser
+        params:
+          UserPrincipalName: "{{TargetUserPrincipalName}}"
+          DisplayName: "{{DisplayName}}"
+          MailNickname: "{{MailNickname}}"
+        output_params:
+          CreatedUserIdMaDev2: "Id"
+        retry:
+          max_retries: 1
+          interval: 30s
+
+      - name: add-to-license-group-madev2
+        worker_id: worker-madev2
+        function: Add-EntraGroupMember
+        params:
+          GroupId: "9ed4af3b-f79e-4e0b-ade6-cb4deef58d04"
+          UserId: "{{CreatedUserIdMaDev2}}"
+        retry:
+          max_retries: 2
+          interval: 15s
+
+      - name: add-to-xtsync-group-madev2
+        worker_id: worker-madev2
+        function: Add-EntraGroupMember
+        params:
+          GroupId: "73582014-93d2-4778-b1f8-d561594f6a71"
+          UserId: "{{CreatedUserIdMaDev2}}"
         retry:
           max_retries: 2
           interval: 15s
