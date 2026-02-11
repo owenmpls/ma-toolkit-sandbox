@@ -164,7 +164,18 @@ function Receive-ServiceBusMessages {
 
     try {
         $task = $ReceiverRef.Value.ReceiveMessagesAsync($MaxMessages, $waitTime)
-        $task.GetAwaiter().GetResult()
+        $result = $task.GetAwaiter().GetResult()
+
+        if ($null -eq $result -or $result.Count -eq 0) {
+            return @()
+        }
+
+        Write-WorkerLog -Message "Received $($result.Count) message(s) from Service Bus." -Properties @{
+            MessageCount = $result.Count
+        }
+
+        # Return messages as a PowerShell array to avoid .NET collection pipeline unwrapping
+        return @($result)
     }
     catch [Azure.Messaging.ServiceBus.ServiceBusException] {
         if ($_.Exception.IsTransient -or $ReceiverRef.Value.IsClosed) {
@@ -182,7 +193,7 @@ function Receive-ServiceBusMessages {
         return @()
     }
     catch {
-        Write-WorkerLog -Message "Error receiving messages: $($_.Exception.Message)" -Severity Error
+        Write-WorkerLog -Message "Error receiving messages: $($_.Exception.Message) [$($_.Exception.GetType().FullName)]" -Severity Error
         return @()
     }
 }
