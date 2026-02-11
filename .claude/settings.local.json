@@ -133,7 +133,9 @@
       "Bash(brew list:*)",
       "Bash(sqlcmd:*)",
       "Bash(az functionapp show:*)",
-      "Bash(security find-generic-password:*)"
+      "Bash(security find-generic-password:*)",
+      "Bash(dotnet tool update:*)",
+      "Bash(dotnet tool:*)"
     ]
   }
 }

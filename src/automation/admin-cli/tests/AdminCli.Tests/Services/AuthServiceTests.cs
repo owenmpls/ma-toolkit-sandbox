@@ -111,4 +111,65 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*not configured*");
     }
+
+    [Fact]
+    public void GetAuthRecordPath_ReturnsPathUnderMatoolkitDir()
+    {
+        var config = new Mock<IConfiguration>();
+        var sut = new AuthService(config.Object);
+
+        var path = sut.GetAuthRecordPath();
+
+        path.Should().Contain(".matoolkit");
+        path.Should().EndWith("auth_record.json");
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenNotConfigured_ThrowsInvalidOperationException()
+    {
+        var config = new Mock<IConfiguration>();
+        var sut = new AuthService(config.Object);
+
+        var act = () => sut.LoginAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not configured*");
+    }
+
+    [Fact]
+    public async Task LogoutAsync_WhenNoRecordFile_CompletesWithoutError()
+    {
+        var config = new Mock<IConfiguration>();
+        var sut = new AuthService(config.Object);
+
+        var act = () => sut.LogoutAsync();
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task LoadAuthenticationRecordAsync_WhenNoFile_ReturnsNull()
+    {
+        var config = new Mock<IConfiguration>();
+        var sut = new AuthService(config.Object);
+
+        var record = await sut.LoadAuthenticationRecordAsync();
+
+        record.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WhenNotSignedIn_ThrowsInvalidOperationException()
+    {
+        var config = new Mock<IConfiguration>();
+        config.Setup(c => c["TENANT_ID"]).Returns("tenant-123");
+        config.Setup(c => c["CLIENT_ID"]).Returns("client-456");
+
+        var sut = new AuthService(config.Object);
+
+        var act = () => sut.GetAccessTokenAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Not signed in*");
+    }
 }

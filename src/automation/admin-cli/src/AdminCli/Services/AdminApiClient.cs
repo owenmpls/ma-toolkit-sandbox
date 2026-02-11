@@ -180,8 +180,11 @@ public class AdminApiClient
     public async Task<CreateBatchResponse> CreateBatchAsync(string runbookName, string csvContent, string? apiUrl = null)
     {
         var client = await GetConfiguredClientAsync(apiUrl);
-        var request = new { runbookName, csvContent };
-        var response = await client.PostAsJsonAsync("api/batches", request, JsonOptions);
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(runbookName), "runbookName");
+        var csvBytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
+        content.Add(new ByteArrayContent(csvBytes), "file", "batch.csv");
+        var response = await client.PostAsync("api/batches", content);
         await EnsureSuccessAsync(response);
         return (await response.Content.ReadFromJsonAsync<CreateBatchResponse>(JsonOptions))!;
     }
@@ -217,8 +220,10 @@ public class AdminApiClient
     public async Task<AddMembersResponse> AddMembersAsync(int batchId, string csvContent, string? apiUrl = null)
     {
         var client = await GetConfiguredClientAsync(apiUrl);
-        var request = new { csvContent };
-        var response = await client.PostAsJsonAsync($"api/batches/{batchId}/members", request, JsonOptions);
+        using var content = new MultipartFormDataContent();
+        var csvBytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
+        content.Add(new ByteArrayContent(csvBytes), "file", "members.csv");
+        var response = await client.PostAsync($"api/batches/{batchId}/members", content);
         await EnsureSuccessAsync(response);
         return (await response.Content.ReadFromJsonAsync<AddMembersResponse>(JsonOptions))!;
     }

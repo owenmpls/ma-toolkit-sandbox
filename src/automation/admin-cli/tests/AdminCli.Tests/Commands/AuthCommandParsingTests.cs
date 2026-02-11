@@ -52,4 +52,30 @@ public class AuthCommandParsingTests
 
         statusCommand.Description.Should().NotBeNullOrEmpty();
     }
+
+    [Fact]
+    public void AuthCommand_HasLogoutSubcommand()
+    {
+        var command = AuthCommands.Create(_authService);
+
+        command.Subcommands.Select(c => c.Name).Should().Contain("logout");
+    }
+
+    [Fact]
+    public void AuthLogout_HasDescription()
+    {
+        var command = AuthCommands.Create(_authService);
+        var logoutCommand = command.Subcommands.First(c => c.Name == "logout");
+
+        logoutCommand.Description.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void AuthLogin_HasUseDeviceCodeOption()
+    {
+        var command = AuthCommands.Create(_authService);
+        var loginCommand = command.Subcommands.First(c => c.Name == "login");
+
+        loginCommand.Options.Select(o => o.Name).Should().Contain("use-device-code");
+    }
 }

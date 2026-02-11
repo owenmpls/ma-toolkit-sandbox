@@ -11,6 +11,7 @@ public static class AuthCommands
         var command = new Command("auth", "Manage authentication");
 
         command.AddCommand(CreateLoginCommand(authService));
+        command.AddCommand(CreateLogoutCommand(authService));
         command.AddCommand(CreateStatusCommand(authService));
 
         return command;
@@ -18,9 +19,14 @@ public static class AuthCommands
 
     private static Command CreateLoginCommand(AuthService authService)
     {
-        var command = new Command("login", "Sign in using device code flow");
+        var command = new Command("login", "Sign in to the Admin API");
 
-        command.SetHandler(async () =>
+        var useDeviceCodeOption = new Option<bool>(
+            "--use-device-code",
+            "Use device code flow instead of opening a browser");
+        command.AddOption(useDeviceCodeOption);
+
+        command.SetHandler(async (bool useDeviceCode) =>
         {
             if (!authService.IsConfigured())
             {
@@ -33,13 +39,28 @@ public static class AuthCommands
 
             try
             {
-                var token = await authService.GetAccessTokenAsync();
+                var record = await authService.LoginAsync(useDeviceCode);
                 AnsiConsole.MarkupLine("[green]Successfully authenticated![/]");
+                AnsiConsole.MarkupLine($"  Account:  [bold]{record.Username}[/]");
+                AnsiConsole.MarkupLine($"  Tenant:   [bold]{record.TenantId}[/]");
             }
             catch (Exception ex)
             {
                 AnsiConsole.MarkupLine($"[red]Authentication failed:[/] {ex.Message}");
             }
+        }, useDeviceCodeOption);
+
+        return command;
+    }
+
+    private static Command CreateLogoutCommand(AuthService authService)
+    {
+        var command = new Command("logout", "Sign out and clear saved credentials");
+
+        command.SetHandler(async () =>
+        {
+            await authService.LogoutAsync();
+            AnsiConsole.MarkupLine("[green]Signed out successfully.[/]");
         });
 
         return command;
@@ -49,7 +70,7 @@ public static class AuthCommands
     {
         var command = new Command("status", "Show authentication status");
 
-        command.SetHandler(() =>
+        command.SetHandler(async () =>
         {
             AnsiConsole.MarkupLine("[bold]Authentication Configuration[/]\n");
 
@@ -61,6 +82,17 @@ public static class AuthCommands
             table.AddRow("Client ID", authService.ClientId ?? "[red]not set[/]");
             table.AddRow("API Scope", authService.ApiScope ?? "[dim](default)[/]");
             table.AddRow("Configured", authService.IsConfigured() ? "[green]yes[/]" : "[red]no[/]");
+
+            var record = await authService.LoadAuthenticationRecordAsync();
+            if (record is not null)
+            {
+                table.AddRow("Signed in", "[green]yes[/]");
+                table.AddRow("Account", record.Username);
+            }
+            else
+            {
+                table.AddRow("Signed in", "[red]no[/]");
+            }
 
             AnsiConsole.Write(table);
 
