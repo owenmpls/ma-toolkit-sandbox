@@ -11,14 +11,6 @@
 
 #Requires -Version 7.4
 
-param(
-    [int]$Port = $env:HEALTH_CHECK_PORT ?? 8080,
-    [ref]$WorkerRunning = $null,
-    [object]$RunspacePool = $null,
-    [object]$ServiceBusReceiver = $null,
-    [object]$Config = $null
-)
-
 $script:HealthCheckRunning = $true
 $script:Listener = $null
 
@@ -28,7 +20,7 @@ function Get-HealthStatus {
         Returns the current health status of the worker.
     #>
     param(
-        [ref]$WorkerRunning,
+        [object]$WorkerRunning,
         [object]$RunspacePool,
         [object]$ServiceBusReceiver,
         [object]$Config
@@ -40,13 +32,14 @@ function Get-HealthStatus {
         checks = @{}
     }
 
-    # Check worker running state
+    # Check worker running state (handles both [ref] and plain value from Start-Job)
     if ($null -ne $WorkerRunning) {
+        $isRunning = if ($WorkerRunning -is [ref]) { $WorkerRunning.Value } else { [bool]$WorkerRunning }
         $status.checks['workerRunning'] = @{
-            status = if ($WorkerRunning.Value) { 'healthy' } else { 'degraded' }
-            running = $WorkerRunning.Value
+            status = if ($isRunning) { 'healthy' } else { 'degraded' }
+            running = $isRunning
         }
-        if (-not $WorkerRunning.Value) {
+        if (-not $isRunning) {
             $status.status = 'degraded'
         }
     }
@@ -121,7 +114,7 @@ function Start-HealthCheckServer {
     #>
     param(
         [int]$Port,
-        [ref]$WorkerRunning,
+        [object]$WorkerRunning,
         [object]$RunspacePool,
         [object]$ServiceBusReceiver,
         [object]$Config
@@ -229,5 +222,4 @@ function Stop-HealthCheckServer {
     }
 }
 
-# Export functions
-Export-ModuleMember -Function Get-HealthStatus, Start-HealthCheckServer, Stop-HealthCheckServer
+# Functions are available in caller scope via dot-sourcing
