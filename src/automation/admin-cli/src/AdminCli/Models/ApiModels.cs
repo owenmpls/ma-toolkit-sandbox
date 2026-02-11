@@ -1,5 +1,45 @@
 namespace AdminCli.Models;
 
+#region API List Response Wrappers
+
+public class RunbookListResponse
+{
+    public List<RunbookSummary> Runbooks { get; set; } = new();
+}
+
+public class RunbookVersionListResponse
+{
+    public string Name { get; set; } = string.Empty;
+    public List<RunbookVersionSummary> Versions { get; set; } = new();
+}
+
+public class BatchListResponse
+{
+    public List<BatchSummary> Batches { get; set; } = new();
+    public int Limit { get; set; }
+    public int Offset { get; set; }
+}
+
+public class MemberListResponse
+{
+    public int BatchId { get; set; }
+    public List<MemberSummary> Members { get; set; } = new();
+}
+
+public class PhaseListResponse
+{
+    public int BatchId { get; set; }
+    public List<PhaseExecution> Phases { get; set; } = new();
+}
+
+public class StepListResponse
+{
+    public int BatchId { get; set; }
+    public List<StepExecution> Steps { get; set; } = new();
+}
+
+#endregion
+
 #region Runbook Models
 
 public class RunbookResponse

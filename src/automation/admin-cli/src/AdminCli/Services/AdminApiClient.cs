@@ -74,7 +74,8 @@ public class AdminApiClient
         var client = await GetConfiguredClientAsync(apiUrl);
         var response = await client.GetAsync("api/runbooks");
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<List<RunbookSummary>>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<RunbookListResponse>(JsonOptions))!;
+        return wrapper.Runbooks;
     }
 
     public async Task<RunbookResponse> GetRunbookAsync(string name, int? version = null, string? apiUrl = null)
@@ -93,7 +94,8 @@ public class AdminApiClient
         var client = await GetConfiguredClientAsync(apiUrl);
         var response = await client.GetAsync($"api/runbooks/{name}/versions");
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<List<RunbookVersionSummary>>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<RunbookVersionListResponse>(JsonOptions))!;
+        return wrapper.Versions;
     }
 
     public async Task DeleteRunbookVersionAsync(string name, int version, string? apiUrl = null)
@@ -163,7 +165,8 @@ public class AdminApiClient
 
         var response = await client.GetAsync(url);
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<List<BatchSummary>>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<BatchListResponse>(JsonOptions))!;
+        return wrapper.Batches;
     }
 
     public async Task<BatchDetails> GetBatchAsync(int batchId, string? apiUrl = null)
@@ -207,7 +210,8 @@ public class AdminApiClient
         var client = await GetConfiguredClientAsync(apiUrl);
         var response = await client.GetAsync($"api/batches/{batchId}/members");
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<List<MemberSummary>>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<MemberListResponse>(JsonOptions))!;
+        return wrapper.Members;
     }
 
     public async Task<AddMembersResponse> AddMembersAsync(int batchId, string csvContent, string? apiUrl = null)
@@ -235,7 +239,8 @@ public class AdminApiClient
         var client = await GetConfiguredClientAsync(apiUrl);
         var response = await client.GetAsync($"api/batches/{batchId}/phases");
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<List<PhaseExecution>>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<PhaseListResponse>(JsonOptions))!;
+        return wrapper.Phases;
     }
 
     public async Task<List<StepExecution>> ListStepsAsync(int batchId, string? apiUrl = null)
@@ -243,7 +248,8 @@ public class AdminApiClient
         var client = await GetConfiguredClientAsync(apiUrl);
         var response = await client.GetAsync($"api/batches/{batchId}/steps");
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<List<StepExecution>>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<StepListResponse>(JsonOptions))!;
+        return wrapper.Steps;
     }
 
     #endregion

@@ -57,14 +57,17 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListRunbooksAsync_ReturnsRunbooks()
     {
-        var expected = new List<RunbookSummary>
+        var response = new RunbookListResponse
         {
-            new() { Id = 1, Name = "runbook1", Version = 1, IsActive = true },
-            new() { Id = 2, Name = "runbook2", Version = 2, IsActive = true }
+            Runbooks = new List<RunbookSummary>
+            {
+                new() { Id = 1, Name = "runbook1", Version = 1, IsActive = true },
+                new() { Id = 2, Name = "runbook2", Version = 2, IsActive = true }
+            }
         };
 
         _mockHttp.When($"{BaseUrl}/api/runbooks")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.ListRunbooksAsync(BaseUrl);
 
@@ -135,14 +138,18 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListRunbookVersionsAsync_ReturnsVersions()
     {
-        var expected = new List<RunbookVersionSummary>
+        var response = new RunbookVersionListResponse
         {
-            new() { Version = 1, IsActive = false },
-            new() { Version = 2, IsActive = true }
+            Name = "test-runbook",
+            Versions = new List<RunbookVersionSummary>
+            {
+                new() { Version = 1, IsActive = false },
+                new() { Version = 2, IsActive = true }
+            }
         };
 
         _mockHttp.When($"{BaseUrl}/api/runbooks/test-runbook/versions")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.ListRunbookVersionsAsync("test-runbook", BaseUrl);
 
@@ -249,13 +256,18 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListBatchesAsync_ReturnsBatches()
     {
-        var expected = new List<BatchSummary>
+        var response = new BatchListResponse
         {
-            new() { Id = 1, RunbookName = "test-runbook", Status = "active", MemberCount = 10 }
+            Batches = new List<BatchSummary>
+            {
+                new() { Id = 1, RunbookName = "test-runbook", Status = "active", MemberCount = 10 }
+            },
+            Limit = 100,
+            Offset = 0
         };
 
         _mockHttp.When($"{BaseUrl}/api/batches")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.ListBatchesAsync(apiUrl: BaseUrl);
 
@@ -266,10 +278,10 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListBatchesAsync_WithFilters_IncludesQueryParams()
     {
-        var expected = new List<BatchSummary>();
+        var response = new BatchListResponse { Batches = new List<BatchSummary>(), Limit = 100, Offset = 0 };
 
         _mockHttp.When($"{BaseUrl}/api/batches?runbook=test&status=active")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         await _sut.ListBatchesAsync("test", "active", BaseUrl);
 
@@ -358,13 +370,17 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListMembersAsync_ReturnsMembers()
     {
-        var expected = new List<MemberSummary>
+        var response = new MemberListResponse
         {
-            new() { Id = 1, MemberKey = "user1", IsActive = true }
+            BatchId = 1,
+            Members = new List<MemberSummary>
+            {
+                new() { Id = 1, MemberKey = "user1", IsActive = true }
+            }
         };
 
         _mockHttp.When($"{BaseUrl}/api/batches/1/members")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.ListMembersAsync(1, BaseUrl);
 
@@ -408,13 +424,17 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListPhasesAsync_ReturnsPhases()
     {
-        var expected = new List<PhaseExecution>
+        var response = new PhaseListResponse
         {
-            new() { Id = 1, PhaseName = "migration", Status = "completed" }
+            BatchId = 1,
+            Phases = new List<PhaseExecution>
+            {
+                new() { Id = 1, PhaseName = "migration", Status = "completed" }
+            }
         };
 
         _mockHttp.When($"{BaseUrl}/api/batches/1/phases")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.ListPhasesAsync(1, BaseUrl);
 
@@ -425,13 +445,17 @@ public class AdminApiClientTests
     [Fact]
     public async Task ListStepsAsync_ReturnsSteps()
     {
-        var expected = new List<StepExecution>
+        var response = new StepListResponse
         {
-            new() { Id = 1, PhaseName = "migration", StepName = "migrate-mailbox", Status = "succeeded" }
+            BatchId = 1,
+            Steps = new List<StepExecution>
+            {
+                new() { Id = 1, PhaseName = "migration", StepName = "migrate-mailbox", Status = "succeeded" }
+            }
         };
 
         _mockHttp.When($"{BaseUrl}/api/batches/1/steps")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.ListStepsAsync(1, BaseUrl);
 
