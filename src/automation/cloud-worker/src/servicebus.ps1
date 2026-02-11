@@ -60,7 +60,10 @@ function New-ServiceBusClient {
 
     Write-WorkerLog -Message "Creating Service Bus client for namespace '$Namespace'..."
 
-    $credential = [Azure.Identity.DefaultAzureCredential]::new()
+    # Use ManagedIdentityCredential (not DefaultAzureCredential) to ensure the
+    # system-assigned managed identity is used. DefaultAzureCredential can pick up the
+    # user-assigned MI (AcrPull only) when both MI types exist on the container app.
+    $credential = [Azure.Identity.ManagedIdentityCredential]::new()
     $client = [Azure.Messaging.ServiceBus.ServiceBusClient]::new($Namespace, $credential)
 
     Write-WorkerLog -Message 'Service Bus client created.'

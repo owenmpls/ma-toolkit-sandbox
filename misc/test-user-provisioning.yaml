@@ -1,0 +1,55 @@
+name: test-user-provisioning
+description: Test runbook — creates Entra users with random passwords and adds them to two groups
+
+data_source:
+  type: dataverse
+  connection: DATAVERSE_CONNECTION_STRING
+  query: |
+    SELECT
+      u.UserPrincipalName   AS UserPrincipalName,
+      u.DisplayName         AS DisplayName,
+      u.MailNickname        AS MailNickname
+    FROM test_users AS u
+    WHERE u.status = 'pending'
+  primary_key: UserPrincipalName
+  batch_time: immediate
+
+init: []
+
+phases:
+  - name: provision
+    offset: T-0
+    steps:
+      - name: create-user
+        worker_id: worker-madev1
+        function: New-EntraUser
+        params:
+          UserPrincipalName: "{{UserPrincipalName}}"
+          DisplayName: "{{DisplayName}}"
+          MailNickname: "{{MailNickname}}"
+        retry:
+          max_retries: 1
+          interval: 30s
+
+      - name: add-to-security-group
+        worker_id: worker-madev1
+        function: Add-EntraGroupMember
+        params:
+          GroupId: "f4f8428f-629f-4efb-97ed-f180c80efb69"
+          UserId: "{{UserPrincipalName}}"
+        retry:
+          max_retries: 2
+          interval: 15s
+
+      - name: add-to-distribution-group
+        worker_id: worker-madev1
+        function: Add-EntraGroupMember
+        params:
+          GroupId: "e0b9cd3b-593e-46eb-9ad0-548797d9a76b"
+          UserId: "{{UserPrincipalName}}"
+        retry:
+          max_retries: 2
+          interval: 15s
+
+on_member_removed: []
+rollbacks: {}
