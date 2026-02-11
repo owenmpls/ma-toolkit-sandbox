@@ -27,16 +27,18 @@ phases:
           UserPrincipalName: "{{UserPrincipalName}}"
           DisplayName: "{{DisplayName}}"
           MailNickname: "{{MailNickname}}"
+        output_params:
+          CreatedUserId: "Id"
         retry:
           max_retries: 1
           interval: 30s
 
-      - name: add-to-security-group
+      - name: add-to-license-group
         worker_id: worker-madev1
         function: Add-EntraGroupMember
         params:
           GroupId: "f4f8428f-629f-4efb-97ed-f180c80efb69"
-          UserId: "{{UserPrincipalName}}"
+          UserId: "{{CreatedUserId}}"
         retry:
           max_retries: 2
           interval: 15s
@@ -46,7 +48,7 @@ phases:
         function: Add-EntraGroupMember
         params:
           GroupId: "e0b9cd3b-593e-46eb-9ad0-548797d9a76b"
-          UserId: "{{UserPrincipalName}}"
+          UserId: "{{CreatedUserId}}"
         retry:
           max_retries: 2
           interval: 15s
