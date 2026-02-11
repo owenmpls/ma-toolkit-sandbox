@@ -206,13 +206,32 @@ function Invoke-InRunspace {
             }
             catch {
                 $ex = $_.Exception
-                $message = "$($ex.Message) $($ex.InnerException.Message)"
+
+                # Walk the exception chain to find the deepest meaningful message.
+                # PowerShell wraps cmdlet errors in CmdletInvocationException /
+                # ActionPreferenceStopException whose Message is often empty —
+                # the real Graph/EXO error lives in InnerException.
+                $innermost = $ex
+                while ($innermost.InnerException) { $innermost = $innermost.InnerException }
+
+                $errorMessage = if (-not [string]::IsNullOrWhiteSpace($innermost.Message)) {
+                    $innermost.Message
+                } elseif (-not [string]::IsNullOrWhiteSpace($ex.Message)) {
+                    $ex.Message
+                } else {
+                    $ex.GetType().FullName
+                }
+
+                $errorType = $innermost.GetType().FullName
+
+                # Build a combined string for pattern matching (outer + inner)
+                $matchText = "$($ex.Message) $($innermost.Message)"
 
                 # Check for auth errors — refresh EXO token and retry
                 $isAuthError = $false
                 $authPatterns = @('401', 'Unauthorized', 'token.*expired', 'Access token has expired')
                 foreach ($pattern in $authPatterns) {
-                    if ($message -match $pattern) {
+                    if ($matchText -match $pattern) {
                         $isAuthError = $true
                         break
                     }
@@ -239,13 +258,13 @@ function Invoke-InRunspace {
                 )
 
                 foreach ($pattern in $throttlePatterns) {
-                    if ($message -match $pattern) {
+                    if ($matchText -match $pattern) {
                         $isThrottled = $true
                         break
                     }
                 }
 
-                if ($message -match 'Retry-After[:\s]+(\d+)') {
+                if ($matchText -match 'Retry-After[:\s]+(\d+)') {
                     $retryAfter = [int]$Matches[1]
                 }
 
@@ -266,8 +285,8 @@ function Invoke-InRunspace {
                     Success     = $false
                     Result      = $null
                     Error       = [PSCustomObject]@{
-                        Message     = $ex.Message
-                        Type        = $ex.GetType().FullName
+                        Message     = $errorMessage
+                        Type        = $errorType
                         IsThrottled = $isThrottled
                         Attempts    = $attempt
                     }
@@ -307,7 +326,14 @@ function Get-RunspaceResult {
         $output = $AsyncHandle.PowerShell.EndInvoke($AsyncHandle.Handle)
 
         if ($AsyncHandle.PowerShell.HadErrors) {
-            $errorMessages = $AsyncHandle.PowerShell.Streams.Error | ForEach-Object { $_.Exception.Message }
+            $errorMessages = $AsyncHandle.PowerShell.Streams.Error | ForEach-Object {
+                $errEx = $_.Exception
+                $inner = $errEx
+                while ($inner.InnerException) { $inner = $inner.InnerException }
+                if (-not [string]::IsNullOrWhiteSpace($inner.Message)) { $inner.Message }
+                elseif (-not [string]::IsNullOrWhiteSpace($errEx.Message)) { $errEx.Message }
+                else { $errEx.GetType().FullName }
+            }
             return [PSCustomObject]@{
                 Success = $false
                 Result  = $null
@@ -332,12 +358,15 @@ function Get-RunspaceResult {
         }
     }
     catch {
+        $catchEx = $_.Exception
+        $catchInner = $catchEx
+        while ($catchInner.InnerException) { $catchInner = $catchInner.InnerException }
         return [PSCustomObject]@{
             Success = $false
             Result  = $null
             Error   = [PSCustomObject]@{
-                Message     = $_.Exception.Message
-                Type        = $_.Exception.GetType().FullName
+                Message     = if (-not [string]::IsNullOrWhiteSpace($catchInner.Message)) { $catchInner.Message } elseif (-not [string]::IsNullOrWhiteSpace($catchEx.Message)) { $catchEx.Message } else { $catchEx.GetType().FullName }
+                Type        = $catchInner.GetType().FullName
                 IsThrottled = $false
                 Attempts    = 1
             }
