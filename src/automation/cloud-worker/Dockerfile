@@ -35,8 +35,8 @@ RUN $nugetBase = 'https://www.nuget.org/api/v2/package'; \
         @{ Name = 'Microsoft.Bcl.AsyncInterfaces'; Version = '8.0.0' }, \
         @{ Name = 'System.Memory.Data'; Version = '1.0.2' }, \
         @{ Name = 'System.ClientModel'; Version = '1.1.0' }, \
-        @{ Name = 'Microsoft.Identity.Client'; Version = '4.65.0' }, \
-        @{ Name = 'Microsoft.Identity.Client.Extensions.Msal'; Version = '4.65.0' }, \
+        @{ Name = 'Microsoft.Identity.Client'; Version = '4.74.1' }, \
+        @{ Name = 'Microsoft.Identity.Client.Extensions.Msal'; Version = '4.74.1' }, \
         @{ Name = 'System.Diagnostics.DiagnosticSource'; Version = '8.0.1' } \
     ) | ForEach-Object { \
         $pkg = $_; \
