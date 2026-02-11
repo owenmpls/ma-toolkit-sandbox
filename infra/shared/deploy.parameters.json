@@ -6,7 +6,7 @@
       "value": "matoolkit"
     },
     "enableKeyVaultFirewall": {
-      "value": true
+      "value": false
     },
     "disableServiceBusPublicAccess": {
       "value": false

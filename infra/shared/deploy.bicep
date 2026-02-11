@@ -13,8 +13,8 @@ param baseName string
 @description('Azure region for deployment.')
 param location string = resourceGroup().location
 
-@description('Enable Key Vault firewall (deny-by-default + trusted Azure service bypass for Arc hybrid workers). VNet resources use the private endpoint created below.')
-param enableKeyVaultFirewall bool = true
+@description('Enable Key Vault firewall (deny-by-default + trusted Azure service bypass). When false, Key Vault allows public access for hybrid workers not on the VNet. VNet resources always use the private endpoint.')
+param enableKeyVaultFirewall bool = false
 
 @description('Disable public network access on Service Bus. Only effective when serviceBusSku is Premium.')
 param disableServiceBusPublicAccess bool = false
@@ -104,8 +104,9 @@ resource workerResultsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-p
 // ---------------------------------------------------------------------------
 // Key Vault — hybrid access model:
 // - VNet resources connect via private endpoint (below)
-// - Azure Arc hybrid workers connect via public endpoint (trusted service bypass)
-// - All other public traffic denied when firewall is enabled
+// - Hybrid workers (off-VNet) connect via public endpoint
+// - Optionally enable firewall to restrict public access (deny-by-default
+//   with Azure service bypass)
 // ---------------------------------------------------------------------------
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
