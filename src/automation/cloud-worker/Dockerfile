@@ -28,6 +28,7 @@ RUN $nugetBase = 'https://www.nuget.org/api/v2/package'; \
     New-Item -ItemType Directory -Path $libPath -Force | Out-Null; \
     @( \
         @{ Name = 'Azure.Messaging.ServiceBus'; Version = '7.18.1' }, \
+        @{ Name = 'Azure.Core.Amqp'; Version = '1.3.1' }, \
         @{ Name = 'Microsoft.Azure.Amqp'; Version = '2.6.9' }, \
         @{ Name = 'Azure.Identity'; Version = '1.13.1' }, \
         @{ Name = 'Azure.Core'; Version = '1.44.1' }, \

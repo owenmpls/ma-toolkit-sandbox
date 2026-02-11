@@ -19,6 +19,7 @@ function Initialize-ServiceBusAssemblies {
 
     $assemblies = @(
         'Azure.Core',
+        'Azure.Core.Amqp',
         'Azure.Identity',
         'Azure.Messaging.ServiceBus',
         'System.Memory.Data',
@@ -191,27 +192,11 @@ function Receive-ServiceBusMessages {
 
     $waitTime = [TimeSpan]::FromSeconds($WaitTimeSeconds)
 
-    # Periodic diagnostic: log every 30th attempt to confirm the loop is alive
-    if (-not $script:_receiveAttemptCount) { $script:_receiveAttemptCount = 0 }
-    $script:_receiveAttemptCount++
-    $isTraceIteration = ($script:_receiveAttemptCount -le 3) -or ($script:_receiveAttemptCount % 30 -eq 0)
-
-    if ($isTraceIteration) {
-        $rcv = $ReceiverRef.Value
-        $rcvType = if ($null -ne $rcv) { $rcv.GetType().FullName } else { 'null' }
-        $isClosed = if ($null -ne $rcv -and $rcv.PSObject.Properties['IsClosed']) { $rcv.IsClosed } else { 'N/A' }
-        Write-WorkerLog -Message "Receive attempt #$($script:_receiveAttemptCount): receiver=$rcvType, closed=$isClosed, maxMsg=$MaxMessages, waitSec=$WaitTimeSeconds"
-    }
-
     try {
         $task = $ReceiverRef.Value.ReceiveMessagesAsync($MaxMessages, $waitTime)
         $result = $task.GetAwaiter().GetResult()
 
         if ($null -eq $result -or $result.Count -eq 0) {
-            if ($isTraceIteration) {
-                $resultType = if ($null -eq $result) { 'null' } else { "$($result.GetType().FullName) (Count=0)" }
-                Write-WorkerLog -Message "Receive attempt #$($script:_receiveAttemptCount): empty ($resultType)"
-            }
             return @()
         }
 
