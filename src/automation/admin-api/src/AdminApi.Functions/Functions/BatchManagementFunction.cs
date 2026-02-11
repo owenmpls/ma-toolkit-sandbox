@@ -15,6 +15,7 @@ public class BatchManagementFunction
 {
     private readonly IBatchRepository _batchRepo;
     private readonly IRunbookRepository _runbookRepo;
+    private readonly IMemberRepository _memberRepo;
     private readonly IPhaseExecutionRepository _phaseRepo;
     private readonly IStepExecutionRepository _stepRepo;
     private readonly IInitExecutionRepository _initRepo;
@@ -26,6 +27,7 @@ public class BatchManagementFunction
     public BatchManagementFunction(
         IBatchRepository batchRepo,
         IRunbookRepository runbookRepo,
+        IMemberRepository memberRepo,
         IPhaseExecutionRepository phaseRepo,
         IStepExecutionRepository stepRepo,
         IInitExecutionRepository initRepo,
@@ -36,6 +38,7 @@ public class BatchManagementFunction
     {
         _batchRepo = batchRepo;
         _runbookRepo = runbookRepo;
+        _memberRepo = memberRepo;
         _phaseRepo = phaseRepo;
         _stepRepo = stepRepo;
         _initRepo = initRepo;
@@ -67,21 +70,40 @@ public class BatchManagementFunction
             ? offVal : 0;
 
         var batches = await _batchRepo.ListAsync(runbookId, status, isManual, limit, offset);
+        var batchList = batches.ToList();
 
-        return new OkObjectResult(new
+        // Look up runbook names/versions and member counts
+        var runbookCache = new Dictionary<int, (string Name, int Version)>();
+        var enriched = new List<object>();
+        foreach (var b in batchList)
         {
-            batches = batches.Select(b => new
+            if (!runbookCache.TryGetValue(b.RunbookId, out var rbInfo))
+            {
+                var rb = await _runbookRepo.GetByIdAsync(b.RunbookId);
+                rbInfo = rb is not null ? (rb.Name, rb.Version) : ("unknown", 0);
+                runbookCache[b.RunbookId] = rbInfo;
+            }
+
+            var members = await _memberRepo.GetActiveByBatchAsync(b.Id);
+            enriched.Add(new
             {
                 b.Id,
-                b.RunbookId,
+                RunbookName = rbInfo.Name,
+                RunbookVersion = rbInfo.Version,
                 b.BatchStartTime,
                 b.Status,
                 b.IsManual,
                 b.CreatedBy,
                 b.CurrentPhase,
+                MemberCount = members.Count(),
                 b.DetectedAt,
                 b.InitDispatchedAt
-            }),
+            });
+        }
+
+        return new OkObjectResult(new
+        {
+            batches = enriched,
             limit,
             offset
         });
@@ -102,22 +124,39 @@ public class BatchManagementFunction
         if (batch is null)
             return new NotFoundObjectResult(new { error = $"Batch {id} not found" });
 
+        var runbook = await _runbookRepo.GetByIdAsync(batch.RunbookId);
+        var members = await _memberRepo.GetActiveByBatchAsync(id);
         var phases = await _phaseRepo.GetByBatchAsync(id);
         var initExecs = await _initRepo.GetByBatchAsync(id);
+
+        // Parse runbook YAML to get available phase names
+        var availablePhases = new List<string>();
+        if (runbook is not null)
+        {
+            try
+            {
+                var definition = _parser.Parse(runbook.YamlContent);
+                availablePhases = definition.Phases.Select(p => p.Name).ToList();
+            }
+            catch { /* best-effort */ }
+        }
 
         return new OkObjectResult(new
         {
             batch = new
             {
                 batch.Id,
-                batch.RunbookId,
+                RunbookName = runbook?.Name ?? "unknown",
+                RunbookVersion = runbook?.Version ?? 0,
                 batch.BatchStartTime,
                 batch.Status,
                 batch.IsManual,
                 batch.CreatedBy,
                 batch.CurrentPhase,
+                MemberCount = members.Count(),
                 batch.DetectedAt,
-                batch.InitDispatchedAt
+                batch.InitDispatchedAt,
+                AvailablePhases = availablePhases
             },
             phases = phases.OrderBy(p => p.OffsetMinutes).Select(p => new
             {
@@ -208,6 +247,7 @@ public class BatchManagementFunction
 
         return new OkObjectResult(new
         {
+            success = true,
             batchId = result.BatchId,
             status = result.Status,
             memberCount = result.MemberCount,

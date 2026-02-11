@@ -70,7 +70,7 @@ CREATE TABLE phase_executions (
     batch_id            INT NOT NULL REFERENCES batches(id),
     phase_name          NVARCHAR(128) NOT NULL,
     offset_minutes      INT NOT NULL,
-    due_at              DATETIME2 NOT NULL,
+    due_at              DATETIME2,
     runbook_version     INT NOT NULL,
     status              NVARCHAR(32) NOT NULL DEFAULT 'pending',
     dispatched_at       DATETIME2,

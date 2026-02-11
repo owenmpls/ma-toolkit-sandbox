@@ -292,17 +292,20 @@ public class AdminApiClientTests
     [Fact]
     public async Task GetBatchAsync_ReturnsDetails()
     {
-        var expected = new BatchDetails
+        var response = new
         {
-            Id = 1,
-            RunbookName = "test-runbook",
-            Status = "active",
-            IsManual = true,
-            MemberCount = 10
+            batch = new
+            {
+                id = 1,
+                runbookName = "test-runbook",
+                status = "active",
+                isManual = true,
+                memberCount = 10
+            }
         };
 
         _mockHttp.When($"{BaseUrl}/api/batches/1")
-            .Respond("application/json", JsonSerializer.Serialize(expected));
+            .Respond("application/json", JsonSerializer.Serialize(response));
 
         var result = await _sut.GetBatchAsync(1, BaseUrl);
 

@@ -174,7 +174,8 @@ public class AdminApiClient
         var client = await GetConfiguredClientAsync(apiUrl);
         var response = await client.GetAsync($"api/batches/{batchId}");
         await EnsureSuccessAsync(response);
-        return (await response.Content.ReadFromJsonAsync<BatchDetails>(JsonOptions))!;
+        var wrapper = (await response.Content.ReadFromJsonAsync<BatchGetResponse>(JsonOptions))!;
+        return wrapper.Batch;
     }
 
     public async Task<CreateBatchResponse> CreateBatchAsync(string runbookName, string csvContent, string? apiUrl = null)

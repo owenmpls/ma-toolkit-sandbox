@@ -139,6 +139,11 @@ public class BatchDetails
     public List<string> AvailablePhases { get; set; } = new();
 }
 
+public class BatchGetResponse
+{
+    public BatchDetails Batch { get; set; } = new();
+}
+
 public class CreateBatchResponse
 {
     public bool Success { get; set; }

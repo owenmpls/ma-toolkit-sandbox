@@ -10,10 +10,13 @@ namespace AdminCli.Services;
 public class AuthService
 {
     private readonly IConfiguration _configuration;
+    private readonly string _configDir;
 
-    public AuthService(IConfiguration configuration)
+    public AuthService(IConfiguration configuration, string? configDir = null)
     {
         _configuration = configuration;
+        _configDir = configDir
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".matoolkit");
     }
 
     public string? TenantId => _configuration["TENANT_ID"]
@@ -32,8 +35,7 @@ public class AuthService
 
     public string GetAuthRecordPath()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".matoolkit");
-        return Path.Combine(dir, "auth_record.json");
+        return Path.Combine(_configDir, "auth_record.json");
     }
 
     public async Task<AuthenticationRecord> LoginAsync(bool useDeviceCode = false, CancellationToken cancellationToken = default)

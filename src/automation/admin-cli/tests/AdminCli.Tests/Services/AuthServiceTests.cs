@@ -6,8 +6,21 @@ using Xunit;
 
 namespace AdminCli.Tests.Services;
 
-public class AuthServiceTests
+public class AuthServiceTests : IDisposable
 {
+    private readonly string _tempDir;
+
+    public AuthServiceTests()
+    {
+        _tempDir = Path.Combine(Path.GetTempPath(), $"matoolkit-test-{Guid.NewGuid()}");
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
     [Fact]
     public void IsConfigured_WithBothTenantAndClient_ReturnsTrue()
     {
@@ -104,7 +117,7 @@ public class AuthServiceTests
     {
         var config = new Mock<IConfiguration>();
 
-        var sut = new AuthService(config.Object);
+        var sut = new AuthService(config.Object, _tempDir);
 
         var act = () => sut.GetAccessTokenAsync();
 
@@ -113,7 +126,19 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public void GetAuthRecordPath_ReturnsPathUnderMatoolkitDir()
+    public void GetAuthRecordPath_ReturnsPathUnderConfigDir()
+    {
+        var config = new Mock<IConfiguration>();
+        var sut = new AuthService(config.Object, _tempDir);
+
+        var path = sut.GetAuthRecordPath();
+
+        path.Should().StartWith(_tempDir);
+        path.Should().EndWith("auth_record.json");
+    }
+
+    [Fact]
+    public void GetAuthRecordPath_DefaultsToMatoolkitDir()
     {
         var config = new Mock<IConfiguration>();
         var sut = new AuthService(config.Object);
@@ -128,7 +153,7 @@ public class AuthServiceTests
     public async Task LoginAsync_WhenNotConfigured_ThrowsInvalidOperationException()
     {
         var config = new Mock<IConfiguration>();
-        var sut = new AuthService(config.Object);
+        var sut = new AuthService(config.Object, _tempDir);
 
         var act = () => sut.LoginAsync();
 
@@ -140,7 +165,7 @@ public class AuthServiceTests
     public async Task LogoutAsync_WhenNoRecordFile_CompletesWithoutError()
     {
         var config = new Mock<IConfiguration>();
-        var sut = new AuthService(config.Object);
+        var sut = new AuthService(config.Object, _tempDir);
 
         var act = () => sut.LogoutAsync();
 
@@ -151,7 +176,7 @@ public class AuthServiceTests
     public async Task LoadAuthenticationRecordAsync_WhenNoFile_ReturnsNull()
     {
         var config = new Mock<IConfiguration>();
-        var sut = new AuthService(config.Object);
+        var sut = new AuthService(config.Object, _tempDir);
 
         var record = await sut.LoadAuthenticationRecordAsync();
 
@@ -165,7 +190,7 @@ public class AuthServiceTests
         config.Setup(c => c["TENANT_ID"]).Returns("tenant-123");
         config.Setup(c => c["CLIENT_ID"]).Returns("client-456");
 
-        var sut = new AuthService(config.Object);
+        var sut = new AuthService(config.Object, _tempDir);
 
         var act = () => sut.GetAccessTokenAsync();
 
