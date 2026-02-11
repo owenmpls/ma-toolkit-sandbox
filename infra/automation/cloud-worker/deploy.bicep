@@ -14,6 +14,9 @@ param targetTenantId string
 @description('App registration client ID for the worker')
 param appId string
 
+@description('Target tenant organization domain name (e.g. contoso.onmicrosoft.com). Required for Exchange Online authentication.')
+param targetOrganization string
+
 @description('Worker ID for this container instance')
 param workerId string = 'worker-01'
 
@@ -240,6 +243,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'RESULTS_TOPIC_NAME', value: 'worker-results' }
             { name: 'KEY_VAULT_NAME', value: keyVault.name }
             { name: 'TARGET_TENANT_ID', value: targetTenantId }
+            { name: 'TARGET_ORGANIZATION', value: targetOrganization }
             { name: 'APP_ID', value: appId }
             { name: 'CERT_NAME', value: 'cert-${workerId}' }
             { name: 'APPINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }

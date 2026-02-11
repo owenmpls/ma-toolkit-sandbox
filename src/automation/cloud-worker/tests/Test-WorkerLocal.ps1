@@ -223,7 +223,7 @@ Test-Step 'auth.ps1 does not export Get-WorkerAppSecret (removed)' {
 
 Test-Step 'Auth scriptblock does not contain client_secret' {
     . (Join-Path $srcPath 'auth.ps1')
-    $scriptBlock = Get-RunspaceAuthScriptBlock -TenantId 'test' -AppId 'test' -CertificateBytes ([byte[]]@(0))
+    $scriptBlock = Get-RunspaceAuthScriptBlock -TenantId 'test' -AppId 'test' -Organization 'test.onmicrosoft.com' -CertificateBytes ([byte[]]@(0))
     $scriptText = $scriptBlock.ToString()
     if ($scriptText -match 'client_secret') {
         throw 'Auth scriptblock still contains client_secret reference'

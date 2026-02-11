@@ -17,6 +17,7 @@ function Get-WorkerConfiguration {
         ResultsTopicName           = $env:RESULTS_TOPIC_NAME ?? 'worker-results'
         KeyVaultName               = $env:KEY_VAULT_NAME
         TargetTenantId             = $env:TARGET_TENANT_ID
+        TargetOrganization         = $env:TARGET_ORGANIZATION
         AppId                      = $env:APP_ID
         CertificateName            = $env:CERT_NAME ?? 'worker-app-cert'
         AppInsightsConnectionString = $env:APPINSIGHTS_CONNECTION_STRING
@@ -36,6 +37,7 @@ function Get-WorkerConfiguration {
         'ServiceBusNamespace',
         'KeyVaultName',
         'TargetTenantId',
+        'TargetOrganization',
         'AppId'
     )
 

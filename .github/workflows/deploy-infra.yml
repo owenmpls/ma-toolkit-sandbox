@@ -159,6 +159,7 @@ jobs:
               location="$LOCATION" \
               targetTenantId="${{ secrets.MADEV1_TENANT_ID }}" \
               appId="${{ secrets.MADEV1_APP_ID }}" \
+              targetOrganization="${{ secrets.MADEV1_ORGANIZATION }}" \
               workerId=worker-madev1 \
               containerImage="${{ steps.shared.outputs.container_registry_login_server }}/cloud-worker:latest" \
               cloudWorkerSubnetId="${{ steps.shared.outputs.cloud_worker_subnet_id }}" \
@@ -180,6 +181,7 @@ jobs:
               location="$LOCATION" \
               targetTenantId="${{ secrets.MADEV2_TENANT_ID }}" \
               appId="${{ secrets.MADEV2_APP_ID }}" \
+              targetOrganization="${{ secrets.MADEV2_ORGANIZATION }}" \
               workerId=worker-madev2 \
               containerImage="${{ steps.shared.outputs.container_registry_login_server }}/cloud-worker:latest" \
               cloudWorkerSubnetId="${{ steps.shared.outputs.cloud_worker_subnet_id }}" \

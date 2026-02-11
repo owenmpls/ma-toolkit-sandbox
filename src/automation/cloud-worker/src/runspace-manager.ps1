@@ -83,11 +83,12 @@ function Initialize-RunspacePool {
         $ps = [PowerShell]::Create()
         $ps.RunspacePool = $pool
 
-        $authScript = Get-RunspaceAuthScriptBlock -TenantId $Config.TargetTenantId -AppId $Config.AppId -CertificateBytes $certBytes
+        $authScript = Get-RunspaceAuthScriptBlock -TenantId $Config.TargetTenantId -AppId $Config.AppId -Organization $Config.TargetOrganization -CertificateBytes $certBytes
 
         $ps.AddScript($authScript).AddParameters(@{
             TenantId         = $Config.TargetTenantId
             AppId            = $Config.AppId
+            Organization     = $Config.TargetOrganization
             CertificateBytes = $certBytes
             RunspaceIndex    = $i
         }) | Out-Null
@@ -185,7 +186,7 @@ function Invoke-InRunspace {
             $exoParams = @{
                 Certificate = $cert
                 AppId       = $cfg.AppId
-                Organization = $cfg.TenantId
+                Organization = $cfg.Organization
                 ShowBanner   = $false
                 ErrorAction  = 'Stop'
             }

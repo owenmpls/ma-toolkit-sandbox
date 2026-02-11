@@ -11,6 +11,9 @@
     "appId": {
       "value": "<APP-REGISTRATION-CLIENT-ID>"
     },
+    "targetOrganization": {
+      "value": "<TARGET-TENANT-DOMAIN>"
+    },
     "workerId": {
       "value": "worker-01"
     },

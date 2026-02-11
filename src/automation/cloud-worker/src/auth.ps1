@@ -95,6 +95,9 @@ function Initialize-RunspaceAuth {
         [string]$AppId,
 
         [Parameter(Mandatory)]
+        [string]$Organization,
+
+        [Parameter(Mandatory)]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 
         [Parameter(Mandatory)]
@@ -112,12 +115,12 @@ function Initialize-RunspaceAuth {
         throw "Runspace ${RunspaceIndex}: Failed to connect MgGraph: $($_.Exception.Message)"
     }
 
-    # Connect to Exchange Online
+    # Connect to Exchange Online (Organization requires tenant domain name, not GUID)
     try {
         $connectParams = @{
             Certificate = $Certificate
             AppId       = $AppId
-            Organization = $TenantId
+            Organization = $Organization
             ShowBanner   = $false
             ErrorAction  = 'Stop'
         }
@@ -147,11 +150,14 @@ function Get-RunspaceAuthScriptBlock {
         [string]$AppId,
 
         [Parameter(Mandatory)]
+        [string]$Organization,
+
+        [Parameter(Mandatory)]
         [byte[]]$CertificateBytes
     )
 
     $authScript = {
-        param($TenantId, $AppId, $CertificateBytes, $RunspaceIndex)
+        param($TenantId, $AppId, $Organization, $CertificateBytes, $RunspaceIndex)
 
         # Reconstruct certificate from PFX bytes (EphemeralKeySet avoids writing keys to disk)
         $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
@@ -163,11 +169,11 @@ function Get-RunspaceAuthScriptBlock {
         # Connect MgGraph with certificate
         Connect-MgGraph -ClientId $AppId -TenantId $TenantId -Certificate $cert -NoWelcome -ErrorAction Stop
 
-        # Connect Exchange Online with certificate
+        # Connect Exchange Online with certificate (Organization requires tenant domain, not GUID)
         $exoParams = @{
             Certificate = $cert
             AppId       = $AppId
-            Organization = $TenantId
+            Organization = $Organization
             ShowBanner   = $false
             ErrorAction  = 'Stop'
         }
@@ -175,8 +181,9 @@ function Get-RunspaceAuthScriptBlock {
 
         # Store auth config for reactive reconnection on auth errors
         $global:WorkerAuthConfig = @{
-            TenantId = $TenantId
-            AppId    = $AppId
+            TenantId     = $TenantId
+            AppId        = $AppId
+            Organization = $Organization
         }
         $global:WorkerCertBytes = $CertificateBytes
     }
