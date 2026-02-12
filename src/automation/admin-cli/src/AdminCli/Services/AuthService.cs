@@ -47,30 +47,47 @@ public class AuthService
         var scope = ApiScope ?? $"api://{ClientId}/.default";
 
         AuthenticationRecord record;
+        var existingRecord = await LoadAuthenticationRecordAsync(cancellationToken);
 
         if (useDeviceCode)
         {
-            var credential = new DeviceCodeCredential(new DeviceCodeCredentialOptions
+            var options = new DeviceCodeCredentialOptions
             {
                 TenantId = TenantId,
                 ClientId = ClientId,
+                TokenCachePersistenceOptions = new TokenCachePersistenceOptions
+                {
+                    Name = "matoolkit-cli"
+                },
                 DeviceCodeCallback = (info, cancel) =>
                 {
                     AnsiConsole.MarkupLine($"[yellow]{info.Message}[/]");
                     return Task.CompletedTask;
                 }
-            });
+            };
+            if (existingRecord is not null)
+                options.AuthenticationRecord = existingRecord;
+
+            var credential = new DeviceCodeCredential(options);
             record = await credential.AuthenticateAsync(
                 new TokenRequestContext(new[] { scope }), cancellationToken);
         }
         else
         {
-            var credential = new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions
+            var options = new InteractiveBrowserCredentialOptions
             {
                 TenantId = TenantId,
                 ClientId = ClientId,
-                RedirectUri = new Uri("http://localhost")
-            });
+                RedirectUri = new Uri("http://localhost"),
+                TokenCachePersistenceOptions = new TokenCachePersistenceOptions
+                {
+                    Name = "matoolkit-cli"
+                }
+            };
+            if (existingRecord is not null)
+                options.AuthenticationRecord = existingRecord;
+
+            var credential = new InteractiveBrowserCredential(options);
             record = await credential.AuthenticateAsync(
                 new TokenRequestContext(new[] { scope }), cancellationToken);
         }
@@ -112,17 +129,26 @@ public class AuthService
             ClientId = ClientId,
             RedirectUri = new Uri("http://localhost"),
             AuthenticationRecord = record,
+            DisableAutomaticAuthentication = true,
             TokenCachePersistenceOptions = new TokenCachePersistenceOptions
             {
                 Name = "matoolkit-cli"
             }
         });
 
-        var token = await credential.GetTokenAsync(
-            new TokenRequestContext(new[] { scope }),
-            cancellationToken);
+        try
+        {
+            var token = await credential.GetTokenAsync(
+                new TokenRequestContext(new[] { scope }),
+                cancellationToken);
 
-        return token.Token;
+            return token.Token;
+        }
+        catch (AuthenticationRequiredException)
+        {
+            throw new InvalidOperationException(
+                "Session expired. Run: matoolkit auth login");
+        }
     }
 
     public Task LogoutAsync(CancellationToken cancellationToken = default)
