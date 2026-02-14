@@ -171,31 +171,8 @@ resource workerSubscriptionRule 'Microsoft.ServiceBus/namespaces/topics/subscrip
   }
 }
 
-// --- Service Bus connection string secret (used by KEDA scaler for auth) ---
-// KEDA requires a connection string — this cannot use managed identity today.
-// The auth rule must be namespace-scoped with Manage rights because KEDA's
-// azure-servicebus scaler uses the management API (GetSubscriptionRuntimeProperties)
-// to read message counts. Topic-scoped or Listen-only connection strings fail.
-resource kedaMonitorAuthRule 'Microsoft.ServiceBus/namespaces/authorizationRules@2022-10-01-preview' = {
-  parent: serviceBus
-  name: 'keda-monitor'
-  properties: {
-    rights: [
-      'Manage'
-      'Listen'
-      'Send'
-    ]
-  }
-}
-
-// Note: the connection string was previously stored in Key Vault and referenced
-// via keyVaultUrl, but ACA's lazy KV secret sync caused KEDA to use stale values.
-// Inlining the value ensures KEDA gets the correct connection string immediately
-// on each deployment. The Manage-rights key is only used by KEDA to read message
-// counts — worker auth uses managed identity separately.
-
 // --- Container App (Worker) ---
-resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
+resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${baseName}-worker-${workerId}'
   location: location
   tags: tags
@@ -215,12 +192,6 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
         {
           server: containerRegistry.properties.loginServer
           identity: workerIdentity.id
-        }
-      ]
-      secrets: [
-        {
-          name: 'sb-connection-string'
-          value: kedaMonitorAuthRule.listKeys().primaryConnectionString
         }
       ]
       // No ingress needed - this is a background worker
@@ -266,12 +237,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
                 subscriptionName: 'worker-${workerId}'
                 messageCount: '1'
               }
-              auth: [
-                {
-                  secretRef: 'sb-connection-string'
-                  triggerParameter: 'connection'
-                }
-              ]
+              identity: 'system'
             }
           }
         ]
@@ -288,6 +254,18 @@ resource kvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(keyVault.id, workerApp.id, '4633458b-17de-408a-b874-0445c86b69e6')
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: workerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Worker managed identity -> Service Bus Data Owner (KEDA needs management API
+// access to read subscription runtime properties for scale-to-zero decisions)
+resource sbDataOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: serviceBus
+  name: guid(serviceBus.id, workerApp.id, '090c5cfd-751d-490a-894a-3ce6f1109419')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '090c5cfd-751d-490a-894a-3ce6f1109419')
     principalId: workerApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
