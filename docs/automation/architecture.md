@@ -252,7 +252,7 @@ Total: 1 KV + 1 SB + 1 SQL + 9 Storage = **12 private endpoints**.
 |----------|----------|---------|
 | Log Analytics Workspace | PerGB2018 | Centralized logging for all App Insights instances |
 | Service Bus Namespace | Standard | Inter-component messaging |
-| Key Vault | Standard, RBAC | Secrets storage (SQL connection strings, SB connection for KEDA, worker certificates) |
+| Key Vault | Standard, RBAC | Secrets storage (SQL connection strings, worker certificates) |
 | Container Registry | Basic | Cloud worker container images |
 | Private DNS Zones | -- | SQL, Key Vault, Service Bus, Storage (blob, queue, table) |
 | Private Endpoints | -- | Key Vault, Service Bus (in shared PE subnet) |
@@ -947,7 +947,7 @@ When a new runbook version is published while batches are active:
 | Orchestrator -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via trigger binding + SDK |
 | Cloud Worker -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via .NET SDK loaded in PowerShell |
 | Cloud Worker -> Graph/EXO | Certificate auth | App registration (target tenant) | PFX from Key Vault; `Connect-MgGraph -Certificate` + `Connect-ExchangeOnline -Certificate` |
-| KEDA -> Service Bus | Shared access key | `keda-monitor` auth rule | Listen-only; connection string stored in Key Vault |
+| KEDA -> Service Bus | Managed identity | System-assigned MI | `identity: 'system'` on custom scale rule; Service Bus Data Owner role |
 | All components -> Key Vault | Managed identity | System-assigned MI | RBAC: Key Vault Secrets User |
 | All components -> Storage | Managed identity | System-assigned MI | Identity-based connection (`AzureWebJobsStorage__accountName`) |
 
@@ -976,7 +976,8 @@ When a new runbook version is published while batches are active:
 | Admin API | Storage Table Data Contributor | Admin API Storage Account | Functions runtime |
 | Admin API | Service Bus Data Sender | Service Bus Namespace | Dispatch manual batch events |
 | Cloud Worker | AcrPull | Container Registry | Pull container images |
-| Cloud Worker | Key Vault Secrets User | Key Vault | Read PFX certificate, KEDA SB connection string |
+| Cloud Worker | Key Vault Secrets User | Key Vault | Read PFX certificate |
+| Cloud Worker | Service Bus Data Owner | Service Bus Namespace | KEDA scaler management API access (read subscription metrics) |
 | Cloud Worker | Service Bus Data Receiver | Service Bus Namespace | Consume worker-jobs |
 | Cloud Worker | Service Bus Data Sender | Service Bus Namespace | Publish worker-results |
 
@@ -1009,19 +1010,17 @@ All secrets are stored in Key Vault with RBAC authorization (no access policies)
 | `scheduler-sql-connection-string` | `Server=tcp:...;Authentication=Active Directory Managed Identity;...` | Scheduler (via KV reference) |
 | `orchestrator-sql-connection-string` | Same format | Orchestrator (via KV reference) |
 | `admin-api-sql-connection-string` | Same format | Admin API (via KV reference) |
-| `keda-sb-connection-string` | `Endpoint=sb://...;SharedAccessKeyName=keda-monitor;SharedAccessKey=...` | KEDA scaler (via ACA secret with `keyVaultUrl`) |
 | Worker PFX certificate | Key Vault Certificate (retrieved via associated secret) | Cloud worker (at startup) |
 
-**No passwords in connection strings.** SQL uses managed identity auth. Storage uses identity-based connections (`AzureWebJobsStorage__accountName`). Service Bus uses managed identity for all runtime operations. The only shared access key is the KEDA monitor rule.
+**No passwords or shared access keys.** SQL uses managed identity auth. Storage uses identity-based connections (`AzureWebJobsStorage__accountName`). Service Bus uses managed identity for all runtime operations, including KEDA scaling. Local (SAS) auth is disabled on the Service Bus namespace.
 
-### KEDA Shared Access Key
+### KEDA Managed Identity
 
-KEDA requires a Service Bus connection string to monitor subscription message counts for scaling decisions. Managed identity is not supported by the KEDA Service Bus scaler as of the current version.
+The KEDA `azure-servicebus` scaler uses the container app's system-assigned managed identity to monitor subscription message counts for scaling decisions. This requires:
 
-- **Scope:** `keda-monitor` authorization rule on the `worker-jobs` topic only (not namespace-level)
-- **Rights:** `Listen` only (read message count metrics, cannot send or manage)
-- **Storage:** Connection string stored in Key Vault, sourced by ACA via `keyVaultUrl` with system-assigned managed identity
-- **Risk:** Compromise of this key allows reading messages on the `worker-jobs` topic but not sending or modifying them
+- **RBAC role:** Service Bus Data Owner on the namespace (KEDA needs management API access to read subscription runtime properties)
+- **Bicep:** `identity: 'system'` on the custom scale rule (requires ACA API version `2025-01-01` or later)
+- **No shared access keys or secrets required** — SAS auth is disabled on the Service Bus namespace (`disableLocalAuth: true`)
 
 ### External API Boundaries
 
@@ -1053,7 +1052,7 @@ Data flows leaving the VNet to external Microsoft services:
 | Vector | Risk | Mitigation |
 |--------|------|------------|
 | Worker PFX certificate compromise | Full Graph + EXO access to target tenant | Key Vault with PE, RBAC, purge protection; certificate rotation |
-| KEDA SAS key compromise | Read messages on `worker-jobs` topic | Listen-only scope, stored in KV, topic-level (not namespace) |
+| KEDA identity compromise | Read Service Bus subscription metrics | System-assigned MI, scoped to Data Owner on namespace; no SAS keys exist |
 | Runbook query injection | Arbitrary SQL against Dataverse/Databricks | Queries are defined by admins at publish time (not user input); `Admin` role required |
 | Member data exfiltration via runbook | Exfil PII through crafted function params | Runbook publish requires `Admin` role; functions execute in isolated worker |
 | Admin API authorization bypass | Unauthorized batch creation or automation control | Entra ID JWT validation, app role enforcement, no function keys |

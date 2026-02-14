@@ -382,6 +382,6 @@ The service principal needs the "Role Based Access Control Administrator" role o
 
 ### Cloud worker stays at 0 replicas
 
-- Verify the KEDA scaler connection string secret exists in Key Vault (`keda-sb-connection-string`)
-- Verify the ACA managed identity has Key Vault Secrets User role
-- Check ACA system logs: `az containerapp logs show --name matoolkit-worker-worker-madev1 --resource-group rg-ma-toolkit-sandbox --type system`
+- Verify the container app's system-assigned managed identity has the Service Bus Data Owner role on the namespace (KEDA needs this for management API access)
+- Check ACA system logs for `FailedGetExternalMetric` or `KEDAScalerFailed` events: `az containerapp logs show --name matoolkit-worker-worker-madev1 --resource-group rg-ma-toolkit-sandbox --type system`
+- Verify `disableLocalAuth` is `true` on the Service Bus namespace (KEDA uses managed identity, not SAS)
