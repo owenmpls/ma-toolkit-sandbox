@@ -173,13 +173,17 @@ resource workerSubscriptionRule 'Microsoft.ServiceBus/namespaces/topics/subscrip
 
 // --- Service Bus connection string secret (used by KEDA scaler for auth) ---
 // KEDA requires a connection string — this cannot use managed identity today.
-// The auth rule is scoped to Listen only (KEDA only needs to read message count).
-resource jobsTopicAuthRule 'Microsoft.ServiceBus/namespaces/topics/authorizationRules@2022-10-01-preview' = {
-  parent: jobsTopic
+// The auth rule must be namespace-scoped with Manage rights because KEDA's
+// azure-servicebus scaler uses the management API (GetSubscriptionRuntimeProperties)
+// to read message counts. Topic-scoped or Listen-only connection strings fail.
+resource kedaMonitorAuthRule 'Microsoft.ServiceBus/namespaces/authorizationRules@2022-10-01-preview' = {
+  parent: serviceBus
   name: 'keda-monitor'
   properties: {
     rights: [
+      'Manage'
       'Listen'
+      'Send'
     ]
   }
 }
@@ -189,7 +193,7 @@ resource sbConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
   parent: keyVault
   name: 'keda-sb-connection-string'
   properties: {
-    value: jobsTopicAuthRule.listKeys().primaryConnectionString
+    value: kedaMonitorAuthRule.listKeys().primaryConnectionString
   }
 }
 
