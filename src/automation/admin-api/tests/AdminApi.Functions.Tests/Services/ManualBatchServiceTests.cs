@@ -492,5 +492,22 @@ public class ManualBatchServiceTests
         _publisherMock.Verify(x => x.PublishBatchInitAsync(It.IsAny<BatchInitMessage>()), Times.Once);
     }
 
+    [Fact]
+    public async Task AdvanceBatchAsync_DispatchesInit_UpdatesBatchStartTime()
+    {
+        var batch = new BatchRecord
+        {
+            Id = 1,
+            IsManual = true,
+            Status = BatchStatus.Detected
+        };
+        var runbook = CreateRunbook();
+        var definition = CreateDefinition(withInit: true);
+
+        await _sut.AdvanceBatchAsync(batch, runbook, definition);
+
+        _batchRepoMock.Verify(x => x.UpdateBatchStartTimeAsync(1, It.IsAny<DateTime>()), Times.Once);
+    }
+
     #endregion
 }

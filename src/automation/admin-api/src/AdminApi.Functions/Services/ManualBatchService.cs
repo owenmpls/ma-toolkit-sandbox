@@ -100,7 +100,7 @@ public class ManualBatchService : IManualBatchService
                 var batch = new BatchRecord
                 {
                     RunbookId = runbook.Id,
-                    BatchStartTime = null, // Manual batches don't use batch_start_time for scheduling
+                    BatchStartTime = DateTime.UtcNow, // Set immediately to avoid UQ_batch violation on NULL duplicates
                     Status = hasInitSteps ? BatchStatus.Detected : BatchStatus.Active,
                     IsManual = true,
                     CreatedBy = createdBy,
