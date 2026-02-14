@@ -172,7 +172,7 @@ resource workerSubscriptionRule 'Microsoft.ServiceBus/namespaces/topics/subscrip
 }
 
 // --- Container App (Worker) ---
-resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource workerApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: '${baseName}-worker-${workerId}'
   location: location
   tags: tags
