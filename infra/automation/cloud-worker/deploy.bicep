@@ -188,14 +188,11 @@ resource kedaMonitorAuthRule 'Microsoft.ServiceBus/namespaces/authorizationRules
   }
 }
 
-// Store SB connection string in Key Vault for the KEDA scaler
-resource sbConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: keyVault
-  name: 'keda-sb-connection-string'
-  properties: {
-    value: kedaMonitorAuthRule.listKeys().primaryConnectionString
-  }
-}
+// Note: the connection string was previously stored in Key Vault and referenced
+// via keyVaultUrl, but ACA's lazy KV secret sync caused KEDA to use stale values.
+// Inlining the value ensures KEDA gets the correct connection string immediately
+// on each deployment. The Manage-rights key is only used by KEDA to read message
+// counts — worker auth uses managed identity separately.
 
 // --- Container App (Worker) ---
 resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
@@ -223,8 +220,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
       secrets: [
         {
           name: 'sb-connection-string'
-          keyVaultUrl: sbConnectionStringSecret.properties.secretUri
-          identity: 'system'
+          value: kedaMonitorAuthRule.listKeys().primaryConnectionString
         }
       ]
       // No ingress needed - this is a background worker
@@ -265,6 +261,7 @@ resource workerApp 'Microsoft.App/containerApps@2023-05-01' = {
             custom: {
               type: 'azure-servicebus'
               metadata: {
+                namespace: serviceBusNamespaceName
                 topicName: 'worker-jobs'
                 subscriptionName: 'worker-${workerId}'
                 messageCount: '1'
