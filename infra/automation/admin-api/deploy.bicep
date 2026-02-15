@@ -61,7 +61,6 @@ var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' /
 var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'       // Azure Service Bus Data Sender
 
 var createPrivateEndpoints = !empty(privateEndpointsSubnetId)
-var enableEasyAuth = !empty(entraIdTenantId) && !empty(entraIdClientId) && !empty(entraIdAudience)
 
 // ---------------------------------------------------------------------------
 // Existing resources
@@ -232,38 +231,6 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
       runtime: {
         name: 'dotnet-isolated'
         version: '8.0'
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// EasyAuth — platform-level Entra ID authentication (conditional)
-// ---------------------------------------------------------------------------
-
-resource authSettings 'Microsoft.Web/sites/config@2023-12-01' = if (enableEasyAuth) {
-  parent: functionApp
-  name: 'authsettingsV2'
-  properties: {
-    platform: {
-      enabled: true
-    }
-    globalValidation: {
-      requireAuthentication: true
-      unauthenticatedClientAction: 'Return401'
-    }
-    identityProviders: {
-      azureActiveDirectory: {
-        enabled: true
-        registration: {
-          clientId: entraIdClientId
-          openIdIssuer: 'https://sts.windows.net/${entraIdTenantId}/v2.0'
-        }
-        validation: {
-          allowedAudiences: [
-            entraIdAudience
-          ]
-        }
       }
     }
   }
