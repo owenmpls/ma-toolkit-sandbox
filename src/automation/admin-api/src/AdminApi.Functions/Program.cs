@@ -58,6 +58,7 @@ builder.Services.AddSingleton(sp =>
 // Shared data source services
 builder.Services.AddHttpClient<IDatabricksQueryClient, DatabricksQueryClient>();
 builder.Services.AddScoped<IDataverseQueryClient, DataverseQueryClient>();
+builder.Services.AddScoped<ISqlQueryClient, SqlQueryClient>();
 builder.Services.AddScoped<IDataSourceQueryService, DataSourceQueryService>();
 
 // Shared parsing and evaluation services

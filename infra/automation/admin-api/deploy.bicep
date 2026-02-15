@@ -190,6 +190,10 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: '@Microsoft.KeyVault(SecretUri=${sqlConnectionStringSecret.properties.secretUri})'
         }
         {
+          name: 'SQL_CONNECTION_STRING'
+          value: '@Microsoft.KeyVault(SecretUri=${sqlConnectionStringSecret.properties.secretUri})'
+        }
+        {
           name: 'AdminApi__ServiceBusNamespace'
           value: '${serviceBusNamespace.name}.servicebus.windows.net'
         }

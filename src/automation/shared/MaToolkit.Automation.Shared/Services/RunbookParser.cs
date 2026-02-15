@@ -18,7 +18,7 @@ public class RunbookParser : IRunbookParser
 
     private static readonly HashSet<string> ValidDataSourceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "dataverse", "databricks"
+        "dataverse", "databricks", "sql"
     };
 
     private static readonly HashSet<string> ValidMultiValuedFormats = new(StringComparer.OrdinalIgnoreCase)

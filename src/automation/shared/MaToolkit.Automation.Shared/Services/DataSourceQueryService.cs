@@ -8,15 +8,18 @@ public class DataSourceQueryService : IDataSourceQueryService
 {
     private readonly IDataverseQueryClient _dataverse;
     private readonly IDatabricksQueryClient _databricks;
+    private readonly ISqlQueryClient _sql;
     private readonly ILogger<DataSourceQueryService> _logger;
 
     public DataSourceQueryService(
         IDataverseQueryClient dataverse,
         IDatabricksQueryClient databricks,
+        ISqlQueryClient sql,
         ILogger<DataSourceQueryService> logger)
     {
         _dataverse = dataverse;
         _databricks = databricks;
+        _sql = sql;
         _logger = logger;
     }
 
@@ -36,6 +39,7 @@ public class DataSourceQueryService : IDataSourceQueryService
                 config.Connection,
                 config.WarehouseId ?? throw new InvalidOperationException("warehouse_id required for databricks"),
                 config.Query),
+            "sql" => await _sql.ExecuteQueryAsync(config.Connection, config.Query),
             _ => throw new InvalidOperationException($"Unsupported data source type: {config.Type}")
         };
     }

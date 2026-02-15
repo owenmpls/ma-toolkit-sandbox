@@ -2,17 +2,19 @@ name: test-user-provisioning
 description: Test runbook — creates Entra users with random passwords and adds them to two groups
 
 data_source:
-  type: dataverse
-  connection: DATAVERSE_CONNECTION_STRING
+  type: sql
+  connection: SQL_CONNECTION_STRING
   query: |
     SELECT
-      u.UserPrincipalName   AS UserPrincipalName,
-      u.DisplayName         AS DisplayName,
-      u.MailNickname        AS MailNickname
+      u.UserPrincipalName,
+      u.DisplayName,
+      u.MailNickname,
+      u.TargetUserPrincipalName,
+      u.batch_time
     FROM test_users AS u
     WHERE u.status = 'pending'
   primary_key: UserPrincipalName
-  batch_time: immediate
+  batch_time_column: batch_time
 
 init: []
 

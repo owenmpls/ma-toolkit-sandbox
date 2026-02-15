@@ -383,6 +383,10 @@ resource schedulerFunctionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: '@Microsoft.KeyVault(SecretUri=${schedulerSqlSecret.properties.secretUri})'
         }
         {
+          name: 'SQL_CONNECTION_STRING'
+          value: '@Microsoft.KeyVault(SecretUri=${schedulerSqlSecret.properties.secretUri})'
+        }
+        {
           name: 'Scheduler__ServiceBusNamespace'
           value: '${serviceBusNamespace.name}.servicebus.windows.net'
         }
