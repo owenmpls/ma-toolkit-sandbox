@@ -22,8 +22,8 @@ public class BlobLeaseDistributedLock : IDistributedLock
         _logger = logger;
         _blobServiceClient = new Lazy<BlobServiceClient>(() =>
         {
-            var accountName = _configuration["AzureWebJobsStorage__accountName"]
-                ?? throw new InvalidOperationException("AzureWebJobsStorage__accountName configuration is required for distributed locking");
+            var accountName = _configuration["AzureWebJobsStorage:accountName"]
+                ?? throw new InvalidOperationException("AzureWebJobsStorage:accountName configuration is required for distributed locking");
             return new BlobServiceClient(new Uri($"https://{accountName}.blob.core.windows.net"), new DefaultAzureCredential());
         });
     }
