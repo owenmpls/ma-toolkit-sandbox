@@ -8,8 +8,9 @@ namespace Scheduler.Functions.Services;
 
 public class BlobLeaseDistributedLock : IDistributedLock
 {
-    private readonly BlobServiceClient _blobServiceClient;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<BlobLeaseDistributedLock> _logger;
+    private readonly Lazy<BlobServiceClient> _blobServiceClient;
 
     private const string ContainerName = "scheduler-locks";
     private const int LeaseDurationSeconds = 60;
@@ -17,15 +18,19 @@ public class BlobLeaseDistributedLock : IDistributedLock
 
     public BlobLeaseDistributedLock(IConfiguration configuration, ILogger<BlobLeaseDistributedLock> logger)
     {
-        var accountName = configuration["AzureWebJobsStorage__accountName"]
-            ?? throw new InvalidOperationException("AzureWebJobsStorage__accountName configuration is required for distributed locking");
-        _blobServiceClient = new BlobServiceClient(new Uri($"https://{accountName}.blob.core.windows.net"), new DefaultAzureCredential());
+        _configuration = configuration;
         _logger = logger;
+        _blobServiceClient = new Lazy<BlobServiceClient>(() =>
+        {
+            var accountName = _configuration["AzureWebJobsStorage__accountName"]
+                ?? throw new InvalidOperationException("AzureWebJobsStorage__accountName configuration is required for distributed locking");
+            return new BlobServiceClient(new Uri($"https://{accountName}.blob.core.windows.net"), new DefaultAzureCredential());
+        });
     }
 
     public async Task<IAsyncDisposable?> TryAcquireAsync(string lockName, CancellationToken ct = default)
     {
-        var containerClient = _blobServiceClient.GetBlobContainerClient(ContainerName);
+        var containerClient = _blobServiceClient.Value.GetBlobContainerClient(ContainerName);
         await containerClient.CreateIfNotExistsAsync(cancellationToken: ct);
 
         var blobClient = containerClient.GetBlobClient(lockName);
