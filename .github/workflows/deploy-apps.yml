@@ -13,6 +13,7 @@ on:
           - orchestrator
           - admin-api
           - cloud-worker
+          - hybrid-worker
 
   push:
     branches: [main]
@@ -41,6 +42,7 @@ jobs:
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
       admin-api: ${{ steps.filter.outputs.admin-api }}
       cloud-worker: ${{ steps.filter.outputs.cloud-worker }}
+      hybrid-worker: ${{ steps.filter.outputs.hybrid-worker }}
       shared: ${{ steps.filter.outputs.shared }}
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +58,8 @@ jobs:
               - 'src/automation/admin-api/**'
             cloud-worker:
               - 'src/automation/cloud-worker/**'
+            hybrid-worker:
+              - 'src/automation/hybrid-worker/**'
             shared:
               - 'src/automation/shared/**'
 
@@ -72,6 +76,7 @@ jobs:
       deploy-orchestrator: ${{ steps.resolve.outputs.orchestrator }}
       deploy-admin-api: ${{ steps.resolve.outputs.admin-api }}
       deploy-cloud-worker: ${{ steps.resolve.outputs.cloud-worker }}
+      deploy-hybrid-worker: ${{ steps.resolve.outputs.hybrid-worker }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,6 +108,7 @@ jobs:
             echo "orchestrator=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "orchestrator" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "admin-api=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "admin-api" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "cloud-worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "cloud-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "hybrid-worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "hybrid-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           else
             # Push trigger — deploy components whose files changed (or all .NET if shared changed)
             SHARED="${{ needs.changes.outputs.shared }}"
@@ -110,6 +116,7 @@ jobs:
             echo "orchestrator=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.orchestrator }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "admin-api=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.admin-api }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "cloud-worker=$( [ "${{ needs.changes.outputs.cloud-worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "hybrid-worker=$( [ "${{ needs.changes.outputs.hybrid-worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup .NET 8 SDK
@@ -340,3 +347,94 @@ jobs:
             --name "${{ steps.apps.outputs.madev2_app }}" \
             --resource-group "$RESOURCE_GROUP" \
             --image "${{ steps.acr.outputs.login_server }}/cloud-worker:${{ github.sha }}"
+
+  # ---------------------------------------------------------------
+  # Deploy Hybrid Worker package to blob storage
+  # ---------------------------------------------------------------
+  deploy-hybrid-worker:
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: [build-and-test]
+    if: >-
+      always() && needs.build-and-test.result == 'success' &&
+      needs.build-and-test.outputs.deploy-hybrid-worker == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set version
+        id: version
+        run: |
+          VERSION=$(cat src/automation/hybrid-worker/version.txt)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Build service host
+        run: |
+          dotnet publish src/automation/hybrid-worker/service-host/ \
+            -c Release -r win-x64 --self-contained \
+            -o src/automation/hybrid-worker/service-host-publish/ \
+            --nologo
+
+      - name: Package hybrid-worker
+        run: |
+          cd src/automation/hybrid-worker
+          zip -r "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            src/ modules/ dotnet-libs/ version.txt \
+            service-host-publish/ \
+            -x "tests/*" "config/*" "*.md" "service-host/*.cs" "service-host/*.csproj"
+
+      - name: Compute SHA256
+        id: hash
+        run: |
+          HASH=$(sha256sum "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" | cut -d' ' -f1)
+          echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch update storage account name
+        id: storage
+        run: |
+          outputs=$(az deployment group show \
+            --name hybrid-worker-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "account=$(echo "$outputs" | jq -r '.updateStorageAccountName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package to blob storage
+        run: |
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --container-name "hybrid-worker" \
+            --name "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --file "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --overwrite --auth-mode login
+
+      - name: Update version manifest
+        run: |
+          cat > /tmp/version.json << EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "sha256": "${{ steps.hash.outputs.sha256 }}",
+            "fileName": "hybrid-worker-${{ steps.version.outputs.version }}.zip",
+            "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "releaseNotes": "Automated build from commit ${{ github.sha }}"
+          }
+          EOF
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --container-name "hybrid-worker" \
+            --name "version.json" \
+            --file "/tmp/version.json" \
+            --overwrite --auth-mode login

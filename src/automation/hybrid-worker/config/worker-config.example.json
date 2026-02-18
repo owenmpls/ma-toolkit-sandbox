@@ -1,0 +1,61 @@
+{
+  "workerId": "hybrid-worker-01",
+  "maxParallelism": 4,
+  "maxPs51Sessions": 2,
+
+  "serviceBus": {
+    "namespace": "matoolkit-sbus.servicebus.windows.net",
+    "jobsTopicName": "worker-jobs",
+    "resultsTopicName": "worker-results"
+  },
+
+  "auth": {
+    "tenantId": "hosting-tenant-guid",
+    "appId": "sp-client-id-for-azure-resources",
+    "certificateThumbprint": "ABC123DEF456...",
+    "keyVaultName": "matoolkit-kv"
+  },
+
+  "targetTenant": {
+    "tenantId": "target-tenant-guid",
+    "organization": "target.onmicrosoft.com",
+    "appId": "target-sp-client-id",
+    "certificateName": "worker-app-cert"
+  },
+
+  "serviceConnections": {
+    "entra": { "enabled": false },
+    "exchangeOnline": { "enabled": false },
+    "activeDirectory": {
+      "enabled": true,
+      "domainController": "dc01.corp.contoso.com",
+      "credentialSecret": "ad-service-account"
+    },
+    "exchangeServer": {
+      "enabled": true,
+      "connectionUri": "http://exchange01.corp.contoso.com/PowerShell/",
+      "credentialSecret": "exchange-service-account"
+    },
+    "sharepointOnline": {
+      "enabled": false,
+      "adminUrl": "https://contoso-admin.sharepoint.com"
+    },
+    "teams": { "enabled": false }
+  },
+
+  "appInsights": {
+    "connectionString": "InstrumentationKey=..."
+  },
+
+  "update": {
+    "enabled": true,
+    "storageAccountName": "yourstorageaccount",
+    "containerName": "hybrid-worker",
+    "pollIntervalMinutes": 5
+  },
+
+  "idleTimeoutSeconds": 0,
+  "shutdownGraceSeconds": 30,
+  "healthCheckPort": 8080,
+  "logPath": "C:\\ProgramData\\MaToolkit\\HybridWorker\\logs"
+}
