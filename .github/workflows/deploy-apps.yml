@@ -355,8 +355,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     needs: [build-and-test]
+    # Only deploy via manual trigger — hybrid-worker infra is per-instance and
+    # requires SP + cert setup before the update storage account exists.
     if: >-
-      always() && needs.build-and-test.result == 'success' &&
+      github.event_name == 'workflow_dispatch' &&
       needs.build-and-test.outputs.deploy-hybrid-worker == 'true'
     steps:
       - name: Checkout
