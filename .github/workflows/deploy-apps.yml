@@ -407,8 +407,18 @@ jobs:
       - name: Fetch update storage account name
         id: storage
         run: |
+          # Find the hybrid worker deployment that created the update storage account.
+          # Any hybrid-worker-*-infra deployment will have the output (storage is shared).
+          ACCOUNT=$(az deployment group list \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[?starts_with(name,'hybrid-worker-') && ends_with(name,'-infra')].name | [0]" \
+            --output tsv)
+          if [ -z "$ACCOUNT" ]; then
+            echo "::error::No hybrid-worker-*-infra deployment found. Deploy hybrid-worker infrastructure first."
+            exit 1
+          fi
           outputs=$(az deployment group show \
-            --name hybrid-worker-infra \
+            --name "$ACCOUNT" \
             --resource-group "$RESOURCE_GROUP" \
             --query properties.outputs \
             --output json)
