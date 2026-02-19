@@ -37,6 +37,7 @@ Thumbs.db
 
 # Secrets and credentials
 *.pfx
+*.pem
 *.publishsettings
 appsettings.*.json
 !appsettings.Development.json
