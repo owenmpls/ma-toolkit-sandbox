@@ -155,7 +155,7 @@ jobs:
             -c Release --no-build -o publish/orchestrator
 
       - name: Publish admin-api
-        if: steps.resolve.outputs.admin-api == 'true'
+        if: steps.resolve.outputs.admin_api == 'true'
         run: |
           dotnet publish src/automation/admin-api/src/AdminApi.Functions/ \
             -c Release --no-build -o publish/admin-api
@@ -169,7 +169,7 @@ jobs:
         run: cd publish/orchestrator && zip -r ../../orchestrator.zip .
 
       - name: Package admin-api artifact
-        if: steps.resolve.outputs.admin-api == 'true'
+        if: steps.resolve.outputs.admin_api == 'true'
         run: cd publish/admin-api && zip -r ../../admin-api.zip .
 
       - name: Upload scheduler artifact
@@ -187,7 +187,7 @@ jobs:
           path: orchestrator.zip
 
       - name: Upload admin-api artifact
-        if: steps.resolve.outputs.admin-api == 'true'
+        if: steps.resolve.outputs.admin_api == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: admin-api
@@ -358,6 +358,7 @@ jobs:
     # Only deploy via manual trigger — hybrid-worker infra is per-instance and
     # requires SP + cert setup before the update storage account exists.
     if: >-
+      always() && needs.build-and-test.result == 'success' &&
       github.event_name == 'workflow_dispatch' &&
       needs.build-and-test.outputs.deploy_hybrid_worker == 'true'
     steps:
