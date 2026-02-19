@@ -55,9 +55,15 @@ C# Azure Functions project (isolated worker, .NET 8). Comprehensive admin API fo
 
 See `src/automation/admin-api/CLAUDE.md` for project context. Full API reference: [`docs/automation/admin-api.md`](docs/automation/admin-api.md)
 
+### hybrid-worker (`src/automation/hybrid-worker/`)
+
+On-premises PowerShell 7.4 worker running as a native Windows Service. Executes migration functions against both cloud services (Entra ID, Exchange Online) and on-premises systems (Active Directory, Exchange Server) using a dual-engine architecture: PS 7.x RunspacePool for cloud functions and PS 5.1 PSSession pool for on-prem functions. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage.
+
+See `src/automation/hybrid-worker/CLAUDE.md` for project context. Reference: [`docs/automation/hybrid-worker.md`](docs/automation/hybrid-worker.md). Deployment: [`docs/automation/hybrid-worker-deployment.md`](docs/automation/hybrid-worker-deployment.md)
+
 ### orchestrator (`src/automation/orchestrator/`)
 
-C# Azure Functions project (isolated worker, .NET 8). Consumes events from the scheduler via Service Bus and coordinates step execution by dispatching jobs to cloud-workers.
+C# Azure Functions project (isolated worker, .NET 8). Consumes events from the scheduler via Service Bus and coordinates step execution by dispatching jobs to cloud-workers and hybrid-workers.
 
 See `src/automation/orchestrator/CLAUDE.md` for details.
 
@@ -132,6 +138,23 @@ docker build -t matoolkitacr.azurecr.io/cloud-worker:latest .
 docker-compose up
 ```
 
+### hybrid-worker commands
+
+Run from `src/automation/hybrid-worker/`:
+
+```bash
+# Run local validation tests (no Azure credentials required)
+pwsh -File tests/Test-WorkerLocal.ps1
+
+# Download .NET dependencies (NuGet packages for Service Bus SDK, etc.)
+pwsh -File Download-Dependencies.ps1
+
+# Install as Windows Service (run as admin on target server)
+.\Install-HybridWorker.ps1 -ConfigPath .\config\worker-config.json `
+    -CertificatePath .\worker-sp.pfx -CertificatePassword $securePass `
+    -ServiceAccount 'CORP\svc-matoolkit$'
+```
+
 ### Infrastructure layout (`infra/`)
 
 ```
@@ -147,8 +170,11 @@ infra/
     ├── admin-api/
     │   ├── deploy.bicep                 ← storage, Function App + storage PEs
     │   └── deploy.parameters.json
-    └── cloud-worker/
-        ├── deploy.bicep                 ← ACA environment + app
+    ├── cloud-worker/
+    │   ├── deploy.bicep                 ← ACA environment + app
+    │   └── deploy.parameters.json
+    └── hybrid-worker/
+        ├── deploy.bicep                 ← SB subscription, RBAC, update storage
         └── deploy.parameters.json
 ```
 
@@ -196,6 +222,15 @@ az deployment group create \
   --template-file infra/automation/cloud-worker/deploy.bicep \
   --parameters infra/automation/cloud-worker/deploy.parameters.json
 
+# 2d. Hybrid worker (per instance — requires SP + cert setup first)
+# See docs/automation/hybrid-worker-deployment.md for full walkthrough
+az deployment group create \
+  --name hybrid-worker-01-infra \
+  --resource-group your-rg \
+  --template-file infra/automation/hybrid-worker/deploy.bicep \
+  --parameters infra/automation/hybrid-worker/deploy.parameters.json \
+  --parameters servicePrincipalObjectId="your-sp-object-id"
+
 # 3. Create SQL contained database users for managed identity auth
 # Run once per environment as the Entra ID admin (set in sqlEntraAdminObjectId).
 # Function App names include a uniqueString suffix — look up the actual names:
@@ -223,7 +258,8 @@ The system follows an **event-driven, queue-based pattern**:
 1. **Admin API** → Manages runbooks, enables/disables automation, supports manual batch creation via CSV upload
 2. **Scheduler** → Timer-triggered, queries data sources (when automation enabled), detects batches, dispatches events to Service Bus
 3. **Orchestrator** → Consumes scheduler events, coordinates step execution, dispatches jobs to workers
-4. **Cloud Worker** → Executes migration operations (Entra ID, Exchange Online) via RunspacePool
+4. **Cloud Worker** → Executes cloud migration operations (Entra ID, Exchange Online) via RunspacePool in ACA
+5. **Hybrid Worker** → Executes cloud + on-prem operations (AD, Exchange Server) via dual PS 7.x/5.1 engines as a Windows Service
 
 ### Cloud Worker Details
 

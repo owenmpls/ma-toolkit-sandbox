@@ -7,7 +7,7 @@ Comprehensive system architecture reference for the M&A Toolkit automation subsy
 ## Table of Contents
 
 - [System Overview](#system-overview)
-- [Component Summary](#component-summary)
+- [Component Summary](#component-summary) (includes Hybrid Worker)
 - [Data Flow](#data-flow)
 - [Infrastructure Topology](#infrastructure-topology)
 - [Service Bus Architecture](#service-bus-architecture)
@@ -17,7 +17,7 @@ Comprehensive system architecture reference for the M&A Toolkit automation subsy
 - [Template Resolution](#template-resolution)
 - [Protocols](#protocols)
 - [Security Model](#security-model)
-- [Component Deep Dives](#component-deep-dives)
+- [Component Deep Dives](#component-deep-dives) (includes Hybrid Worker)
 - [Deployment Topology](#deployment-topology)
 
 ---
@@ -30,7 +30,8 @@ The system follows a strict separation of concerns:
 
 - **Detection and timing** are owned by the scheduler.
 - **Coordination and progression** are owned by the orchestrator.
-- **Execution** is owned by the cloud worker.
+- **Cloud execution** is owned by the cloud worker.
+- **On-prem + cloud execution** is owned by the hybrid worker.
 - **User interaction** is owned by the admin API and CLI.
 
 All inter-component communication (except the admin API/CLI HTTP interface) flows through Azure Service Bus, providing durability, decoupling, and resilience to component restarts.
@@ -78,7 +79,12 @@ All inter-component communication (except the admin API/CLI HTTP interface) flow
                       v                           |
                   +---+---------------------------+--------+
                   |             Cloud Worker                |
-                  |     (PowerShell, ACA, Graph + EXO)     |
+                  |     (PowerShell 7.4, ACA, Graph + EXO) |
+                  +----------------------------------------+
+                  +---+---------------------------+--------+
+                  |            Hybrid Worker                |
+                  |   (PowerShell 7.4 + 5.1, Windows Svc,  |
+                  |    Graph + EXO + AD + Exchange Server)  |
                   +----------------------------------------+
 ```
 
@@ -138,6 +144,17 @@ Built with `System.CommandLine` for parsing and `Spectre.Console` for rich termi
 | Role | Migration function execution |
 
 Executes migration operations against a target Microsoft 365 tenant using MgGraph and Exchange Online PowerShell modules. Uses a RunspacePool with per-runspace authenticated sessions for parallel execution. Certificate-based auth via PFX from Key Vault. KEDA scaler monitors the Service Bus subscription and scales from 0 to 1 when messages arrive. Idle timeout (300s default) triggers graceful exit so ACA scales back to zero.
+
+### Hybrid Worker
+
+| Property | Value |
+|----------|-------|
+| Runtime | PowerShell 7.4 + Windows PowerShell 5.1 |
+| Service Host | .NET 8 Worker Service |
+| Hosting | On-premises Windows Server (Windows Service) |
+| Role | Dual-engine migration function execution (cloud + on-prem) |
+
+Executes migration operations against both cloud services (Entra ID, Exchange Online) and on-premises systems (Active Directory, Exchange Server) using a dual-engine architecture. PS 7.x RunspacePool handles cloud functions; PS 5.1 PSSession pool handles on-prem functions that require Windows PowerShell cmdlets. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage. Each service connection (entra, exchangeOnline, activeDirectory, exchangeServer) can be independently enabled or disabled.
 
 ---
 
@@ -282,6 +299,12 @@ Key Vault configuration: RBAC authorization enabled, soft delete with 7-day rete
 - Per-worker Service Bus subscription with SQL filter on `WorkerId` property
 - RBAC assignments (ACR Pull, Key Vault, Service Bus)
 
+**Hybrid Worker** (per instance, deployed manually):
+- Per-worker Service Bus subscription with SQL filter on `WorkerId` property
+- RBAC assignments (Key Vault Secrets User, Service Bus Data Receiver/Sender)
+- Update storage account with blob container (optional, shared across instances)
+- Storage Blob Data Reader role on the service principal
+
 ---
 
 ## Service Bus Architecture
@@ -302,6 +325,7 @@ All topics: 1024 MB max size, partitioning disabled.
 |-------|-------------|----------|--------|
 | `orchestrator-events` | `orchestrator` | Orchestrator | All messages (no filter) |
 | `worker-jobs` | `worker-{workerId}` | Cloud Worker | SQL filter: `WorkerId = '{workerId}'` |
+| `worker-jobs` | `worker-{workerId}` | Hybrid Worker | SQL filter: `WorkerId = '{workerId}'` |
 | `worker-results` | `orchestrator` | Orchestrator | All messages (no filter) |
 
 Orchestrator subscription configuration: max delivery count 10, lock duration 1 minute, default TTL 14 days, dead-lettering on expiration enabled.
@@ -947,6 +971,10 @@ When a new runbook version is published while batches are active:
 | Orchestrator -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via trigger binding + SDK |
 | Cloud Worker -> Service Bus | Managed identity | System-assigned MI | `DefaultAzureCredential` via .NET SDK loaded in PowerShell |
 | Cloud Worker -> Graph/EXO | Certificate auth | App registration (target tenant) | PFX from Key Vault; `Connect-MgGraph -Certificate` + `Connect-ExchangeOnline -Certificate` |
+| Hybrid Worker -> Service Bus | Certificate auth | Service principal | `ClientCertificateCredential` via .NET SDK; cert in `Cert:\LocalMachine\My` |
+| Hybrid Worker -> Key Vault | Certificate auth | Service principal | `Connect-AzAccount -ServicePrincipal -CertificateThumbprint` |
+| Hybrid Worker -> Graph/EXO | Certificate auth | App registration (target tenant) | PFX from Key Vault; same pattern as cloud worker |
+| Hybrid Worker -> AD/Exchange Server | Username/password | Domain service account | `PSCredential` from Key Vault JSON secret; via PS 5.1 PSSession |
 | KEDA -> Service Bus | Managed identity | System-assigned MI | `identity: 'system'` on custom scale rule; Service Bus Data Owner role |
 | All components -> Key Vault | Managed identity | System-assigned MI | RBAC: Key Vault Secrets User |
 | All components -> Storage | Managed identity | System-assigned MI | Identity-based connection (`AzureWebJobsStorage__accountName`) |
@@ -980,6 +1008,10 @@ When a new runbook version is published while batches are active:
 | Cloud Worker | Service Bus Data Owner | Service Bus Namespace | KEDA scaler management API access (read subscription metrics) |
 | Cloud Worker | Service Bus Data Receiver | Service Bus Namespace | Consume worker-jobs |
 | Cloud Worker | Service Bus Data Sender | Service Bus Namespace | Publish worker-results |
+| Hybrid Worker (SP) | Key Vault Secrets User | Key Vault | Read PFX certificate + on-prem credentials |
+| Hybrid Worker (SP) | Service Bus Data Receiver | Service Bus Namespace | Consume worker-jobs |
+| Hybrid Worker (SP) | Service Bus Data Sender | Service Bus Namespace | Publish worker-results |
+| Hybrid Worker (SP) | Storage Blob Data Reader | Update Storage Account | Download update packages |
 
 ### SQL Database Access
 
@@ -1010,7 +1042,8 @@ All secrets are stored in Key Vault with RBAC authorization (no access policies)
 | `scheduler-sql-connection-string` | `Server=tcp:...;Authentication=Active Directory Managed Identity;...` | Scheduler (via KV reference) |
 | `orchestrator-sql-connection-string` | Same format | Orchestrator (via KV reference) |
 | `admin-api-sql-connection-string` | Same format | Admin API (via KV reference) |
-| Worker PFX certificate | Key Vault Certificate (retrieved via associated secret) | Cloud worker (at startup) |
+| Worker PFX certificate | Key Vault Certificate (retrieved via associated secret) | Cloud worker, hybrid worker (at startup) |
+| On-prem credential secrets | JSON: `{"username": "DOMAIN\\user", "password": "..."}` | Hybrid worker (at startup) |
 
 **No passwords or shared access keys.** SQL uses managed identity auth. Storage uses identity-based connections (`AzureWebJobsStorage__accountName`). Service Bus uses managed identity for all runtime operations, including KEDA scaling. Local (SAS) auth is disabled on the Service Bus namespace.
 
@@ -1028,8 +1061,10 @@ Data flows leaving the VNet to external Microsoft services:
 
 | Destination | Protocol | Consumer | Data Flowing Out |
 |-------------|----------|----------|-----------------|
-| Microsoft Graph API | HTTPS | Cloud worker | Entra ID user/group operations (create, modify, validate) |
-| Exchange Online | HTTPS (PowerShell remoting) | Cloud worker | Mail user configuration, mailbox operations |
+| Microsoft Graph API | HTTPS | Cloud worker, hybrid worker | Entra ID user/group operations (create, modify, validate) |
+| Exchange Online | HTTPS (PowerShell remoting) | Cloud worker, hybrid worker | Mail user configuration, mailbox operations |
+| Active Directory | LDAP/Kerberos | Hybrid worker | AD user/group operations via PSSession |
+| Exchange Server | HTTPS (PowerShell remoting) | Hybrid worker | Remote mailbox operations via PSSession |
 | Dataverse TDS endpoint | TDS (TCP 1433) | Scheduler | SQL queries against Dataverse tables |
 | Databricks SQL Statements API | HTTPS | Scheduler | SQL queries via REST API |
 | Application Insights | HTTPS | All components | Telemetry (traces, exceptions, metrics) |
@@ -1312,7 +1347,7 @@ Each runspace in the pool gets its own independent MgGraph and EXO session, avoi
 | `Test-ExchangeAttributeMatch` | Object | Validate Exchange attributes (supports multi-value) |
 | `Test-ExchangeGroupMembership` | Object | Validate Exchange group membership |
 
-Custom functions are discovered from the `CustomFunctions/` directory (volume mount or baked into image).
+Custom functions are discovered from the `CustomFunctions/` directory (volume mount or baked into image). The hybrid worker additionally supports `HybridFunctions/` (on-prem) and `CustomFunctions/` with per-module engine declaration.
 
 #### Throttle Handling
 
@@ -1325,6 +1360,51 @@ Retry with exponential backoff and jitter happens inside each runspace. Throttli
 - When idle (no messages and no active jobs for 300 seconds): worker exits gracefully.
 - ACA scales back to 0 replicas.
 - Max replicas: 1 (single worker instance per worker ID).
+
+### Hybrid Worker Internals
+
+#### Dual-Engine Architecture
+
+The hybrid worker runs two execution engines side by side within a single `pwsh.exe` process:
+
+- **RunspacePool** (PS 7.x) -- For cloud modules (Entra ID, Exchange Online). Same architecture as the cloud worker.
+- **PSSession Pool** (PS 5.1) -- For on-prem modules (Active Directory, Exchange Server). Connects to the local machine's `Microsoft.PowerShell` remoting endpoint to access Windows PowerShell 5.1 cmdlets.
+
+Function routing is determined by the `PrivateData.ExecutionEngine` field in each module's `.psd1` manifest. The `service-connections.ps1` module builds a `FunctionEngineMap` at startup, and the job dispatcher routes each incoming job to the correct engine.
+
+#### Boot Sequence (12 Phases)
+
+Extended from the cloud worker's 8-phase boot:
+
+1. Apply pending update (atomic directory swap)
+2. Load configuration from JSON file + env var overrides
+3. Initialize App Insights logging
+4. Azure authentication (SP + cert in `Cert:\LocalMachine\My`)
+5. Retrieve target-tenant PFX certificate from Key Vault (only if cloud services enabled)
+6. Retrieve on-prem credentials from Key Vault (only for enabled on-prem services)
+7. Initialize Service Bus (ClientCertificateCredential instead of ManagedIdentityCredential)
+8. Initialize service connection registry (function-to-engine mapping)
+9a. Initialize RunspacePool (if cloud services enabled)
+9b. Initialize SessionPool (if on-prem services enabled)
+10. Start health check HTTP server
+11. Register shutdown handler
+12. Start job dispatcher loop
+
+#### Self-Update Mechanism
+
+The hybrid worker polls Azure Blob Storage for new versions:
+
+1. Downloads `version.json` from blob storage, compares `[Version]` with `current/version.txt`
+2. Downloads zip, verifies SHA256, extracts to `staging/`
+3. Writes `update-pending.json` marker, sets `Running = $false` to drain active jobs
+4. On next boot: renames `current/ -> previous/`, `staging/ -> current/`, deletes marker
+5. Rollback: if rename fails, restores `previous/ -> current/`
+
+Update packages are published by the `deploy-apps.yml` GitHub Actions workflow (`deploy-hybrid-worker` job, manual trigger only).
+
+#### Configuration
+
+Configuration is loaded from `C:\ProgramData\MaToolkit\HybridWorker\config\worker-config.json`. See the [Hybrid Worker reference](hybrid-worker.md) for the full configuration reference.
 
 ---
 
@@ -1387,6 +1467,14 @@ az deployment group create \
   --resource-group your-rg \
   --template-file infra/automation/cloud-worker/deploy.bicep \
   --parameters infra/automation/cloud-worker/deploy.parameters.json
+
+# 2d. Hybrid Worker (per instance -- requires SP + cert setup first)
+az deployment group create \
+  --name hybrid-worker-01-infra \
+  --resource-group your-rg \
+  --template-file infra/automation/hybrid-worker/deploy.bicep \
+  --parameters infra/automation/hybrid-worker/deploy.parameters.json \
+  --parameters servicePrincipalObjectId="..."
 ```
 
 ### CI/CD
@@ -1394,7 +1482,9 @@ az deployment group create \
 Automated deployment is available via GitHub Actions:
 
 - `.github/workflows/deploy-infra.yml` -- Infrastructure deployment (Bicep)
-- `.github/workflows/deploy-apps.yml` -- Application code deployment
+- `.github/workflows/deploy-apps.yml` -- Application code deployment (includes hybrid worker update package publishing via manual trigger)
+
+Hybrid worker infrastructure is deployed manually per instance (not via CI/CD) because each instance requires its own service principal and certificate setup. See the [Hybrid Worker Deployment Guide](hybrid-worker-deployment.md) for the full walkthrough.
 
 ### Infrastructure Layout
 
@@ -1413,6 +1503,9 @@ infra/
     cloud-worker/
       deploy.bicep                       # ACA environment, ACA app, KEDA scaler,
       deploy.parameters.json             # worker subscription, RBAC
+    hybrid-worker/
+      deploy.bicep                       # SB subscription, RBAC, update storage
+      deploy.parameters.json             # (deploy per instance, manually)
 ```
 
 ### Technology Stack Summary
@@ -1424,6 +1517,7 @@ infra/
 | Admin API | C# | .NET 8, Azure Functions v4 (isolated) | Flex Consumption | Dapper + raw SQL |
 | Admin CLI | C# | .NET, System.CommandLine, Spectre.Console | Global tool / self-contained | HTTP (Admin API) |
 | Cloud Worker | PowerShell 7.4 | MgGraph, ExchangeOnlineManagement | Azure Container Apps | Service Bus .NET SDK |
+| Hybrid Worker | PowerShell 7.4 + 5.1 | MgGraph, EXO, ActiveDirectory, Exchange Server | Windows Service (on-prem) | Service Bus .NET SDK |
 | Database | -- | Azure SQL Serverless | GP_S_Gen5_1 | Entra-only auth |
 | Messaging | -- | Azure Service Bus Standard | 3 topics | Managed identity |
 
