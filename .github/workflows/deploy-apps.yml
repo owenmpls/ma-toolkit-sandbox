@@ -40,9 +40,9 @@ jobs:
     outputs:
       scheduler: ${{ steps.filter.outputs.scheduler }}
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
-      admin-api: ${{ steps.filter.outputs.admin-api }}
-      cloud-worker: ${{ steps.filter.outputs.cloud-worker }}
-      hybrid-worker: ${{ steps.filter.outputs.hybrid-worker }}
+      admin_api: ${{ steps.filter.outputs.admin_api }}
+      cloud_worker: ${{ steps.filter.outputs.cloud_worker }}
+      hybrid_worker: ${{ steps.filter.outputs.hybrid_worker }}
       shared: ${{ steps.filter.outputs.shared }}
     steps:
       - uses: actions/checkout@v4
@@ -54,11 +54,11 @@ jobs:
               - 'src/automation/scheduler/**'
             orchestrator:
               - 'src/automation/orchestrator/**'
-            admin-api:
+            admin_api:
               - 'src/automation/admin-api/**'
-            cloud-worker:
+            cloud_worker:
               - 'src/automation/cloud-worker/**'
-            hybrid-worker:
+            hybrid_worker:
               - 'src/automation/hybrid-worker/**'
             shared:
               - 'src/automation/shared/**'
@@ -72,11 +72,11 @@ jobs:
     needs: [changes]
     if: always() && (needs.changes.result == 'skipped' || needs.changes.result == 'success')
     outputs:
-      deploy-scheduler: ${{ steps.resolve.outputs.scheduler }}
-      deploy-orchestrator: ${{ steps.resolve.outputs.orchestrator }}
-      deploy-admin-api: ${{ steps.resolve.outputs.admin-api }}
-      deploy-cloud-worker: ${{ steps.resolve.outputs.cloud-worker }}
-      deploy-hybrid-worker: ${{ steps.resolve.outputs.hybrid-worker }}
+      deploy_scheduler: ${{ steps.resolve.outputs.scheduler }}
+      deploy_orchestrator: ${{ steps.resolve.outputs.orchestrator }}
+      deploy_admin_api: ${{ steps.resolve.outputs.admin_api }}
+      deploy_cloud_worker: ${{ steps.resolve.outputs.cloud_worker }}
+      deploy_hybrid_worker: ${{ steps.resolve.outputs.hybrid_worker }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,17 +106,17 @@ jobs:
             COMPONENT="${{ inputs.component }}"
             echo "scheduler=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "scheduler" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "orchestrator=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "orchestrator" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "admin-api=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "admin-api" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "cloud-worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "cloud-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "hybrid-worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "hybrid-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "admin_api=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "admin-api" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "cloud_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "cloud-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "hybrid_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "hybrid-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           else
             # Push trigger — deploy components whose files changed (or all .NET if shared changed)
             SHARED="${{ needs.changes.outputs.shared }}"
             echo "scheduler=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.scheduler }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "orchestrator=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.orchestrator }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "admin-api=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.admin-api }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "cloud-worker=$( [ "${{ needs.changes.outputs.cloud-worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "hybrid-worker=$( [ "${{ needs.changes.outputs.hybrid-worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "admin_api=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.admin_api }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "cloud_worker=$( [ "${{ needs.changes.outputs.cloud_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "hybrid_worker=$( [ "${{ needs.changes.outputs.hybrid_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup .NET 8 SDK
@@ -202,9 +202,9 @@ jobs:
     needs: [build-and-test]
     if: >-
       always() && needs.build-and-test.result == 'success' &&
-      (needs.build-and-test.outputs.deploy-scheduler == 'true' ||
-       needs.build-and-test.outputs.deploy-orchestrator == 'true' ||
-       needs.build-and-test.outputs.deploy-admin-api == 'true')
+      (needs.build-and-test.outputs.deploy_scheduler == 'true' ||
+       needs.build-and-test.outputs.deploy_orchestrator == 'true' ||
+       needs.build-and-test.outputs.deploy_admin_api == 'true')
     steps:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -234,25 +234,25 @@ jobs:
           echo "admin_api_app=$(echo "$api_outputs" | jq -r '.functionAppName.value')" >> "$GITHUB_OUTPUT"
 
       - name: Download scheduler artifact
-        if: needs.build-and-test.outputs.deploy-scheduler == 'true'
+        if: needs.build-and-test.outputs.deploy_scheduler == 'true'
         uses: actions/download-artifact@v4
         with:
           name: scheduler
 
       - name: Download orchestrator artifact
-        if: needs.build-and-test.outputs.deploy-orchestrator == 'true'
+        if: needs.build-and-test.outputs.deploy_orchestrator == 'true'
         uses: actions/download-artifact@v4
         with:
           name: orchestrator
 
       - name: Download admin-api artifact
-        if: needs.build-and-test.outputs.deploy-admin-api == 'true'
+        if: needs.build-and-test.outputs.deploy_admin_api == 'true'
         uses: actions/download-artifact@v4
         with:
           name: admin-api
 
       - name: Deploy scheduler
-        if: needs.build-and-test.outputs.deploy-scheduler == 'true'
+        if: needs.build-and-test.outputs.deploy_scheduler == 'true'
         run: |
           az functionapp deployment source config-zip \
             --resource-group "$RESOURCE_GROUP" \
@@ -260,7 +260,7 @@ jobs:
             --src scheduler.zip
 
       - name: Deploy orchestrator
-        if: needs.build-and-test.outputs.deploy-orchestrator == 'true'
+        if: needs.build-and-test.outputs.deploy_orchestrator == 'true'
         run: |
           az functionapp deployment source config-zip \
             --resource-group "$RESOURCE_GROUP" \
@@ -268,7 +268,7 @@ jobs:
             --src orchestrator.zip
 
       - name: Deploy admin-api
-        if: needs.build-and-test.outputs.deploy-admin-api == 'true'
+        if: needs.build-and-test.outputs.deploy_admin_api == 'true'
         run: |
           az functionapp deployment source config-zip \
             --resource-group "$RESOURCE_GROUP" \
@@ -284,7 +284,7 @@ jobs:
     needs: [build-and-test]
     if: >-
       always() && needs.build-and-test.result == 'success' &&
-      needs.build-and-test.outputs.deploy-cloud-worker == 'true'
+      needs.build-and-test.outputs.deploy_cloud_worker == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -359,7 +359,7 @@ jobs:
     # requires SP + cert setup before the update storage account exists.
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      needs.build-and-test.outputs.deploy-hybrid-worker == 'true'
+      needs.build-and-test.outputs.deploy_hybrid_worker == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
