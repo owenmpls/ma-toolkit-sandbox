@@ -13,6 +13,7 @@ on:
           - scheduler-orchestrator
           - admin-api
           - cloud-worker
+          - hybrid-worker
 
 permissions:
   id-token: write
@@ -189,3 +190,25 @@ jobs:
               keyVaultName="${{ steps.shared.outputs.key_vault_name }}" \
               containerRegistryName="${{ steps.shared.outputs.container_registry_name }}" \
               logAnalyticsWorkspaceName="${{ steps.shared.outputs.log_analytics_workspace_name }}"
+
+      # ---------------------------------------------------------------
+      # Hybrid Worker shared infrastructure
+      # ---------------------------------------------------------------
+
+      - name: Resolve CI/CD SP object ID
+        if: inputs.stage == 'all' || inputs.stage == 'hybrid-worker'
+        id: cicd-sp
+        run: |
+          SP_OBJECT_ID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)
+          echo "object_id=$SP_OBJECT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy hybrid-worker-shared
+        if: inputs.stage == 'all' || inputs.stage == 'hybrid-worker'
+        run: |
+          az deployment group create \
+            --name hybrid-worker-shared \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/automation/hybrid-worker-shared/deploy.bicep \
+            --parameters infra/automation/hybrid-worker-shared/deploy.parameters.json \
+            --parameters location="$LOCATION" \
+            --parameters cicdSpObjectId="${{ steps.cicd-sp.outputs.object_id }}"

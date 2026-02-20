@@ -84,7 +84,9 @@ Keep the PFX file -- you will import it on the Windows server in Step 6.
 
 ## Step 3: Deploy Azure Infrastructure
 
-The Bicep template creates the Service Bus subscription (with SQL filter), RBAC role assignments, and optionally an update storage account. Deploy it once per hybrid worker instance.
+The Bicep template creates the Service Bus subscription (with SQL filter) and RBAC role assignments. Deploy it once per hybrid worker instance.
+
+> **Prerequisite:** The shared hybrid-worker infrastructure (update storage account) must be deployed first via `deploy-infra.yml` or manually with `infra/automation/hybrid-worker-shared/deploy.bicep`.
 
 ### 3a. Edit the Parameters File
 
@@ -104,8 +106,7 @@ Update the values:
 | `serviceBusNamespaceName` | Your Service Bus namespace name |
 | `keyVaultName` | Your Key Vault name |
 | `servicePrincipalObjectId` | Object ID of the SP from Step 1 |
-
-Set `deployUpdateStorage` to `false` if you already have an update storage account from a previous hybrid worker deployment.
+| `updateStorageAccountName` | Name of the shared update storage account (from hybrid-worker-shared deployment) |
 
 ### 3b. Deploy
 
@@ -124,10 +125,7 @@ This creates:
   - Service Bus Data Receiver (namespace scope)
   - Service Bus Data Sender (namespace scope)
   - Key Vault Secrets User (Key Vault scope)
-- **Update storage** (if `deployUpdateStorage = true`):
-  - Storage account (`Standard_LRS`, no public blob access)
-  - Blob container `hybrid-worker`
-  - Storage Blob Data Reader role on the SP
+  - Storage Blob Data Reader (update storage account scope)
 
 ## Step 4: Upload On-Premises Credentials to Key Vault
 
@@ -290,7 +288,7 @@ To deploy a second hybrid worker (e.g., `hybrid-worker-02`), repeat Steps 1-7 wi
 
 - A new app registration and service principal
 - A new certificate
-- A new Bicep deployment with `workerId = hybrid-worker-02` and `deployUpdateStorage = false` (reuse the existing update storage account)
+- A new Bicep deployment with `workerId = hybrid-worker-02` (the shared update storage account is already deployed)
 - A new configuration file with the updated `workerId` and SP details
 
 ---

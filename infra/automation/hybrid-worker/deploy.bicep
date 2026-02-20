@@ -1,5 +1,6 @@
-// Hybrid Worker infrastructure — Service Bus subscription, RBAC, and update storage
-// Deploy per hybrid worker instance (pass unique workerId for each)
+// Hybrid Worker per-instance infrastructure — Service Bus subscription + RBAC
+// Deploy once per hybrid worker instance (pass unique workerId for each).
+// Prerequisite: deploy hybrid-worker-shared first (creates the update storage account).
 
 // Parameters
 param baseName string
@@ -8,11 +9,8 @@ param workerId string
 param serviceBusNamespaceName string
 param keyVaultName string
 param servicePrincipalObjectId string  // Object ID of the hybrid worker's SP
+param updateStorageAccountName string
 param tags object = { component: 'hybrid-worker', project: 'ma-toolkit' }
-
-// Optional: update storage (deploy once, shared by all hybrid workers)
-param deployUpdateStorage bool = true
-param updateStorageAccountName string = '${baseName}hwupdate'
 
 // Existing resources
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = { name: serviceBusNamespaceName }
@@ -21,6 +19,7 @@ resource jobsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' e
   parent: serviceBus
   name: 'worker-jobs'
 }
+resource updateStorage 'Microsoft.Storage/storageAccounts@2023-01-01' existing = { name: updateStorageAccountName }
 
 // Service Bus subscription with SQL filter (same pattern as cloud-worker)
 resource workerSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
@@ -75,23 +74,8 @@ resource kvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-// Update storage account (shared, deploy once)
-resource updateStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = if (deployUpdateStorage) {
-  name: updateStorageAccountName
-  location: location
-  tags: tags
-  kind: 'StorageV2'
-  sku: { name: 'Standard_LRS' }
-  properties: { allowBlobPublicAccess: false }
-}
-
-resource updateContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = if (deployUpdateStorage) {
-  name: '${updateStorage.name}/default/hybrid-worker'
-  properties: { publicAccess: 'None' }
-}
-
 // RBAC: SP -> Storage Blob Data Reader (for update downloads)
-resource storageReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployUpdateStorage) {
+resource storageReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: updateStorage
   name: guid(updateStorage.id, servicePrincipalObjectId, '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')
   properties: {
@@ -103,4 +87,3 @@ resource storageReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 
 // Outputs
 output subscriptionName string = workerSubscription.name
-output updateStorageAccountName string = deployUpdateStorage ? updateStorage.name : ''

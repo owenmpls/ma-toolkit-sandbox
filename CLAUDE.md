@@ -173,8 +173,11 @@ infra/
     ├── cloud-worker/
     │   ├── deploy.bicep                 ← ACA environment + app
     │   └── deploy.parameters.json
+    ├── hybrid-worker-shared/
+    │   ├── deploy.bicep                 ← update storage account + blob container
+    │   └── deploy.parameters.json
     └── hybrid-worker/
-        ├── deploy.bicep                 ← SB subscription, RBAC, update storage
+        ├── deploy.bicep                 ← SB subscription, RBAC (per instance)
         └── deploy.parameters.json
 ```
 
@@ -222,7 +225,14 @@ az deployment group create \
   --template-file infra/automation/cloud-worker/deploy.bicep \
   --parameters infra/automation/cloud-worker/deploy.parameters.json
 
-# 2d. Hybrid worker (per instance — requires SP + cert setup first)
+# 2d. Hybrid worker shared infrastructure (update storage account)
+az deployment group create \
+  --name hybrid-worker-shared \
+  --resource-group your-rg \
+  --template-file infra/automation/hybrid-worker-shared/deploy.bicep \
+  --parameters infra/automation/hybrid-worker-shared/deploy.parameters.json
+
+# 2e. Hybrid worker (per instance — requires SP + cert setup first)
 # See docs/automation/hybrid-worker-deployment.md for full walkthrough
 az deployment group create \
   --name hybrid-worker-01-infra \
