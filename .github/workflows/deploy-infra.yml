@@ -205,10 +205,19 @@ jobs:
       - name: Deploy hybrid-worker-shared
         if: inputs.stage == 'all' || inputs.stage == 'hybrid-worker'
         run: |
-          az deployment group create \
+          # RoleAssignmentExists is expected on redeploys (ARM idempotency bug)
+          # — the role assignment already exists with identical properties.
+          if ! az deployment group create \
             --name hybrid-worker-shared \
             --resource-group "$RESOURCE_GROUP" \
             --template-file infra/automation/hybrid-worker-shared/deploy.bicep \
             --parameters infra/automation/hybrid-worker-shared/deploy.parameters.json \
             --parameters location="$LOCATION" \
-            --parameters cicdSpObjectId="${{ steps.cicd-sp.outputs.object_id }}"
+            --parameters cicdSpObjectId="${{ steps.cicd-sp.outputs.object_id }}" 2>&1 | tee /tmp/hw-shared-deploy.log; then
+            if grep -q 'RoleAssignmentExists' /tmp/hw-shared-deploy.log; then
+              echo "::warning::Role assignment already exists (expected on redeploy) — continuing."
+            else
+              echo "::error::hybrid-worker-shared deployment failed."
+              exit 1
+            fi
+          fi
