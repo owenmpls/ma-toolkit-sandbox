@@ -47,9 +47,9 @@ Test-Assert 'version.txt exists' {
     Test-Path (Join-Path $projectRoot 'version.txt')
 }
 
-Test-Assert 'version.txt contains valid semver' {
+Test-Assert 'version.txt contains valid version' {
     $v = (Get-Content (Join-Path $projectRoot 'version.txt') -Raw).Trim()
-    $v -match '^\d+\.\d+\.\d+$'
+    $v -match '^\d+\.\d+(\.\d+)?$'
 }
 
 Test-Assert '.gitignore exists' {

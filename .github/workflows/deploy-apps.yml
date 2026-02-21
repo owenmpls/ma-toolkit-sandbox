@@ -355,11 +355,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     needs: [build-and-test]
-    # Only deploy via manual trigger — hybrid-worker-shared infra must be
-    # deployed first via deploy-infra.yml.
     if: >-
       always() && needs.build-and-test.result == 'success' &&
-      github.event_name == 'workflow_dispatch' &&
       needs.build-and-test.outputs.deploy_hybrid_worker == 'true'
     steps:
       - name: Checkout
@@ -380,7 +377,8 @@ jobs:
       - name: Set version
         id: version
         run: |
-          VERSION=$(cat src/automation/hybrid-worker/version.txt)
+          BASE_VERSION=$(cat src/automation/hybrid-worker/version.txt | tr -d '[:space:]')
+          VERSION="${BASE_VERSION}.${{ github.run_number }}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
@@ -405,17 +403,23 @@ jobs:
           HASH=$(sha256sum "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" | cut -d' ' -f1)
           echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch update storage account name
+      - name: Check hybrid-worker-shared infrastructure
         id: storage
         run: |
-          outputs=$(az deployment group show \
+          if outputs=$(az deployment group show \
             --name hybrid-worker-shared \
             --resource-group "$RESOURCE_GROUP" \
             --query properties.outputs \
-            --output json)
-          echo "account=$(echo "$outputs" | jq -r '.updateStorageAccountName.value')" >> "$GITHUB_OUTPUT"
+            --output json 2>/dev/null); then
+            echo "account=$(echo "$outputs" | jq -r '.updateStorageAccountName.value')" >> "$GITHUB_OUTPUT"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::hybrid-worker-shared infrastructure not deployed — skipping package upload. Deploy infra first via deploy-infra.yml."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload package to blob storage
+        if: steps.storage.outputs.exists == 'true'
         run: |
           az storage blob upload \
             --account-name "${{ steps.storage.outputs.account }}" \
@@ -425,6 +429,7 @@ jobs:
             --overwrite --auth-mode login
 
       - name: Update version manifest
+        if: steps.storage.outputs.exists == 'true'
         run: |
           cat > /tmp/version.json << EOF
           {
