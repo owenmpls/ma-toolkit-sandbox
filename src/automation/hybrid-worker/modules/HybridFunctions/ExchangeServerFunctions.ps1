@@ -7,27 +7,52 @@
 #>
 
 function New-ExchangeRemoteMailbox {
+    <#
+    .SYNOPSIS
+        Provisions a new remote mailbox in Exchange Server.
+    .DESCRIPTION
+        Creates a new mail-enabled AD user with a remote routing address pointing
+        to Exchange Online. Uses New-RemoteMailbox which creates the AD account and
+        mail-enables it in a single operation.
+    #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] [string]$Identity,
+        [Parameter(Mandatory)] [string]$Name,
+        [Parameter(Mandatory)] [string]$UserPrincipalName,
         [Parameter(Mandatory)] [string]$RemoteRoutingAddress,
-        [string]$Alias
+        [Parameter(Mandatory)] [SecureString]$Password,
+        [string]$FirstName,
+        [string]$LastName,
+        [string]$DisplayName,
+        [string]$Alias,
+        [string]$OrganizationalUnit,
+        [string]$SamAccountName
     )
 
-    # Skeleton — implement based on migration requirements
     $params = @{
-        Identity              = $Identity
-        RemoteRoutingAddress  = $RemoteRoutingAddress
+        Name                 = $Name
+        UserPrincipalName    = $UserPrincipalName
+        RemoteRoutingAddress = $RemoteRoutingAddress
+        Password             = $Password
+        ResetPasswordOnNextLogon = $false
+        ErrorAction          = 'Stop'
     }
+    if ($FirstName) { $params['FirstName'] = $FirstName }
+    if ($LastName) { $params['LastName'] = $LastName }
+    if ($DisplayName) { $params['DisplayName'] = $DisplayName }
     if ($Alias) { $params['Alias'] = $Alias }
+    if ($OrganizationalUnit) { $params['OnPremisesOrganizationalUnit'] = $OrganizationalUnit }
+    if ($SamAccountName) { $params['SamAccountName'] = $SamAccountName }
 
-    Enable-RemoteMailbox @params -ErrorAction Stop
-    $mailbox = Get-RemoteMailbox -Identity $Identity -ErrorAction Stop
+    $mailbox = New-RemoteMailbox @params
+    $result = Get-RemoteMailbox -Identity $mailbox.Identity -ErrorAction Stop
 
     return [PSCustomObject]@{
-        Identity             = $mailbox.Identity
-        RemoteRoutingAddress = $mailbox.RemoteRoutingAddress.ToString()
-        PrimarySmtpAddress   = $mailbox.PrimarySmtpAddress.ToString()
+        Identity             = $result.Identity
+        Guid                 = $result.Guid.ToString()
+        RemoteRoutingAddress = $result.RemoteRoutingAddress.ToString()
+        PrimarySmtpAddress   = $result.PrimarySmtpAddress.ToString()
+        SamAccountName       = $result.SamAccountName
     }
 }
 
