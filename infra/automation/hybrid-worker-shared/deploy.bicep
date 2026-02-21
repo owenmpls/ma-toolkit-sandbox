@@ -13,7 +13,11 @@ resource updateStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   tags: tags
   kind: 'StorageV2'
   sku: { name: 'Standard_LRS' }
-  properties: { allowBlobPublicAccess: false }
+  properties: {
+    allowBlobPublicAccess: false
+    publicNetworkAccess: 'Enabled'
+    allowSharedKeyAccess: false
+  }
 }
 
 resource updateContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
