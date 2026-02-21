@@ -1312,7 +1312,7 @@ The worker follows an 8-phase boot sequence:
 2. Initialize logging (App Insights TelemetryClient + console fallback)
 3. Authenticate to Azure via managed identity (`auth.ps1`)
 4. Retrieve PFX certificate from Key Vault
-5. Initialize Service Bus client (`servicebus.ps1`)
+5. Initialize Service Bus client (`service-bus.ps1`)
 6. Create RunspacePool with per-runspace MgGraph + EXO sessions (`runspace-manager.ps1`)
 7. Discover and load function modules (Standard + Custom)
 8. Enter main job dispatch loop (`job-dispatcher.ps1`)

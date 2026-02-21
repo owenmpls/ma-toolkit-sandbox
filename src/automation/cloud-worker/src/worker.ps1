@@ -23,7 +23,7 @@ $srcPath = Join-Path $basePath 'src'
 . (Join-Path $srcPath 'config.ps1')
 . (Join-Path $srcPath 'logging.ps1')
 . (Join-Path $srcPath 'auth.ps1')
-. (Join-Path $srcPath 'servicebus.ps1')
+. (Join-Path $srcPath 'service-bus.ps1')
 . (Join-Path $srcPath 'runspace-manager.ps1')
 . (Join-Path $srcPath 'job-dispatcher.ps1')
 . (Join-Path $srcPath 'health-check.ps1')

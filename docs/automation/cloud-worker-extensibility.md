@@ -715,7 +715,7 @@ cloud-worker/
 |   +-- worker.ps1                         # Main entry point (8-phase boot sequence)
 |   +-- config.ps1                         # Env var loader + validation
 |   +-- auth.ps1                           # Managed identity, Key Vault cert retrieval, MgGraph + EXO cert auth
-|   +-- servicebus.ps1                     # .NET SDK for send/receive (Azure.Messaging.ServiceBus)
+|   +-- service-bus.ps1                    # .NET SDK for send/receive (Azure.Messaging.ServiceBus)
 |   +-- runspace-manager.ps1               # RunspacePool creation, per-runspace auth, async dispatch
 |   +-- job-dispatcher.ps1                 # Main loop: receive -> validate -> dispatch -> collect -> send results
 |   +-- logging.ps1                        # App Insights TelemetryClient + console fallback

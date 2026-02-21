@@ -53,7 +53,7 @@ $sourceFiles = @(
     'config.ps1',
     'logging.ps1',
     'auth.ps1',
-    'servicebus.ps1',
+    'service-bus.ps1',
     'runspace-manager.ps1',
     'job-dispatcher.ps1'
 )
