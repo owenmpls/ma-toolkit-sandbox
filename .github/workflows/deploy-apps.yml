@@ -389,6 +389,9 @@ jobs:
             -o src/automation/hybrid-worker/service-host-publish/ \
             --nologo
 
+      - name: Download .NET dependencies
+        run: pwsh -File src/automation/hybrid-worker/Download-Dependencies.ps1
+
       - name: Package hybrid-worker
         run: |
           cd src/automation/hybrid-worker
