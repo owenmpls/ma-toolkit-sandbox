@@ -2,9 +2,9 @@
 .SYNOPSIS
     Job dispatcher for the Hybrid Worker.
 .DESCRIPTION
-    Receives job messages from Service Bus, validates them, routes to the correct
-    execution engine (RunspacePool for PS 7.x or SessionPool for PS 5.1),
-    collects results, and sends result messages back. Periodically checks for updates.
+    Receives job messages from Service Bus, validates them, checks capability
+    gating, dispatches to the SessionPool, collects results, and sends result
+    messages back. Periodically checks for updates.
 #>
 
 function Test-JobMessage {
@@ -126,7 +126,7 @@ function New-JobResult {
 function Start-JobDispatcher {
     <#
     .SYNOPSIS
-        Main job processing loop with dual-engine routing and periodic update checks.
+        Main job processing loop with capability gating and periodic update checks.
     #>
     [CmdletBinding()]
     param(
@@ -136,9 +136,7 @@ function Start-JobDispatcher {
         [Parameter(Mandatory)] [Azure.Messaging.ServiceBus.ServiceBusClient]$Client,
         [Parameter(Mandatory)] [string]$JobsTopicName,
         [Parameter(Mandatory)] [PSCustomObject]$ServiceRegistry,
-        # These may be $null if the corresponding engine is not enabled:
-        [System.Management.Automation.Runspaces.RunspacePool]$RunspacePool,
-        [PSCustomObject]$SessionPool,
+        [Parameter(Mandatory)] [PSCustomObject]$SessionPool,
         [Parameter(Mandatory)] [ref]$Running
     )
 
@@ -183,37 +181,24 @@ function Start-JobDispatcher {
                         if ($downloaded) {
                             Write-WorkerLog -Message 'Update downloaded. Will apply after draining active jobs.'
                             $Running.Value = $false
-                            # Don't break — let the shutdown drain loop handle active jobs
+                            # Don't break -- let the shutdown drain loop handle active jobs
                         }
                     }
                 }
             }
 
-            # --- Check for completed jobs (both engines) ---
+            # --- Check for completed jobs ---
             $completedIndexes = @()
             for ($i = 0; $i -lt $activeJobs.Count; $i++) {
                 $activeJob = $activeJobs[$i]
-                $isCompleted = $false
-
-                if ($activeJob.Engine -eq 'RunspacePool') {
-                    $isCompleted = $activeJob.AsyncHandle.Handle.IsCompleted
-                }
-                elseif ($activeJob.Engine -eq 'SessionPool') {
-                    $isCompleted = $activeJob.AsyncHandle.Job.State -in @('Completed', 'Failed', 'Stopped')
-                }
+                $isCompleted = $activeJob.AsyncHandle.Job.State -in @('Completed', 'Failed', 'Stopped')
 
                 if ($isCompleted) {
                     $completedIndexes += $i
                     $lastActivityTime = [DateTime]::UtcNow
 
                     try {
-                        # Collect result using the appropriate engine's collector
-                        $executionResult = if ($activeJob.Engine -eq 'RunspacePool') {
-                            Get-RunspaceResult -AsyncHandle $activeJob.AsyncHandle
-                        } else {
-                            Get-SessionResult -AsyncHandle $activeJob.AsyncHandle
-                        }
-
+                        $executionResult = Get-SessionResult -AsyncHandle $activeJob.AsyncHandle
                         $duration = [long]((Get-Date) - $activeJob.StartTime).TotalMilliseconds
                         $status = if ($executionResult.Success) { 'success' } else { 'failure' }
 
@@ -224,12 +209,12 @@ function Start-JobDispatcher {
                         Send-ServiceBusResult -Sender $Sender -Result $resultMsg
                         Complete-ServiceBusMessage -Receiver $Receiver -Message $activeJob.SbMessage
 
-                        Write-WorkerLog -Message "Job '$($activeJob.Job.JobId)' $status ($($duration)ms, $($activeJob.Engine))." -Properties @{
+                        Write-WorkerLog -Message "Job '$($activeJob.Job.JobId)' $status ($($duration)ms)." -Properties @{
                             JobId = $activeJob.Job.JobId; FunctionName = $activeJob.Job.FunctionName
-                            DurationMs = $duration; Engine = $activeJob.Engine
+                            DurationMs = $duration
                         }
                         Write-WorkerMetric -Name 'JobDuration' -Value $duration -Properties @{
-                            FunctionName = $activeJob.Job.FunctionName; Status = $status; Engine = $activeJob.Engine
+                            FunctionName = $activeJob.Job.FunctionName; Status = $status
                         }
                     }
                     catch {
@@ -244,14 +229,11 @@ function Start-JobDispatcher {
                 $activeJobs.RemoveAt($completedIndexes[$i])
             }
 
-            # --- Determine available slots per engine ---
-            $runspaceActive = ($activeJobs | Where-Object { $_.Engine -eq 'RunspacePool' }).Count
-            $sessionActive = ($activeJobs | Where-Object { $_.Engine -eq 'SessionPool' }).Count
-            $runspaceSlots = if ($RunspacePool) { $Config.MaxParallelism - $runspaceActive } else { 0 }
-            $sessionSlots = if ($SessionPool) { $SessionPool.ActiveSessions - $sessionActive } else { 0 }
-            $totalSlots = $runspaceSlots + $sessionSlots
+            # --- Determine available slots ---
+            $sessionActive = $activeJobs.Count
+            $availableSlots = $SessionPool.ActiveSessions - $sessionActive
 
-            if ($totalSlots -le 0) {
+            if ($availableSlots -le 0) {
                 Start-Sleep -Milliseconds 100
                 continue
             }
@@ -260,7 +242,7 @@ function Start-JobDispatcher {
             $receiverRef = [ref]$Receiver
             $messages = Receive-ServiceBusMessages -ReceiverRef $receiverRef -Client $Client `
                 -TopicName $JobsTopicName -WorkerId $Config.WorkerId `
-                -MaxMessages $totalSlots -WaitTimeSeconds 2
+                -MaxMessages $availableSlots -WaitTimeSeconds 2
             $Receiver = $receiverRef.Value
 
             if (-not $messages -or $messages.Count -eq 0) { continue }
@@ -281,61 +263,55 @@ function Start-JobDispatcher {
                         continue
                     }
 
-                    # Check whitelist
+                    # Capability gating: check allowed functions with informative errors
                     if ($job.FunctionName -notin $script:AllowedFunctions) {
+                        $requiredService = $ServiceRegistry.FunctionCatalog[$job.FunctionName]
+                        if ($requiredService) {
+                            # Known function but its service is disabled
+                            $errorType = 'CapabilityDisabledError'
+                            $errorMsg = "Function '$($job.FunctionName)' requires service '$requiredService' which is not enabled on worker '$($Config.WorkerId)'."
+                        }
+                        else {
+                            # Completely unknown function
+                            $errorType = 'SecurityValidationError'
+                            $errorMsg = "Function '$($job.FunctionName)' is not a registered function."
+                        }
                         $errorResult = New-JobResult -Job $job -WorkerId $Config.WorkerId -Status 'failure' -ErrorInfo ([PSCustomObject]@{
-                            message = "Function '$($job.FunctionName)' not allowed."; type = 'SecurityValidationError'; isThrottled = $false; attempts = 0
+                            message = $errorMsg; type = $errorType; isThrottled = $false; attempts = 0
                         })
                         Send-ServiceBusResult -Sender $Sender -Result $errorResult
                         Complete-ServiceBusMessage -Receiver $Receiver -Message $message
                         continue
                     }
 
-                    # Route to correct engine
-                    $engine = Get-FunctionEngine -FunctionName $job.FunctionName -ServiceRegistry $ServiceRegistry
+                    # Check capacity
+                    if ($availableSlots -le 0) {
+                        Abandon-ServiceBusMessage -Receiver $Receiver -Message $message
+                        continue
+                    }
+
                     $parameters = ConvertTo-ParameterHashtable -Parameters $job.Parameters
 
-                    # Check engine-specific capacity
-                    if ($engine -eq 'RunspacePool' -and $runspaceSlots -le 0) {
-                        Abandon-ServiceBusMessage -Receiver $Receiver -Message $message
-                        continue
-                    }
-                    if ($engine -eq 'SessionPool' -and $sessionSlots -le 0) {
-                        Abandon-ServiceBusMessage -Receiver $Receiver -Message $message
-                        continue
+                    Write-WorkerLog -Message "Dispatching '$($job.JobId)': $($job.FunctionName)" -Properties @{
+                        JobId = $job.JobId; FunctionName = $job.FunctionName
                     }
 
-                    Write-WorkerLog -Message "Dispatching '$($job.JobId)': $($job.FunctionName) [$engine]" -Properties @{
-                        JobId = $job.JobId; FunctionName = $job.FunctionName; Engine = $engine
-                    }
-
-                    $asyncHandle = if ($engine -eq 'RunspacePool') {
-                        Invoke-InRunspace -Pool $RunspacePool -FunctionName $job.FunctionName `
-                            -Parameters $parameters -MaxRetries $Config.MaxRetryCount `
-                            -BaseDelaySeconds $Config.BaseRetryDelaySeconds `
-                            -MaxDelaySeconds $Config.MaxRetryDelaySeconds
-                    }
-                    else {
-                        Invoke-InSession -Pool $SessionPool -FunctionName $job.FunctionName `
-                            -Parameters $parameters -MaxRetries $Config.MaxRetryCount `
-                            -BaseDelaySeconds $Config.BaseRetryDelaySeconds `
-                            -MaxDelaySeconds $Config.MaxRetryDelaySeconds
-                    }
+                    $asyncHandle = Invoke-InSession -Pool $SessionPool -FunctionName $job.FunctionName `
+                        -Parameters $parameters -MaxRetries $Config.MaxRetryCount `
+                        -BaseDelaySeconds $Config.BaseRetryDelaySeconds `
+                        -MaxDelaySeconds $Config.MaxRetryDelaySeconds
 
                     $activeJobs.Add([PSCustomObject]@{
                         Job         = $job
                         AsyncHandle = $asyncHandle
                         SbMessage   = $message
                         StartTime   = Get-Date
-                        Engine      = $engine
                     })
 
-                    # Update available slots
-                    if ($engine -eq 'RunspacePool') { $runspaceSlots-- }
-                    else { $sessionSlots-- }
+                    $availableSlots--
 
                     Write-WorkerMetric -Name 'JobDispatched' -Value 1 -Properties @{
-                        FunctionName = $job.FunctionName; Engine = $engine
+                        FunctionName = $job.FunctionName
                     }
                 }
                 catch {
@@ -360,13 +336,11 @@ function Start-JobDispatcher {
             $completedIndexes = @()
             for ($i = 0; $i -lt $activeJobs.Count; $i++) {
                 $aj = $activeJobs[$i]
-                $done = if ($aj.Engine -eq 'RunspacePool') { $aj.AsyncHandle.Handle.IsCompleted }
-                        else { $aj.AsyncHandle.Job.State -in @('Completed', 'Failed', 'Stopped') }
+                $done = $aj.AsyncHandle.Job.State -in @('Completed', 'Failed', 'Stopped')
                 if ($done) {
                     $completedIndexes += $i
                     try {
-                        $result = if ($aj.Engine -eq 'RunspacePool') { Get-RunspaceResult -AsyncHandle $aj.AsyncHandle }
-                                  else { Get-SessionResult -AsyncHandle $aj.AsyncHandle }
+                        $result = Get-SessionResult -AsyncHandle $aj.AsyncHandle
                         $dur = [long]((Get-Date) - $aj.StartTime).TotalMilliseconds
                         $st = if ($result.Success) { 'success' } else { 'failure' }
                         $msg = New-JobResult -Job $aj.Job -WorkerId $Config.WorkerId -Status $st `

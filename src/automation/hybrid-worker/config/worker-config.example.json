@@ -1,7 +1,6 @@
 {
   "workerId": "hybrid-worker-01",
-  "maxParallelism": 4,
-  "maxPs51Sessions": 2,
+  "maxPs51Sessions": 4,
 
   "serviceBus": {
     "namespace": "matoolkit-sbus.servicebus.windows.net",
@@ -16,20 +15,21 @@
     "keyVaultName": "matoolkit-kv"
   },
 
-  "targetTenant": {
-    "tenantId": "target-tenant-guid",
-    "organization": "target.onmicrosoft.com",
-    "appId": "target-sp-client-id",
-    "certificateName": "worker-app-cert"
-  },
-
   "serviceConnections": {
-    "entra": { "enabled": false },
-    "exchangeOnline": { "enabled": false },
     "activeDirectory": {
       "enabled": true,
-      "domainController": "dc01.corp.contoso.com",
-      "credentialSecret": "ad-service-account"
+      "forests": [
+        {
+          "name": "corp.contoso.com",
+          "server": "dc01.corp.contoso.com",
+          "credentialSecret": "ad-cred-contoso"
+        },
+        {
+          "name": "emea.contoso.com",
+          "server": "dc01.emea.contoso.com",
+          "credentialSecret": "ad-cred-emea"
+        }
+      ]
     },
     "exchangeServer": {
       "enabled": true,
@@ -38,9 +38,13 @@
     },
     "sharepointOnline": {
       "enabled": false,
-      "adminUrl": "https://contoso-admin.sharepoint.com"
+      "adminUrl": "https://contoso-admin.sharepoint.com",
+      "credentialSecret": "spo-service-account"
     },
-    "teams": { "enabled": false }
+    "teams": {
+      "enabled": false,
+      "credentialSecret": "teams-service-account"
+    }
   },
 
   "appInsights": {

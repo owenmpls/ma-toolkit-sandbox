@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-An on-premises PowerShell worker running as a native Windows Service, part of the Migration Automation Toolkit's **automation subsystem**. It executes migration functions against both cloud (Entra ID, Exchange Online) and on-premises (Active Directory, Exchange Server, SharePoint Online, Teams) services using a dual-engine architecture: PS 7.x RunspacePool for cloud functions and PS 5.1 PSSession pool for on-prem functions.
+An on-premises PowerShell worker running as a native Windows Service, part of the Migration Automation Toolkit's **automation subsystem**. It executes migration functions against on-premises (Active Directory, Exchange Server) and cloud services (SharePoint Online, Teams) using PS 5.1 PSSessions. Supports multi-forest AD environments with lazy connection validation.
 
 ## Project Structure
 
@@ -19,37 +19,59 @@ hybrid-worker/
 │   ├── WorkerProcessService.cs
 │   └── appsettings.json
 ├── src/
-│   ├── worker.ps1                         # Main entry point (12-phase boot)
+│   ├── worker.ps1                         # Main entry point (11-phase boot)
 │   ├── config.ps1                         # JSON config loader + env var overrides
-│   ├── logging.ps1                        # App Insights telemetry (adapted from cloud-worker)
-│   ├── auth.ps1                           # SP cert auth + on-prem credential retrieval
+│   ├── logging.ps1                        # App Insights telemetry
+│   ├── auth.ps1                           # SP cert auth + credential retrieval
 │   ├── service-bus.ps1                    # SB integration (ClientCertificateCredential)
-│   ├── runspace-manager.ps1               # PS 7.x RunspacePool (reused from cloud-worker)
-│   ├── session-pool.ps1                   # PS 5.1 PSSession pool (NEW)
-│   ├── job-dispatcher.ps1                 # Dual-engine routing + update check
-│   ├── service-connections.ps1            # Service registry + function-to-engine mapping
+│   ├── ad-forest-manager.ps1              # Multi-forest config validation
+│   ├── session-pool.ps1                   # PS 5.1 PSSession pool (single engine)
+│   ├── job-dispatcher.ps1                 # Capability-gated dispatch + update check
+│   ├── service-connections.ps1            # Per-service module scanning + catalog
 │   ├── update-manager.ps1                 # Blob storage version check + zip download
-│   └── health-check.ps1                   # Health endpoint (adapted from cloud-worker)
+│   └── health-check.ps1                   # Health endpoint
 ├── modules/
-│   ├── StandardFunctions/                 # Copy of cloud-worker StandardFunctions
-│   ├── HybridFunctions/                   # On-prem functions (PS 5.1 via PSSession)
-│   └── CustomFunctions/                   # Customer-specific modules
+│   ├── ADFunctions/                       # RequiredService = activeDirectory
+│   │   ├── ADFunctions.psd1
+│   │   ├── ADFunctions.psm1
+│   │   ├── ADForestConnection.ps1         # Get-ADForestConnection, Reset-ADForestConnection
+│   │   └── ADOperations.ps1               # New-ADMigrationUser, Set-ADUserAttribute
+│   ├── ExchangeServerFunctions/           # RequiredService = exchangeServer
+│   │   ├── ExchangeServerFunctions.psd1
+│   │   ├── ExchangeServerFunctions.psm1
+│   │   └── ExchangeServerOperations.ps1   # New-ExchangeRemoteMailbox
+│   ├── SPOFunctions/                      # RequiredService = sharepointOnline
+│   │   ├── SPOFunctions.psd1
+│   │   ├── SPOFunctions.psm1
+│   │   └── SPOOperations.ps1              # New-MigrationSPOSite
+│   ├── TeamsFunctions/                    # RequiredService = teams
+│   │   ├── TeamsFunctions.psd1
+│   │   ├── TeamsFunctions.psm1
+│   │   └── TeamsOperations.ps1            # New-MigrationTeam
+│   └── CustomFunctions/                   # Customer-specific extensibility modules
+│       └── SampleCustomFunctions/         # RequiredServices = @(all four)
+│           ├── SampleCustomFunctions.psd1
+│           ├── SampleCustomFunctions.psm1
+│           └── SampleFunctions.ps1        # 4 sample functions (one per service pattern)
 ├── config/
 │   └── worker-config.example.json         # Example configuration file
 ├── tests/
-│   └── Test-WorkerLocal.ps1               # Parse + structure validation tests
+│   └── Test-WorkerLocal.ps1               # Parse + structure + stale reference validation
 └── dotnet-libs/                           # .NET assemblies (fetched by Download-Dependencies.ps1)
 ```
 
 ## Key Architecture Decisions
 
-- **Dual-engine**: RunspacePool (PS 7.x) for cloud modules, PSSession pool (PS 5.1) for on-prem modules
-- **Service Bus SDK**: Same Azure.Messaging.ServiceBus .NET assembly as cloud-worker, but authenticated via `ClientCertificateCredential` instead of `ManagedIdentityCredential`
-- **Windows Service host**: .NET 8 Worker Service manages the `pwsh.exe` process lifecycle (start, stop, restart on crash, graceful shutdown via process signal)
-- **Self-update**: Polls Azure Blob Storage for new versions, downloads + stages, worker exits and service host restarts it, new version applied at boot
-- **Certificate auth**: SP certificate in `Cert:\LocalMachine\My` for Azure resources; KV-stored PFX for target tenant MgGraph/EXO (same as cloud-worker)
+- **Single engine**: PS 5.1 PSSession pool only — all remaining modules (AD, Exchange Server, SPO, Teams) work in PS 5.1
+- **Per-service modules**: Each module declares `RequiredService` in `PrivateData`, enabling selective loading based on enabled services
+- **Capability gating**: Functions for disabled services are cataloged but not whitelisted; jobs get informative `CapabilityDisabledError` instead of generic rejection
+- **Multi-forest AD**: Supports 20+ forests via config-driven `forests` array with lazy connection validation (`Get-ADForestConnection`)
+- **Config-driven services**: Each service (activeDirectory, exchangeServer, sharepointOnline, teams) can be independently enabled/disabled
+- **Service Bus SDK**: Azure.Messaging.ServiceBus .NET assembly, authenticated via `ClientCertificateCredential`
+- **Windows Service host**: .NET 8 Worker Service manages the `pwsh.exe` process lifecycle
+- **Self-update**: Polls Azure Blob Storage for new versions, downloads + stages, applies at boot
+- **Certificate auth**: SP certificate in `Cert:\LocalMachine\My` for Azure resources
 - **On-prem credentials**: Username/password stored as JSON secrets in Key Vault, retrieved at startup
-- **Configurable services**: Each service connection (entra, exchangeOnline, activeDirectory, exchangeServer, sharepointOnline, teams) can be independently enabled/disabled
 
 ## Service Bus Message Format
 
@@ -57,4 +79,4 @@ Same as cloud-worker — see `src/automation/cloud-worker/CLAUDE.md` for job/res
 
 ## Tests
 
-Run `pwsh -File tests/Test-WorkerLocal.ps1` — validates parse correctness for all .ps1 files, module structure, manifest exports, and project structure.
+Run `pwsh -File tests/Test-WorkerLocal.ps1` — validates parse correctness for all .ps1 files, module structure, manifest exports, config schema, and verifies no stale references to removed components (RunspacePool, StandardFunctions, MgGraph, etc.).

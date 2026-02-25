@@ -57,7 +57,7 @@ See `src/automation/admin-api/CLAUDE.md` for project context. Full API reference
 
 ### hybrid-worker (`src/automation/hybrid-worker/`)
 
-On-premises PowerShell 7.4 worker running as a native Windows Service. Executes migration functions against both cloud services (Entra ID, Exchange Online) and on-premises systems (Active Directory, Exchange Server) using a dual-engine architecture: PS 7.x RunspacePool for cloud functions and PS 5.1 PSSession pool for on-prem functions. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage.
+On-premises PowerShell 7.4 worker running as a native Windows Service. Executes migration functions against on-premises systems (Active Directory, Exchange Server) and cloud services (SharePoint Online, Teams) using a PS 5.1 PSSession pool. Supports multi-forest AD environments (20+ forests) with lazy connection validation. Per-service modules enable capability gating — if a service is disabled, its functions are cataloged but not whitelisted, returning informative errors. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage.
 
 See `src/automation/hybrid-worker/CLAUDE.md` for project context. Reference: [`docs/automation/hybrid-worker.md`](docs/automation/hybrid-worker.md). Deployment: [`docs/automation/hybrid-worker-deployment.md`](docs/automation/hybrid-worker-deployment.md)
 
@@ -269,7 +269,7 @@ The system follows an **event-driven, queue-based pattern**:
 2. **Scheduler** → Timer-triggered, queries data sources (when automation enabled), detects batches, dispatches events to Service Bus
 3. **Orchestrator** → Consumes scheduler events, coordinates step execution, dispatches jobs to workers
 4. **Cloud Worker** → Executes cloud migration operations (Entra ID, Exchange Online) via RunspacePool in ACA
-5. **Hybrid Worker** → Executes cloud + on-prem operations (AD, Exchange Server) via dual PS 7.x/5.1 engines as a Windows Service
+5. **Hybrid Worker** → Executes on-prem + cloud operations (AD, Exchange Server, SPO, Teams) via PS 5.1 SessionPool as a Windows Service
 
 ### Cloud Worker Details
 

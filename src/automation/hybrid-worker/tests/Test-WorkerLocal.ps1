@@ -27,12 +27,12 @@ function Test-Assert {
             $script:TestsPassed++
         }
         else {
-            Write-Host "  [FAIL] $Name — returned: $result" -ForegroundColor Red
+            Write-Host "  [FAIL] $Name -- returned: $result" -ForegroundColor Red
             $script:TestsFailed++
         }
     }
     catch {
-        Write-Host "  [FAIL] $Name — $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  [FAIL] $Name -- $($_.Exception.Message)" -ForegroundColor Red
         $script:TestsFailed++
     }
 }
@@ -97,7 +97,7 @@ $srcFiles = @(
     'logging.ps1',
     'auth.ps1',
     'service-bus.ps1',
-    'runspace-manager.ps1',
+    'ad-forest-manager.ps1',
     'session-pool.ps1',
     'service-connections.ps1',
     'update-manager.ps1',
@@ -127,45 +127,94 @@ Test-Assert 'src/ contains exactly 11 .ps1 files' {
 }
 
 # ============================================================================
-# Section 4: Module Validation
+# Section 4: Module Validation — Per-Service Modules
 # ============================================================================
 Write-Host ''
 Write-Host '=== Module Validation ===' -ForegroundColor Cyan
 
-Test-Assert 'StandardFunctions manifest is valid' {
-    $psd1 = Join-Path $modulesPath 'StandardFunctions/StandardFunctions.psd1'
+# ADFunctions module
+Test-Assert 'ADFunctions manifest is valid' {
+    $psd1 = Join-Path $modulesPath 'ADFunctions/ADFunctions.psd1'
     $manifest = Import-PowerShellDataFile -Path $psd1
-    $manifest.FunctionsToExport.Count -eq 14
+    $manifest.FunctionsToExport.Count -eq 4
 }
 
-Test-Assert 'StandardFunctions.psm1 exists' {
-    Test-Path (Join-Path $modulesPath 'StandardFunctions/StandardFunctions.psm1')
+Test-Assert 'ADFunctions.psm1 exists' {
+    Test-Path (Join-Path $modulesPath 'ADFunctions/ADFunctions.psm1')
 }
 
-Test-Assert 'HybridFunctions manifest is valid' {
-    $psd1 = Join-Path $modulesPath 'HybridFunctions/HybridFunctions.psd1'
+Test-Assert 'ADFunctions RequiredService is activeDirectory' {
+    $psd1 = Join-Path $modulesPath 'ADFunctions/ADFunctions.psd1'
     $manifest = Import-PowerShellDataFile -Path $psd1
-    $manifest.FunctionsToExport.Count -ge 9
+    $manifest.PrivateData.RequiredService -eq 'activeDirectory'
 }
 
-Test-Assert 'HybridFunctions.psm1 exists' {
-    Test-Path (Join-Path $modulesPath 'HybridFunctions/HybridFunctions.psm1')
-}
-
-Test-Assert 'HybridFunctions ExecutionEngine is SessionPool' {
-    $psd1 = Join-Path $modulesPath 'HybridFunctions/HybridFunctions.psd1'
+Test-Assert 'ADFunctions ExecutionEngine is SessionPool' {
+    $psd1 = Join-Path $modulesPath 'ADFunctions/ADFunctions.psd1'
     $manifest = Import-PowerShellDataFile -Path $psd1
     $manifest.PrivateData.ExecutionEngine -eq 'SessionPool'
 }
 
+# ExchangeServerFunctions module
+Test-Assert 'ExchangeServerFunctions manifest is valid' {
+    $psd1 = Join-Path $modulesPath 'ExchangeServerFunctions/ExchangeServerFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.FunctionsToExport.Count -eq 1
+}
+
+Test-Assert 'ExchangeServerFunctions RequiredService is exchangeServer' {
+    $psd1 = Join-Path $modulesPath 'ExchangeServerFunctions/ExchangeServerFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.PrivateData.RequiredService -eq 'exchangeServer'
+}
+
+# SPOFunctions module
+Test-Assert 'SPOFunctions manifest is valid' {
+    $psd1 = Join-Path $modulesPath 'SPOFunctions/SPOFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.FunctionsToExport.Count -eq 1
+}
+
+Test-Assert 'SPOFunctions RequiredService is sharepointOnline' {
+    $psd1 = Join-Path $modulesPath 'SPOFunctions/SPOFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.PrivateData.RequiredService -eq 'sharepointOnline'
+}
+
+# TeamsFunctions module
+Test-Assert 'TeamsFunctions manifest is valid' {
+    $psd1 = Join-Path $modulesPath 'TeamsFunctions/TeamsFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.FunctionsToExport.Count -eq 1
+}
+
+Test-Assert 'TeamsFunctions RequiredService is teams' {
+    $psd1 = Join-Path $modulesPath 'TeamsFunctions/TeamsFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.PrivateData.RequiredService -eq 'teams'
+}
+
+# SampleCustomFunctions module
+Test-Assert 'SampleCustomFunctions manifest is valid' {
+    $psd1 = Join-Path $modulesPath 'CustomFunctions/SampleCustomFunctions/SampleCustomFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.FunctionsToExport.Count -eq 4
+}
+
+Test-Assert 'SampleCustomFunctions has RequiredServices array' {
+    $psd1 = Join-Path $modulesPath 'CustomFunctions/SampleCustomFunctions/SampleCustomFunctions.psd1'
+    $manifest = Import-PowerShellDataFile -Path $psd1
+    $manifest.PrivateData.RequiredServices.Count -eq 4
+}
+
 # Parse all module function files
 $moduleFunctionFiles = @(
-    'StandardFunctions/EntraFunctions.ps1',
-    'StandardFunctions/ExchangeFunctions.ps1',
-    'HybridFunctions/ADFunctions.ps1',
-    'HybridFunctions/ExchangeServerFunctions.ps1',
-    'HybridFunctions/SPOFunctions.ps1',
-    'HybridFunctions/TeamsFunctions.ps1'
+    'ADFunctions/ADForestConnection.ps1',
+    'ADFunctions/ADOperations.ps1',
+    'ExchangeServerFunctions/ExchangeServerOperations.ps1',
+    'SPOFunctions/SPOOperations.ps1',
+    'TeamsFunctions/TeamsOperations.ps1',
+    'CustomFunctions/SampleCustomFunctions/SampleFunctions.ps1'
 )
 
 foreach ($file in $moduleFunctionFiles) {
@@ -190,10 +239,28 @@ Test-Assert 'Example config is valid JSON' {
     $null -ne $json.workerId -and $null -ne $json.serviceBus -and $null -ne $json.auth
 }
 
-Test-Assert 'Example config has serviceConnections' {
+Test-Assert 'Example config has serviceConnections with forests' {
     $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
     $json = Get-Content $configPath -Raw | ConvertFrom-Json
-    $null -ne $json.serviceConnections.activeDirectory -and $null -ne $json.serviceConnections.entra
+    $null -ne $json.serviceConnections.activeDirectory.forests -and $json.serviceConnections.activeDirectory.forests.Count -ge 1
+}
+
+Test-Assert 'Example config does not have targetTenant' {
+    $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
+    $json = Get-Content $configPath -Raw | ConvertFrom-Json
+    $null -eq $json.targetTenant
+}
+
+Test-Assert 'Example config does not have maxParallelism' {
+    $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
+    $json = Get-Content $configPath -Raw | ConvertFrom-Json
+    $null -eq $json.maxParallelism
+}
+
+Test-Assert 'Example config does not have entra/exchangeOnline' {
+    $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
+    $json = Get-Content $configPath -Raw | ConvertFrom-Json
+    $null -eq $json.serviceConnections.entra -and $null -eq $json.serviceConnections.exchangeOnline
 }
 
 # ============================================================================
@@ -215,6 +282,38 @@ Test-Assert 'csproj references WindowsServices package' {
 Test-Assert 'Program.cs configures MaToolkitHybridWorker service' {
     $cs = Get-Content (Join-Path $projectRoot 'service-host/Program.cs') -Raw
     $cs -match 'MaToolkitHybridWorker'
+}
+
+# ============================================================================
+# Section 7: No Stale References
+# ============================================================================
+Write-Host ''
+Write-Host '=== Stale Reference Check ===' -ForegroundColor Cyan
+
+$stalePatterns = @(
+    @{ Pattern = 'RunspacePool'; Description = 'RunspacePool references in src/' },
+    @{ Pattern = 'runspace-manager'; Description = 'runspace-manager references in src/' },
+    @{ Pattern = 'StandardFunctions'; Description = 'StandardFunctions references in src/' },
+    @{ Pattern = 'MgGraph'; Description = 'MgGraph references in src/' },
+    @{ Pattern = 'ExchangeOnline'; Description = 'ExchangeOnline references in src/' },
+    @{ Pattern = 'HybridModulePath'; Description = 'HybridModulePath references in src/' },
+    @{ Pattern = 'MaxParallelism'; Description = 'MaxParallelism references in src/' },
+    @{ Pattern = 'TargetTenant'; Description = 'TargetTenant references in src/' }
+)
+
+foreach ($check in $stalePatterns) {
+    Test-Assert "No $($check.Description)" {
+        $srcFiles = Get-ChildItem -Path $srcPath -Filter '*.ps1' -File
+        $found = $false
+        foreach ($f in $srcFiles) {
+            $content = Get-Content $f.FullName -Raw
+            if ($content -match $check.Pattern) {
+                $found = $true
+                break
+            }
+        }
+        -not $found
+    }
 }
 
 # ============================================================================

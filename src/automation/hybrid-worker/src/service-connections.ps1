@@ -2,15 +2,19 @@
 .SYNOPSIS
     Service connection registry for the Hybrid Worker.
 .DESCRIPTION
-    Maps function names to execution engines based on which services are enabled
-    in config. Used by the job dispatcher to route function calls to the correct
-    engine (RunspacePool for PS 7.x cloud functions, SessionPool for PS 5.1 on-prem).
+    Scans per-service modules and custom modules, builds a full function catalog
+    (FunctionName -> RequiredService), and determines which functions are allowed
+    based on enabled services. Supports capability gating: functions for disabled
+    services are cataloged but not whitelisted.
 #>
 
 function Initialize-ServiceConnections {
     <#
     .SYNOPSIS
-        Validates enabled services and builds function-to-engine mapping.
+        Scans modules and builds function catalog + allowed function whitelist.
+    .RETURNS
+        Registry object with FunctionCatalog, AllowedFunctions, EnabledServices,
+        and EnabledModulePaths.
     #>
     [CmdletBinding()]
     param(
@@ -18,89 +22,106 @@ function Initialize-ServiceConnections {
         [PSCustomObject]$Config
     )
 
-    $registry = @{
-        CloudServicesEnabled  = $false
-        OnPremServicesEnabled = $false
-        FunctionEngineMap     = @{}  # FunctionName -> 'RunspacePool' | 'SessionPool'
-        EnabledServices       = @()
-    }
-
     $sc = $Config.ServiceConnections
 
-    # Cloud services (PS 7.x RunspacePool)
-    if ($sc.entra.enabled -or $sc.exchangeOnline.enabled) {
-        $registry.CloudServicesEnabled = $true
-        if ($sc.entra.enabled) { $registry.EnabledServices += 'entra' }
-        if ($sc.exchangeOnline.enabled) { $registry.EnabledServices += 'exchangeOnline' }
+    # Determine which services are enabled
+    $enabledServices = @()
+    $allServiceNames = @('activeDirectory', 'exchangeServer', 'sharepointOnline', 'teams')
+    foreach ($svc in $allServiceNames) {
+        if ($sc.$svc.enabled -eq $true) {
+            $enabledServices += $svc
+        }
+    }
 
-        # Map StandardFunctions exports to RunspacePool
-        $standardManifest = Join-Path $Config.StandardModulePath 'StandardFunctions.psd1'
-        if (Test-Path $standardManifest) {
-            $manifest = Import-PowerShellDataFile -Path $standardManifest
+    # Scan all service modules (top-level directories under ServiceModulesPath, excluding CustomFunctions)
+    $functionCatalog = @{}     # FunctionName -> RequiredService (ALL functions from ALL modules)
+    $allowedFunctions = @()    # Only functions for enabled services
+    $enabledModulePaths = @()  # Module manifest paths to import in sessions
+
+    $serviceModulesPath = $Config.ServiceModulesPath
+    if (Test-Path $serviceModulesPath) {
+        $moduleDirs = Get-ChildItem -Path $serviceModulesPath -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne 'CustomFunctions' }
+
+        foreach ($dir in $moduleDirs) {
+            $psd1 = Join-Path $dir.FullName "$($dir.Name).psd1"
+            if (-not (Test-Path $psd1)) { continue }
+
+            $manifest = Import-PowerShellDataFile -Path $psd1
+            $requiredService = $manifest.PrivateData.RequiredService
+
+            if (-not $requiredService) { continue }
+
+            # Catalog all exported functions
             foreach ($fn in $manifest.FunctionsToExport) {
-                $registry.FunctionEngineMap[$fn] = 'RunspacePool'
+                $functionCatalog[$fn] = $requiredService
+            }
+
+            # If this service is enabled, whitelist the functions and record the module path
+            if ($requiredService -in $enabledServices) {
+                $allowedFunctions += @($manifest.FunctionsToExport)
+                $enabledModulePaths += $psd1
             }
         }
     }
 
-    # On-prem services (PS 5.1 SessionPool)
-    $onPremServices = @('activeDirectory', 'exchangeServer', 'sharepointOnline', 'teams')
-    foreach ($svc in $onPremServices) {
-        if ($sc.$svc.enabled) {
-            $registry.OnPremServicesEnabled = $true
-            $registry.EnabledServices += $svc
-        }
-    }
-
-    if ($registry.OnPremServicesEnabled) {
-        # Map HybridFunctions exports to SessionPool
-        $hybridManifest = Join-Path $Config.HybridModulePath 'HybridFunctions.psd1'
-        if (Test-Path $hybridManifest) {
-            $manifest = Import-PowerShellDataFile -Path $hybridManifest
-            foreach ($fn in $manifest.FunctionsToExport) {
-                $registry.FunctionEngineMap[$fn] = 'SessionPool'
-            }
-        }
-    }
-
-    # Custom modules — check PrivateData.ExecutionEngine for engine hint
+    # Scan custom modules — support both RequiredService (single) and RequiredServices (array)
     if (Test-Path $Config.CustomModulesPath) {
         $customDirs = Get-ChildItem -Path $Config.CustomModulesPath -Directory -ErrorAction SilentlyContinue
         foreach ($dir in $customDirs) {
             $psd1 = Join-Path $dir.FullName "$($dir.Name).psd1"
-            if (Test-Path $psd1) {
-                $manifest = Import-PowerShellDataFile -Path $psd1
-                $engine = $manifest.PrivateData.ExecutionEngine ?? 'RunspacePool'
-                foreach ($fn in $manifest.FunctionsToExport) {
-                    $registry.FunctionEngineMap[$fn] = $engine
+            if (-not (Test-Path $psd1)) { continue }
+
+            $manifest = Import-PowerShellDataFile -Path $psd1
+
+            # Determine required services (single or array)
+            $requiredServices = @()
+            if ($manifest.PrivateData.RequiredServices) {
+                $requiredServices = @($manifest.PrivateData.RequiredServices)
+            }
+            elseif ($manifest.PrivateData.RequiredService) {
+                $requiredServices = @($manifest.PrivateData.RequiredService)
+            }
+
+            if ($requiredServices.Count -eq 0) { continue }
+
+            # For catalog, use the first required service as the representative
+            $catalogService = $requiredServices[0]
+            foreach ($fn in $manifest.FunctionsToExport) {
+                $functionCatalog[$fn] = $catalogService
+            }
+
+            # Custom module is enabled only if ALL its required services are enabled
+            $allEnabled = $true
+            foreach ($rs in $requiredServices) {
+                if ($rs -notin $enabledServices) {
+                    $allEnabled = $false
+                    break
                 }
+            }
+
+            if ($allEnabled) {
+                $allowedFunctions += @($manifest.FunctionsToExport)
+                $enabledModulePaths += $psd1
             }
         }
     }
 
-    Write-WorkerLog -Message "Service connections initialized. Enabled: $($registry.EnabledServices -join ', ')" -Properties @{
-        CloudEnabled  = $registry.CloudServicesEnabled
-        OnPremEnabled = $registry.OnPremServicesEnabled
-        FunctionCount = $registry.FunctionEngineMap.Count
+    $registry = [PSCustomObject]@{
+        FunctionCatalog    = $functionCatalog
+        AllowedFunctions   = $allowedFunctions
+        EnabledServices    = $enabledServices
+        EnabledModulePaths = $enabledModulePaths
     }
 
-    return [PSCustomObject]$registry
-}
-
-function Get-FunctionEngine {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$FunctionName,
-
-        [Parameter(Mandatory)]
-        [PSCustomObject]$ServiceRegistry
-    )
-
-    if ($ServiceRegistry.FunctionEngineMap.ContainsKey($FunctionName)) {
-        return $ServiceRegistry.FunctionEngineMap[$FunctionName]
+    Write-WorkerLog -Message "Service connections initialized. Enabled: $($enabledServices -join ', ')" -Properties @{
+        EnabledServices     = ($enabledServices -join ', ')
+        CatalogCount        = $functionCatalog.Count
+        AllowedCount        = $allowedFunctions.Count
+        EnabledModuleCount  = $enabledModulePaths.Count
     }
-    return $null  # Not in whitelist
+
+    return $registry
 }
 
 function Get-AllowedFunctions {
@@ -117,7 +138,7 @@ function Get-AllowedFunctions {
     $allowed = [System.Collections.Generic.HashSet[string]]::new(
         [StringComparer]::OrdinalIgnoreCase
     )
-    foreach ($fn in $ServiceRegistry.FunctionEngineMap.Keys) {
+    foreach ($fn in $ServiceRegistry.AllowedFunctions) {
         [void]$allowed.Add($fn)
     }
     return $allowed

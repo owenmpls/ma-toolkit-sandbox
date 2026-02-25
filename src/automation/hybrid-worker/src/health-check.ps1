@@ -4,7 +4,7 @@
 .DESCRIPTION
     Provides a simple HTTP endpoint for health/liveness checks.
     Returns JSON with status information about worker components
-    including RunspacePool, SessionPool, version, and update status.
+    including SessionPool, version, and update status.
 #>
 
 #Requires -Version 7.4
@@ -19,7 +19,6 @@ function Get-HealthStatus {
     #>
     param(
         [object]$WorkerRunning,
-        [object]$RunspacePool,
         [object]$SessionPool,
         [object]$ServiceBusReceiver,
         [object]$Config
@@ -40,34 +39,6 @@ function Get-HealthStatus {
         }
         if (-not $isRunning) {
             $status.status = 'degraded'
-        }
-    }
-
-    # Check runspace pool health
-    if ($null -ne $RunspacePool) {
-        try {
-            $poolState = $RunspacePool.RunspacePoolStateInfo.State.ToString()
-            $available = $RunspacePool.GetAvailableRunspaces()
-            $maxRunspaces = $RunspacePool.GetMaxRunspaces()
-
-            $status.checks['runspacePool'] = @{
-                status = if ($poolState -eq 'Opened') { 'healthy' } else { 'unhealthy' }
-                state = $poolState
-                available = $available
-                max = $maxRunspaces
-                utilization = [math]::Round((($maxRunspaces - $available) / $maxRunspaces) * 100, 1)
-            }
-
-            if ($poolState -ne 'Opened') {
-                $status.status = 'unhealthy'
-            }
-        }
-        catch {
-            $status.checks['runspacePool'] = @{
-                status = 'error'
-                error = $_.Exception.Message
-            }
-            $status.status = 'unhealthy'
         }
     }
 
@@ -111,7 +82,6 @@ function Get-HealthStatus {
     if ($null -ne $Config) {
         $status.worker = @{
             id = $Config.WorkerId
-            maxParallelism = $Config.MaxParallelism
             maxPs51Sessions = $Config.MaxPs51Sessions
             idleTimeoutSeconds = $Config.IdleTimeoutSeconds
         }
@@ -142,7 +112,6 @@ function Start-HealthCheckServer {
     param(
         [int]$Port,
         [object]$WorkerRunning,
-        [object]$RunspacePool,
         [object]$SessionPool,
         [object]$ServiceBusReceiver,
         [object]$Config
@@ -181,7 +150,7 @@ function Start-HealthCheckServer {
                 $request = $context.Request
                 $response = $context.Response
 
-                $healthStatus = Get-HealthStatus -WorkerRunning $WorkerRunning -RunspacePool $RunspacePool -SessionPool $SessionPool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
+                $healthStatus = Get-HealthStatus -WorkerRunning $WorkerRunning -SessionPool $SessionPool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
 
                 $jsonResponse = $healthStatus | ConvertTo-Json -Depth 5 -Compress
                 $buffer = [System.Text.Encoding]::UTF8.GetBytes($jsonResponse)

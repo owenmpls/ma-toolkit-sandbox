@@ -2,7 +2,7 @@
 .SYNOPSIS
     Exchange Server Management Shell functions for the Hybrid Worker.
 .DESCRIPTION
-    Provides remote mailbox management and validation functions.
+    Provides remote mailbox management functions.
     These run in PS 5.1 PSSessions with Exchange Server cmdlets imported.
 #>
 
@@ -14,6 +14,36 @@ function New-ExchangeRemoteMailbox {
         Creates a new mail-enabled AD user with a remote routing address pointing
         to Exchange Online. Uses New-RemoteMailbox which creates the AD account and
         mail-enables it in a single operation.
+    .PARAMETER Name
+        The Name (cn) for the new mailbox.
+    .PARAMETER UserPrincipalName
+        The UPN for the new mailbox user.
+    .PARAMETER RemoteRoutingAddress
+        The remote routing address (e.g., user@tenant.mail.onmicrosoft.com).
+    .PARAMETER Password
+        SecureString password for the new account.
+    .PARAMETER FirstName
+        Optional first name.
+    .PARAMETER LastName
+        Optional last name.
+    .PARAMETER DisplayName
+        Optional display name.
+    .PARAMETER Alias
+        Optional mail alias.
+    .PARAMETER OrganizationalUnit
+        Optional OU distinguished name.
+    .PARAMETER SamAccountName
+        Optional SAM account name.
+    .EXAMPLE
+        $job = @{
+            "FunctionName" = "New-ExchangeRemoteMailbox"
+            "Parameters" = @{
+                "Name" = "John Doe"
+                "UserPrincipalName" = "jdoe@contoso.com"
+                "RemoteRoutingAddress" = "jdoe@contoso.mail.onmicrosoft.com"
+                "Password" = "(SecureString)"
+            }
+        }
     #>
     [CmdletBinding()]
     param(
@@ -53,46 +83,5 @@ function New-ExchangeRemoteMailbox {
         RemoteRoutingAddress = $result.RemoteRoutingAddress.ToString()
         PrimarySmtpAddress   = $result.PrimarySmtpAddress.ToString()
         SamAccountName       = $result.SamAccountName
-    }
-}
-
-function Set-ExchangeRemoteMailboxAttributes {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [string]$Identity,
-        [hashtable]$Attributes = @{}
-    )
-
-    if ($Attributes.Count -gt 0) {
-        Set-RemoteMailbox -Identity $Identity @Attributes -ErrorAction Stop
-    }
-    return $true
-}
-
-function Test-ExchangeRemoteMailboxMatch {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [string]$Identity,
-        [Parameter(Mandatory)] [string]$AttributeName,
-        [Parameter(Mandatory)] $ExpectedValue
-    )
-
-    $mailbox = Get-RemoteMailbox -Identity $Identity -ErrorAction Stop
-    $actualValue = $mailbox.$AttributeName
-
-    # Handle email address collections
-    if ($actualValue -is [System.Collections.IEnumerable] -and $actualValue -isnot [string]) {
-        $actualValue = @($actualValue | ForEach-Object { $_.ToString() })
-        $isMatch = $actualValue -contains $ExpectedValue
-    }
-    else {
-        $actualValue = if ($null -ne $actualValue) { $actualValue.ToString() } else { $null }
-        $isMatch = ($actualValue -eq $ExpectedValue)
-    }
-
-    return [PSCustomObject]@{
-        match    = $isMatch
-        expected = $ExpectedValue
-        actual   = $actualValue
     }
 }

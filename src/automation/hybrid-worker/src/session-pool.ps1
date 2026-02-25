@@ -1,11 +1,77 @@
 <#
 .SYNOPSIS
-    PSSession pool for PS 5.1 functions in the Hybrid Worker.
+    PSSession pool for the Hybrid Worker.
 .DESCRIPTION
     Manages a pool of persistent PowerShell Remoting sessions to the localhost
     Windows PowerShell 5.1 endpoint. Each session keeps its modules loaded
     across job invocations, avoiding cold-start overhead.
 #>
+
+function Get-SessionInitScriptBlock {
+    <#
+    .SYNOPSIS
+        Returns the scriptblock used to initialize a PS 5.1 session.
+    .DESCRIPTION
+        Encapsulates all module loading and service connection logic so it can
+        be reused for both initial session creation and session recreation.
+    #>
+    [CmdletBinding()]
+    param()
+
+    return {
+        param($ServiceConnections, $Credentials, $ForestConfigs, $EnabledModulePaths)
+
+        $loaded = @()
+
+        # Active Directory module
+        if ($ServiceConnections.activeDirectory.enabled) {
+            Import-Module ActiveDirectory -ErrorAction Stop
+            $loaded += 'ActiveDirectory'
+        }
+
+        # Exchange Server Management Shell
+        if ($ServiceConnections.exchangeServer.enabled) {
+            $uri = $ServiceConnections.exchangeServer.connectionUri
+            $cred = $Credentials['exchangeServer']
+            $exSession = New-PSSession -ConfigurationName Microsoft.Exchange `
+                -ConnectionUri $uri -Credential $cred -Authentication Kerberos -ErrorAction Stop
+            Import-PSSession $exSession -AllowClobber -DisableNameChecking | Out-Null
+            $loaded += 'ExchangeServer'
+        }
+
+        # SharePoint Online
+        if ($ServiceConnections.sharepointOnline.enabled) {
+            Import-Module Microsoft.Online.SharePoint.PowerShell -DisableNameChecking -ErrorAction Stop
+            $cred = $Credentials['sharepointOnline']
+            Connect-SPOService -Url $ServiceConnections.sharepointOnline.adminUrl -Credential $cred -ErrorAction Stop
+            $loaded += 'SharePointOnline'
+        }
+
+        # Microsoft Teams
+        if ($ServiceConnections.teams.enabled) {
+            Import-Module MicrosoftTeams -ErrorAction Stop
+            $cred = $Credentials['teams']
+            Connect-MicrosoftTeams -Credential $cred -ErrorAction Stop
+            $loaded += 'MicrosoftTeams'
+        }
+
+        # Inject forest configs for AD functions (Get-ADForestConnection uses these)
+        if ($ForestConfigs -and $ForestConfigs.Count -gt 0) {
+            $global:ForestConfigs = $ForestConfigs
+            $global:ForestConnectionCache = @{}
+        }
+
+        # Import per-service function modules
+        foreach ($modulePath in $EnabledModulePaths) {
+            if (Test-Path $modulePath) {
+                Import-Module $modulePath -ErrorAction Stop
+                $loaded += [System.IO.Path]::GetFileNameWithoutExtension($modulePath)
+            }
+        }
+
+        return $loaded
+    }
+}
 
 function Initialize-SessionPool {
     <#
@@ -13,7 +79,7 @@ function Initialize-SessionPool {
         Creates PSSession pool to localhost Windows PowerShell 5.1.
     .DESCRIPTION
         Creates $Config.MaxPs51Sessions persistent PSSessions, loads enabled
-        modules in each, and authenticates to on-prem services.
+        service modules in each, injects forest configs, and authenticates to services.
     #>
     [CmdletBinding()]
     param(
@@ -21,11 +87,16 @@ function Initialize-SessionPool {
         [PSCustomObject]$Config,
 
         [Parameter(Mandatory)]
-        [hashtable]$OnPremCredentials  # { 'ad-service-account' = [PSCredential]; ... }
+        [hashtable]$OnPremCredentials,
+
+        [hashtable]$ForestConfigs = @{},
+
+        [array]$EnabledModulePaths = @()
     )
 
     Write-WorkerLog -Message "Initializing PS 5.1 session pool (size=$($Config.MaxPs51Sessions))..."
 
+    $initScript = Get-SessionInitScriptBlock
     $sessions = @()
     $failedCount = 0
 
@@ -36,53 +107,9 @@ function Initialize-SessionPool {
                 -ConfigurationName 'Microsoft.PowerShell' `
                 -ErrorAction Stop
 
-            # Load modules based on enabled service connections
-            $initResult = Invoke-Command -Session $session -ScriptBlock {
-                param($ServiceConnections, $Credentials, $HybridModulePath)
-
-                $loaded = @()
-
-                # Active Directory
-                if ($ServiceConnections.activeDirectory.enabled) {
-                    Import-Module ActiveDirectory -ErrorAction Stop
-                    $loaded += 'ActiveDirectory'
-                }
-
-                # Exchange Server Management Shell
-                if ($ServiceConnections.exchangeServer.enabled) {
-                    $uri = $ServiceConnections.exchangeServer.connectionUri
-                    $cred = $Credentials['exchangeServer']
-                    $exSession = New-PSSession -ConfigurationName Microsoft.Exchange `
-                        -ConnectionUri $uri -Credential $cred -Authentication Kerberos -ErrorAction Stop
-                    Import-PSSession $exSession -AllowClobber -DisableNameChecking | Out-Null
-                    $loaded += 'ExchangeServer'
-                }
-
-                # SharePoint Online
-                if ($ServiceConnections.sharepointOnline.enabled) {
-                    Import-Module Microsoft.Online.SharePoint.PowerShell -DisableNameChecking -ErrorAction Stop
-                    $cred = $Credentials['sharepointOnline']
-                    Connect-SPOService -Url $ServiceConnections.sharepointOnline.adminUrl -Credential $cred -ErrorAction Stop
-                    $loaded += 'SharePointOnline'
-                }
-
-                # Microsoft Teams
-                if ($ServiceConnections.teams.enabled) {
-                    Import-Module MicrosoftTeams -ErrorAction Stop
-                    $cred = $Credentials['teams']
-                    Connect-MicrosoftTeams -Credential $cred -ErrorAction Stop
-                    $loaded += 'MicrosoftTeams'
-                }
-
-                # Import HybridFunctions module (the actual function implementations)
-                $manifestPath = Join-Path $HybridModulePath 'HybridFunctions.psd1'
-                if (Test-Path $manifestPath) {
-                    Import-Module $manifestPath -ErrorAction Stop
-                    $loaded += 'HybridFunctions'
-                }
-
-                return $loaded
-            } -ArgumentList $Config.ServiceConnections, $OnPremCredentials, $Config.HybridModulePath
+            # Load modules and inject configs
+            $initResult = Invoke-Command -Session $session -ScriptBlock $initScript `
+                -ArgumentList $Config.ServiceConnections, $OnPremCredentials, $ForestConfigs, $EnabledModulePaths
 
             Write-WorkerLog -Message "Session ${i}: Modules loaded: $($initResult -join ', ')" -Properties @{ SessionIndex = $i }
 
@@ -105,7 +132,7 @@ function Initialize-SessionPool {
     }
 
     if ($failedCount -gt 0) {
-        Write-WorkerLog -Message "$failedCount session(s) failed. Running with reduced PS 5.1 parallelism." -Severity Warning
+        Write-WorkerLog -Message "$failedCount session(s) failed. Running with reduced parallelism." -Severity Warning
     }
 
     Write-WorkerEvent -EventName 'SessionPoolInitialized' -Properties @{
@@ -117,6 +144,8 @@ function Initialize-SessionPool {
         Sessions         = $sessions
         MaxSessions      = $Config.MaxPs51Sessions
         ActiveSessions   = $sessions.Count
+        InitScriptBlock  = $initScript
+        InitArgs         = @($Config.ServiceConnections, $OnPremCredentials, $ForestConfigs, $EnabledModulePaths)
     }
 }
 
@@ -125,7 +154,7 @@ function Invoke-InSession {
     .SYNOPSIS
         Dispatches a function call to an available PSSession.
     .RETURNS
-        Async handle object with same shape as Invoke-InRunspace for unified result collection.
+        Async handle object for unified result collection.
     #>
     [CmdletBinding()]
     param(
@@ -222,7 +251,6 @@ function Invoke-InSession {
 
     $slot.Job = $job
 
-    # Return handle with same shape as Invoke-InRunspace for unified collection
     return [PSCustomObject]@{
         SessionSlot = $slot
         Job         = $job
@@ -235,7 +263,7 @@ function Get-SessionResult {
     .SYNOPSIS
         Collects result from a completed PSSession job.
     .RETURNS
-        Same shape as Get-RunspaceResult: { Success, Result, Error }
+        Object with shape: { Success, Result, Error }
     #>
     [CmdletBinding()]
     param(
@@ -280,11 +308,7 @@ function Get-SessionResult {
 function Test-SessionPoolHealth {
     <#
     .SYNOPSIS
-        Tests session health and recreates dead sessions.
-    .NOTES
-        Known gap: Recreated sessions do not have modules reloaded.
-        This will be addressed in a future update by extracting module-loading
-        into a reusable helper function.
+        Tests session health and recreates dead sessions with full module re-initialization.
     #>
     [CmdletBinding()]
     param(
@@ -303,8 +327,13 @@ function Test-SessionPoolHealth {
             try {
                 Remove-PSSession -Session $slot.Session -ErrorAction SilentlyContinue
                 $slot.Session = New-PSSession -ComputerName localhost -ConfigurationName 'Microsoft.PowerShell' -ErrorAction Stop
-                # TODO: Re-initialize modules (same init logic as Initialize-SessionPool)
-                Write-WorkerLog -Message "Session $($slot.Index) recreated successfully."
+
+                # Re-initialize with same config used during pool creation
+                if ($Pool.InitScriptBlock -and $Pool.InitArgs) {
+                    Invoke-Command -Session $slot.Session -ScriptBlock $Pool.InitScriptBlock -ArgumentList $Pool.InitArgs
+                }
+
+                Write-WorkerLog -Message "Session $($slot.Index) recreated and re-initialized successfully."
             }
             catch {
                 Write-WorkerLog -Message "Failed to recreate session $($slot.Index): $($_.Exception.Message)" -Severity Error

@@ -3,8 +3,8 @@
     PowerShell Hybrid Worker - Main entry point.
 .DESCRIPTION
     On-premises PowerShell worker that runs as a native Windows Service. Processes
-    migration automation jobs via Azure Service Bus using a dual-engine architecture:
-    PS 7.x RunspacePool for cloud functions and PS 5.1 PSSession pool for on-prem functions.
+    migration automation jobs via Azure Service Bus using a PS 5.1 PSSession pool
+    for on-prem and cloud service functions (AD, Exchange Server, SPO, Teams).
 .NOTES
     Configuration is loaded from a JSON file. See config.ps1 for details.
     The .NET service host sets HYBRID_WORKER_CONFIG_PATH and HYBRID_WORKER_INSTALL_PATH.
@@ -25,7 +25,7 @@ $srcPath = Join-Path $basePath 'src'
 . (Join-Path $srcPath 'logging.ps1')
 . (Join-Path $srcPath 'auth.ps1')
 . (Join-Path $srcPath 'service-bus.ps1')
-. (Join-Path $srcPath 'runspace-manager.ps1')
+. (Join-Path $srcPath 'ad-forest-manager.ps1')
 . (Join-Path $srcPath 'session-pool.ps1')
 . (Join-Path $srcPath 'service-connections.ps1')
 . (Join-Path $srcPath 'update-manager.ps1')
@@ -53,7 +53,6 @@ Write-Host '[BOOT] Phase 2: Loading configuration...'
 try {
     $config = Get-WorkerConfiguration
     Write-Host "[BOOT] Worker ID: $($config.WorkerId)"
-    Write-Host "[BOOT] Max Parallelism: $($config.MaxParallelism)"
     Write-Host "[BOOT] Max PS 5.1 Sessions: $($config.MaxPs51Sessions)"
     Write-Host "[BOOT] Service Bus: $($config.ServiceBusNamespace)"
     Write-Host "[BOOT] Idle Timeout: $(if ($config.IdleTimeoutSeconds -gt 0) { "$($config.IdleTimeoutSeconds)s" } else { 'disabled (persistent service)' })"
@@ -69,7 +68,6 @@ try {
     Initialize-WorkerLogging -Config $config
     Write-WorkerLog -Message "Worker '$($config.WorkerId)' starting up..."
     Write-WorkerEvent -EventName 'WorkerStarting' -Properties @{
-        MaxParallelism      = $config.MaxParallelism
         MaxPs51Sessions     = $config.MaxPs51Sessions
         ServiceBusNamespace = $config.ServiceBusNamespace
     }
@@ -90,35 +88,31 @@ catch {
     exit 1
 }
 
-# --- Phase 5: Retrieve Target Tenant Certificate (conditional) ---
-$certificate = $null
-$cloudServicesEnabled = ($config.ServiceConnections.entra.enabled -eq $true) -or
-                        ($config.ServiceConnections.exchangeOnline.enabled -eq $true)
-if ($cloudServicesEnabled) {
-    Write-WorkerLog -Message 'Phase 5: Retrieving target tenant certificate from Key Vault...'
+# --- Phase 5: Retrieve Credentials ---
+Write-WorkerLog -Message 'Phase 5: Retrieving credentials...'
+$onPremCredentials = @{}
+$forestCredentials = @{}
+
+# Retrieve forest credentials (if AD enabled)
+if ($config.ServiceConnections.activeDirectory.enabled -eq $true) {
     try {
-        $certificate = Get-WorkerCertificate -KeyVaultName $config.KeyVaultName -CertificateName $config.TargetCertificateName
+        $forests = Initialize-ForestManager -Forests @($config.ServiceConnections.activeDirectory.forests)
+        $forestCredentials = Get-ForestCredentials -KeyVaultName $config.KeyVaultName -Forests $forests
     }
     catch {
-        Write-WorkerLog -Message "Certificate retrieval failed: $($_.Exception.Message)" -Severity Critical
+        Write-WorkerLog -Message "Forest credential retrieval failed: $($_.Exception.Message)" -Severity Critical
         Flush-WorkerTelemetry
         exit 1
     }
 }
-else {
-    Write-WorkerLog -Message 'Phase 5: Skipped (no cloud services enabled).'
-}
 
-# --- Phase 6: Retrieve On-Prem Credentials (conditional) ---
-$onPremCredentials = @{}
-$onPremServices = @('activeDirectory', 'exchangeServer', 'sharepointOnline', 'teams')
-$onPremServicesEnabled = $false
-foreach ($svc in $onPremServices) {
+# Retrieve individual service credentials
+$credentialServices = @('exchangeServer', 'sharepointOnline', 'teams')
+foreach ($svc in $credentialServices) {
     if ($config.ServiceConnections.$svc.enabled -eq $true) {
-        $onPremServicesEnabled = $true
         $credSecret = $config.ServiceConnections.$svc.credentialSecret
         if ($credSecret) {
-            Write-WorkerLog -Message "Phase 6: Retrieving credential for '$svc'..."
+            Write-WorkerLog -Message "Retrieving credential for '$svc'..."
             try {
                 $onPremCredentials[$svc] = Get-OnPremCredential -KeyVaultName $config.KeyVaultName -SecretName $credSecret
             }
@@ -130,12 +124,15 @@ foreach ($svc in $onPremServices) {
         }
     }
 }
-if (-not $onPremServicesEnabled) {
-    Write-WorkerLog -Message 'Phase 6: Skipped (no on-prem services enabled).'
+
+$anyServiceEnabled = ($config.ServiceConnections.activeDirectory.enabled -eq $true) -or
+                     ($credentialServices | Where-Object { $config.ServiceConnections.$_.enabled -eq $true }).Count -gt 0
+if (-not $anyServiceEnabled) {
+    Write-WorkerLog -Message 'Phase 5: No services enabled -- no credentials to retrieve.'
 }
 
-# --- Phase 7: Initialize Service Bus ---
-Write-WorkerLog -Message 'Phase 7: Initializing Service Bus...'
+# --- Phase 6: Initialize Service Bus ---
+Write-WorkerLog -Message 'Phase 6: Initializing Service Bus...'
 try {
     Initialize-ServiceBusAssemblies -DotNetLibPath $config.DotNetLibPath
     $sbClient = New-ServiceBusClient -Namespace $config.ServiceBusNamespace -Config $config
@@ -149,8 +146,8 @@ catch {
     exit 1
 }
 
-# --- Phase 8: Initialize Service Connections ---
-Write-WorkerLog -Message 'Phase 8: Initializing service connections...'
+# --- Phase 7: Initialize Service Connections ---
+Write-WorkerLog -Message 'Phase 7: Initializing service connections...'
 try {
     $serviceRegistry = Initialize-ServiceConnections -Config $config
 }
@@ -161,40 +158,29 @@ catch {
     exit 1
 }
 
-# --- Phase 9: Initialize Execution Engines ---
-$runspacePool = $null
+# --- Phase 8: Initialize SessionPool ---
+Write-WorkerLog -Message 'Phase 8: Initializing SessionPool...'
+
+# Build forest config hashtable for injection into sessions
+$forestConfigsForSessions = @{}
+if ($config.ServiceConnections.activeDirectory.enabled -eq $true) {
+    foreach ($forest in @($config.ServiceConnections.activeDirectory.forests)) {
+        $forestConfigsForSessions[$forest.name] = @{
+            Server     = $forest.server
+            Credential = $forestCredentials[$forest.name]
+        }
+    }
+}
+
 $sessionPool = $null
-
-# Phase 9a: RunspacePool (if cloud services enabled)
-if ($serviceRegistry.CloudServicesEnabled) {
-    Write-WorkerLog -Message 'Phase 9a: Initializing RunspacePool for PS 7.x cloud functions...'
+if ($serviceRegistry.EnabledServices.Count -gt 0) {
     try {
-        $runspacePool = Initialize-RunspacePool -Config $config -Certificate $certificate
-    }
-    catch {
-        Write-WorkerLog -Message "RunspacePool initialization failed: $($_.Exception.Message)" -Severity Critical
-        Write-WorkerException -Exception $_.Exception
-        try { $sbReceiver.DisposeAsync().GetAwaiter().GetResult() } catch { }
-        try { $sbSender.DisposeAsync().GetAwaiter().GetResult() } catch { }
-        try { $sbClient.DisposeAsync().GetAwaiter().GetResult() } catch { }
-        Flush-WorkerTelemetry
-        exit 1
-    }
-}
-else {
-    Write-WorkerLog -Message 'Phase 9a: Skipped (no cloud services enabled).'
-}
-
-# Phase 9b: SessionPool (if on-prem services enabled)
-if ($serviceRegistry.OnPremServicesEnabled) {
-    Write-WorkerLog -Message 'Phase 9b: Initializing SessionPool for PS 5.1 on-prem functions...'
-    try {
-        $sessionPool = Initialize-SessionPool -Config $config -OnPremCredentials $onPremCredentials
+        $sessionPool = Initialize-SessionPool -Config $config -OnPremCredentials $onPremCredentials `
+            -ForestConfigs $forestConfigsForSessions -EnabledModulePaths $serviceRegistry.EnabledModulePaths
     }
     catch {
         Write-WorkerLog -Message "SessionPool initialization failed: $($_.Exception.Message)" -Severity Critical
         Write-WorkerException -Exception $_.Exception
-        if ($runspacePool) { try { Close-RunspacePool -Pool $runspacePool } catch { } }
         try { $sbReceiver.DisposeAsync().GetAwaiter().GetResult() } catch { }
         try { $sbSender.DisposeAsync().GetAwaiter().GetResult() } catch { }
         try { $sbClient.DisposeAsync().GetAwaiter().GetResult() } catch { }
@@ -203,25 +189,22 @@ if ($serviceRegistry.OnPremServicesEnabled) {
     }
 }
 else {
-    Write-WorkerLog -Message 'Phase 9b: Skipped (no on-prem services enabled).'
+    Write-WorkerLog -Message 'Phase 8: Skipped (no services enabled).'
 }
 
-# --- Phase 10: Start Health Check Server ---
-Write-WorkerLog -Message 'Phase 10: Starting health check server...'
+# --- Phase 9: Start Health Check Server ---
+Write-WorkerLog -Message 'Phase 9: Starting health check server...'
 $healthCheckJob = Start-Job -ScriptBlock {
-    param($srcPath, $Port, $WorkerRunning, $RunspacePool, $SessionPool, $ServiceBusReceiver, $Config)
+    param($srcPath, $Port, $WorkerRunning, $SessionPool, $ServiceBusReceiver, $Config)
     . (Join-Path $srcPath 'health-check.ps1')
-    Start-HealthCheckServer -Port $Port -WorkerRunning $WorkerRunning -RunspacePool $RunspacePool -SessionPool $SessionPool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
-} -ArgumentList $srcPath, $config.HealthCheckPort, ([ref]$script:WorkerRunning), $runspacePool, $sessionPool, $sbReceiver, $config
+    Start-HealthCheckServer -Port $Port -WorkerRunning $WorkerRunning -SessionPool $SessionPool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
+} -ArgumentList $srcPath, $config.HealthCheckPort, ([ref]$script:WorkerRunning), $sessionPool, $sbReceiver, $config
 Write-WorkerLog -Message "Health check server started on port $($config.HealthCheckPort)"
 
-# --- Phase 11: Register Shutdown Handler ---
-Write-WorkerLog -Message 'Phase 11: Registering shutdown handler...'
+# --- Phase 10: Register Shutdown Handler ---
+Write-WorkerLog -Message 'Phase 10: Registering shutdown handler...'
 
 # Register shutdown handler for service host stop signal.
-# The .NET WorkerProcessService sends a process termination signal on service stop.
-# Console.CancelKeyPress catches this and sets the running flag to false, allowing
-# the dispatcher to drain active jobs within the configured grace period.
 try {
     [Console]::CancelKeyPress.Add({
         param($sender, $e)
@@ -238,30 +221,35 @@ $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
     $script:WorkerRunning = $false
 }
 
-# --- Phase 12: Start Job Dispatcher ---
-Write-WorkerLog -Message 'Phase 12: Starting job dispatcher...'
+# --- Phase 11: Start Job Dispatcher ---
+Write-WorkerLog -Message 'Phase 11: Starting job dispatcher...'
 Write-WorkerEvent -EventName 'WorkerReady' -Properties @{
     WorkerId           = $config.WorkerId
-    MaxParallelism     = $config.MaxParallelism
     MaxPs51Sessions    = $config.MaxPs51Sessions
-    CloudServices      = $serviceRegistry.CloudServicesEnabled
-    OnPremServices     = $serviceRegistry.OnPremServicesEnabled
     EnabledServices    = ($serviceRegistry.EnabledServices -join ', ')
+    AllowedFunctions   = $serviceRegistry.AllowedFunctions.Count
+    CatalogFunctions   = $serviceRegistry.FunctionCatalog.Count
 }
 
 Write-Host ''
 Write-Host "Worker '$($config.WorkerId)' is READY and listening for jobs." -ForegroundColor Green
 Write-Host ''
 
-try {
-    Start-JobDispatcher -Config $config -Receiver $sbReceiver -Sender $sbSender -Client $sbClient `
-        -JobsTopicName $config.JobsTopicName -ServiceRegistry $serviceRegistry `
-        -RunspacePool $runspacePool -SessionPool $sessionPool `
-        -Running ([ref]$script:WorkerRunning)
+if ($null -eq $sessionPool) {
+    Write-WorkerLog -Message 'No services enabled. Worker will only respond to health checks until shutdown.' -Severity Warning
+    while ($script:WorkerRunning) { Start-Sleep -Seconds 5 }
 }
-catch {
-    Write-WorkerLog -Message "Job dispatcher fatal error: $($_.Exception.Message)" -Severity Critical
-    Write-WorkerException -Exception $_.Exception
+else {
+    try {
+        Start-JobDispatcher -Config $config -Receiver $sbReceiver -Sender $sbSender -Client $sbClient `
+            -JobsTopicName $config.JobsTopicName -ServiceRegistry $serviceRegistry `
+            -SessionPool $sessionPool `
+            -Running ([ref]$script:WorkerRunning)
+    }
+    catch {
+        Write-WorkerLog -Message "Job dispatcher fatal error: $($_.Exception.Message)" -Severity Critical
+        Write-WorkerException -Exception $_.Exception
+    }
 }
 
 # --- Shutdown ---
@@ -279,22 +267,13 @@ catch {
     Write-WorkerLog -Message "Error stopping health check server: $($_.Exception.Message)" -Severity Warning
 }
 
-# Close execution engines
+# Close session pool
 if ($null -ne $sessionPool) {
     try {
         Close-SessionPool -Pool $sessionPool
     }
     catch {
         Write-WorkerLog -Message "Error closing session pool: $($_.Exception.Message)" -Severity Warning
-    }
-}
-
-if ($null -ne $runspacePool) {
-    try {
-        Close-RunspacePool -Pool $runspacePool
-    }
-    catch {
-        Write-WorkerLog -Message "Error closing runspace pool: $($_.Exception.Message)" -Severity Warning
     }
 }
 
