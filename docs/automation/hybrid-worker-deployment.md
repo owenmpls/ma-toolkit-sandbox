@@ -19,7 +19,7 @@ Step-by-step instructions to deploy the Azure infrastructure for a hybrid worker
 Deploying a hybrid worker instance involves three stages:
 
 1. **Azure setup** -- Create a service principal, generate a certificate, and deploy the Bicep template (Service Bus subscription, RBAC, update storage)
-2. **Key Vault secrets** -- Upload on-premises service account credentials and the target tenant certificate
+2. **Key Vault secrets** -- Upload on-premises service account credentials
 3. **Windows installation** -- Install the worker on the target server, configure, and start the service
 
 Each hybrid worker instance gets its own service principal, certificate, Service Bus subscription, and configuration. Multiple instances can share the same update storage account.
@@ -127,17 +127,26 @@ This creates:
   - Key Vault Secrets User (Key Vault scope)
   - Storage Blob Data Reader (update storage account scope)
 
-## Step 4: Upload On-Premises Credentials to Key Vault
+## Step 4: Upload Credentials to Key Vault
 
-If the worker will connect to on-premises services (AD, Exchange Server), store the service account credentials in Key Vault as JSON secrets.
+Store service account credentials in Key Vault as JSON secrets for each enabled service.
 
-### Active Directory Credential
+### Active Directory Credentials (One Per Forest)
+
+Each forest in the `serviceConnections.activeDirectory.forests` array has its own `credentialSecret`:
 
 ```bash
+# Forest: corp.contoso.com
 az keyvault secret set \
   --vault-name your-kv \
-  --name "ad-service-account" \
+  --name "ad-cred-contoso" \
   --value '{"username": "CORP\\svc-matoolkit", "password": "your-password"}'
+
+# Forest: emea.contoso.com
+az keyvault secret set \
+  --vault-name your-kv \
+  --name "ad-cred-emea" \
+  --value '{"username": "EMEA\\svc-matoolkit", "password": "your-password"}'
 ```
 
 ### Exchange Server Credential
@@ -149,30 +158,27 @@ az keyvault secret set \
   --value '{"username": "CORP\\svc-matoolkit-exch", "password": "your-password"}'
 ```
 
-The secret names must match the `credentialSecret` values in the worker configuration (Step 7).
-
-## Step 5: Upload Target Tenant Certificate to Key Vault
-
-If the worker will execute cloud functions (Entra ID, Exchange Online), upload the target tenant's PFX certificate to Key Vault. This is the same certificate used by the app registration in the target tenant.
+### SharePoint Online / Teams Credentials (If Enabled)
 
 ```bash
-# Combine key and cert if separate
-cat target-key.pem target-cert.pem > target-combined.pem
-
-# Import into Key Vault
-az keyvault certificate import \
+az keyvault secret set \
   --vault-name your-kv \
-  --name "worker-app-cert" \
-  --file target-combined.pem
+  --name "spo-service-account" \
+  --value '{"username": "svc-matoolkit-spo@contoso.com", "password": "your-password"}'
+
+az keyvault secret set \
+  --vault-name your-kv \
+  --name "teams-service-account" \
+  --value '{"username": "svc-matoolkit-teams@contoso.com", "password": "your-password"}'
 ```
 
-The certificate name must match the `targetTenant.certificateName` in the worker configuration (default: `worker-app-cert`).
+The secret names must match the `credentialSecret` values in the worker configuration (Step 6).
 
-## Step 6: Install the Worker on Windows
+## Step 5: Install the Worker on Windows
 
 All remaining steps run on the target Windows server. Clone or copy the repository to the server.
 
-### 6a. Download .NET Dependencies
+### 5a. Download .NET Dependencies
 
 ```powershell
 cd src\automation\hybrid-worker
@@ -181,7 +187,7 @@ pwsh -File Download-Dependencies.ps1
 
 This fetches the required NuGet packages (Azure.Messaging.ServiceBus, Azure.Identity, etc.) into `dotnet-libs/`.
 
-### 6b. Prepare the Configuration File
+### 5b. Prepare the Configuration File
 
 Copy and edit the example configuration:
 
@@ -198,7 +204,7 @@ Update the values to match your environment. See the [Configuration Reference](h
 - `auth.keyVaultName` -- Your Key Vault name
 - `serviceConnections.*` -- Enable the services this worker will use
 
-### 6c. Run the Installer
+### 5c. Run the Installer
 
 Run the installer as Administrator. The installer builds the .NET service host, copies files to `C:\ProgramData\MaToolkit\HybridWorker\`, imports the certificate, registers the Windows Service, and configures service recovery.
 
@@ -244,37 +250,37 @@ The installer performs these steps:
 8. Configures service recovery: restart at 10s, 30s, 60s; reset counter after 1 day
 9. Locks down `config\` directory ACL (Administrators: FullControl, service account: Read)
 
-## Step 7: Verify Configuration and Start
+## Step 6: Verify Configuration and Start
 
-### 7a. Verify the Certificate
+### 6a. Verify the Certificate
 
 ```powershell
 # Confirm the certificate is in the store
 Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq "YOUR_THUMBPRINT" }
 ```
 
-### 7b. Start the Service
+### 6b. Start the Service
 
 ```powershell
 Start-Service MaToolkitHybridWorker
 ```
 
-### 7c. Check Startup Logs
+### 6c. Check Startup Logs
 
 ```powershell
 # Watch the worker log for boot sequence
 Get-Content C:\ProgramData\MaToolkit\HybridWorker\logs\worker.log -Tail 50 -Wait
 ```
 
-You should see all 12 boot phases completing successfully. If the worker connects to Service Bus and starts the dispatcher loop, the installation is complete.
+You should see all 11 boot phases completing successfully. If the worker connects to Service Bus and starts the dispatcher loop, the installation is complete.
 
-### 7d. Check Health Endpoint
+### 6d. Check Health Endpoint
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/health
 ```
 
-### 7e. Check Windows Event Log
+### 6e. Check Windows Event Log
 
 ```powershell
 Get-WinEvent -ProviderName MaToolkitHybridWorker -MaxEvents 10
@@ -284,7 +290,7 @@ Get-WinEvent -ProviderName MaToolkitHybridWorker -MaxEvents 10
 
 ## Deploying Additional Instances
 
-To deploy a second hybrid worker (e.g., `hybrid-worker-02`), repeat Steps 1-7 with:
+To deploy a second hybrid worker (e.g., `hybrid-worker-02`), repeat Steps 1-6 with:
 
 - A new app registration and service principal
 - A new certificate
@@ -316,7 +322,7 @@ After completing all steps, verify:
 - [ ] **Certificate** -- `Get-ChildItem Cert:\LocalMachine\My` shows the imported certificate with the correct thumbprint
 - [ ] **Service registered** -- `Get-Service MaToolkitHybridWorker` returns the service with `Automatic` startup type
 - [ ] **Service running** -- `Get-Service MaToolkitHybridWorker` shows `Running` status
-- [ ] **Boot sequence** -- Worker log shows all 12 phases completing without errors
+- [ ] **Boot sequence** -- Worker log shows all 11 phases completing without errors
 - [ ] **Health endpoint** -- `Invoke-RestMethod http://localhost:8080/health` returns a healthy response
 - [ ] **Service Bus connected** -- Health response shows `serviceBus.connected = true`
 - [ ] **Test job** -- Send a test job to the `worker-jobs` topic with `WorkerId = 'hybrid-worker-01'` and verify a result appears on the `worker-results` topic

@@ -84,7 +84,7 @@ All inter-component communication (except the admin API/CLI HTTP interface) flow
                   +---+---------------------------+--------+
                   |            Hybrid Worker                |
                   |   (PowerShell 7.4 + 5.1, Windows Svc,  |
-                  |    Graph + EXO + AD + Exchange Server)  |
+                  |    AD + Exchange Server + SPO + Teams)  |
                   +----------------------------------------+
 ```
 
@@ -152,9 +152,9 @@ Executes migration operations against a target Microsoft 365 tenant using MgGrap
 | Runtime | PowerShell 7.4 + Windows PowerShell 5.1 |
 | Service Host | .NET 8 Worker Service |
 | Hosting | On-premises Windows Server (Windows Service) |
-| Role | Dual-engine migration function execution (cloud + on-prem) |
+| Role | On-prem + cloud service migration function execution |
 
-Executes migration operations against both cloud services (Entra ID, Exchange Online) and on-premises systems (Active Directory, Exchange Server) using a dual-engine architecture. PS 7.x RunspacePool handles cloud functions; PS 5.1 PSSession pool handles on-prem functions that require Windows PowerShell cmdlets. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage. Each service connection (entra, exchangeOnline, activeDirectory, exchangeServer) can be independently enabled or disabled.
+Executes migration operations against on-premises systems (Active Directory, Exchange Server) and cloud services (SharePoint Online, Teams) using a single PS 5.1 PSSession pool engine. Functions are organized into per-service modules with capability gating -- if a service is disabled, its functions are cataloged but not whitelisted, and jobs targeting them get an informative `CapabilityDisabledError`. Supports multi-forest AD environments (20+ forests) with lazy connection validation. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage. Each service connection (activeDirectory, exchangeServer, sharepointOnline, teams) can be independently enabled or disabled.
 
 ---
 
@@ -973,8 +973,8 @@ When a new runbook version is published while batches are active:
 | Cloud Worker -> Graph/EXO | Certificate auth | App registration (target tenant) | PFX from Key Vault; `Connect-MgGraph -Certificate` + `Connect-ExchangeOnline -Certificate` |
 | Hybrid Worker -> Service Bus | Certificate auth | Service principal | `ClientCertificateCredential` via .NET SDK; cert in `Cert:\LocalMachine\My` |
 | Hybrid Worker -> Key Vault | Certificate auth | Service principal | `Connect-AzAccount -ServicePrincipal -CertificateThumbprint` |
-| Hybrid Worker -> Graph/EXO | Certificate auth | App registration (target tenant) | PFX from Key Vault; same pattern as cloud worker |
-| Hybrid Worker -> AD/Exchange Server | Username/password | Domain service account | `PSCredential` from Key Vault JSON secret; via PS 5.1 PSSession |
+| Hybrid Worker -> AD (per forest) | Username/password | Domain service account | `PSCredential` from Key Vault JSON secret (one per forest); via PS 5.1 PSSession |
+| Hybrid Worker -> Exchange/SPO/Teams | Username/password | Service account | `PSCredential` from Key Vault JSON secret; via PS 5.1 PSSession |
 | KEDA -> Service Bus | Managed identity | System-assigned MI | `identity: 'system'` on custom scale rule; Service Bus Data Owner role |
 | All components -> Key Vault | Managed identity | System-assigned MI | RBAC: Key Vault Secrets User |
 | All components -> Storage | Managed identity | System-assigned MI | Identity-based connection (`AzureWebJobsStorage__accountName`) |
@@ -1008,7 +1008,7 @@ When a new runbook version is published while batches are active:
 | Cloud Worker | Service Bus Data Owner | Service Bus Namespace | KEDA scaler management API access (read subscription metrics) |
 | Cloud Worker | Service Bus Data Receiver | Service Bus Namespace | Consume worker-jobs |
 | Cloud Worker | Service Bus Data Sender | Service Bus Namespace | Publish worker-results |
-| Hybrid Worker (SP) | Key Vault Secrets User | Key Vault | Read PFX certificate + on-prem credentials |
+| Hybrid Worker (SP) | Key Vault Secrets User | Key Vault | Read on-prem + service credentials |
 | Hybrid Worker (SP) | Service Bus Data Receiver | Service Bus Namespace | Consume worker-jobs |
 | Hybrid Worker (SP) | Service Bus Data Sender | Service Bus Namespace | Publish worker-results |
 | Hybrid Worker (SP) | Storage Blob Data Reader | Update Storage Account | Download update packages |
@@ -1042,8 +1042,8 @@ All secrets are stored in Key Vault with RBAC authorization (no access policies)
 | `scheduler-sql-connection-string` | `Server=tcp:...;Authentication=Active Directory Managed Identity;...` | Scheduler (via KV reference) |
 | `orchestrator-sql-connection-string` | Same format | Orchestrator (via KV reference) |
 | `admin-api-sql-connection-string` | Same format | Admin API (via KV reference) |
-| Worker PFX certificate | Key Vault Certificate (retrieved via associated secret) | Cloud worker, hybrid worker (at startup) |
-| On-prem credential secrets | JSON: `{"username": "DOMAIN\\user", "password": "..."}` | Hybrid worker (at startup) |
+| Worker PFX certificate | Key Vault Certificate (retrieved via associated secret) | Cloud worker (at startup) |
+| On-prem / service credential secrets | JSON: `{"username": "DOMAIN\\user", "password": "..."}` | Hybrid worker (at startup; one per AD forest + one per enabled service) |
 
 **No passwords or shared access keys.** SQL uses managed identity auth. Storage uses identity-based connections (`AzureWebJobsStorage__accountName`). Service Bus uses managed identity for all runtime operations, including KEDA scaling. Local (SAS) auth is disabled on the Service Bus namespace.
 
@@ -1061,10 +1061,12 @@ Data flows leaving the VNet to external Microsoft services:
 
 | Destination | Protocol | Consumer | Data Flowing Out |
 |-------------|----------|----------|-----------------|
-| Microsoft Graph API | HTTPS | Cloud worker, hybrid worker | Entra ID user/group operations (create, modify, validate) |
-| Exchange Online | HTTPS (PowerShell remoting) | Cloud worker, hybrid worker | Mail user configuration, mailbox operations |
-| Active Directory | LDAP/Kerberos | Hybrid worker | AD user/group operations via PSSession |
+| Microsoft Graph API | HTTPS | Cloud worker | Entra ID user/group operations (create, modify, validate) |
+| Exchange Online | HTTPS (PowerShell remoting) | Cloud worker | Mail user configuration, mailbox operations |
+| Active Directory | LDAP/Kerberos | Hybrid worker | AD user/group operations via PSSession (multi-forest) |
 | Exchange Server | HTTPS (PowerShell remoting) | Hybrid worker | Remote mailbox operations via PSSession |
+| SharePoint Online | HTTPS | Hybrid worker | SPO site operations via PSSession |
+| Microsoft Teams | HTTPS | Hybrid worker | Teams team operations via PSSession |
 | Dataverse TDS endpoint | TDS (TCP 1433) | Scheduler | SQL queries against Dataverse tables |
 | Databricks SQL Statements API | HTTPS | Scheduler | SQL queries via REST API |
 | Application Insights | HTTPS | All components | Telemetry (traces, exceptions, metrics) |
@@ -1347,7 +1349,7 @@ Each runspace in the pool gets its own independent MgGraph and EXO session, avoi
 | `Test-ExchangeAttributeMatch` | Object | Validate Exchange attributes (supports multi-value) |
 | `Test-ExchangeGroupMembership` | Object | Validate Exchange group membership |
 
-Custom functions are discovered from the `CustomFunctions/` directory (volume mount or baked into image). The hybrid worker additionally supports `HybridFunctions/` (on-prem) and `CustomFunctions/` with per-module engine declaration.
+Custom functions are discovered from the `CustomFunctions/` directory (volume mount or baked into image). The hybrid worker uses per-service modules (ADFunctions, ExchangeServerFunctions, SPOFunctions, TeamsFunctions) with capability gating, plus a `CustomFunctions/` directory for customer-specific extensibility modules.
 
 #### Throttle Handling
 
@@ -1363,32 +1365,25 @@ Retry with exponential backoff and jitter happens inside each runspace. Throttli
 
 ### Hybrid Worker Internals
 
-#### Dual-Engine Architecture
+#### Single-Engine Architecture
 
-The hybrid worker runs two execution engines side by side within a single `pwsh.exe` process:
+The hybrid worker uses a single PS 5.1 PSSession pool for all function execution. Functions are organized into per-service modules, each declaring its `RequiredService` in the module manifest's `PrivateData`. The `service-connections.ps1` module scans all service modules at startup, builds a function catalog and allowed function whitelist, and the job dispatcher uses three-tier capability gating (allowed, disabled, unknown).
 
-- **RunspacePool** (PS 7.x) -- For cloud modules (Entra ID, Exchange Online). Same architecture as the cloud worker.
-- **PSSession Pool** (PS 5.1) -- For on-prem modules (Active Directory, Exchange Server). Connects to the local machine's `Microsoft.PowerShell` remoting endpoint to access Windows PowerShell 5.1 cmdlets.
+Multi-forest AD is supported via a config-driven `forests` array. Forest credentials are pre-fetched at startup, injected into sessions as `$global:ForestConfigs`, and lazily validated at runtime via `Get-ADForestConnection`.
 
-Function routing is determined by the `PrivateData.ExecutionEngine` field in each module's `.psd1` manifest. The `service-connections.ps1` module builds a `FunctionEngineMap` at startup, and the job dispatcher routes each incoming job to the correct engine.
-
-#### Boot Sequence (12 Phases)
-
-Extended from the cloud worker's 8-phase boot:
+#### Boot Sequence (11 Phases)
 
 1. Apply pending update (atomic directory swap)
 2. Load configuration from JSON file + env var overrides
 3. Initialize App Insights logging
 4. Azure authentication (SP + cert in `Cert:\LocalMachine\My`)
-5. Retrieve target-tenant PFX certificate from Key Vault (only if cloud services enabled)
-6. Retrieve on-prem credentials from Key Vault (only for enabled on-prem services)
-7. Initialize Service Bus (ClientCertificateCredential instead of ManagedIdentityCredential)
-8. Initialize service connection registry (function-to-engine mapping)
-9a. Initialize RunspacePool (if cloud services enabled)
-9b. Initialize SessionPool (if on-prem services enabled)
-10. Start health check HTTP server
-11. Register shutdown handler
-12. Start job dispatcher loop
+5. Retrieve credentials (forest credentials + individual service credentials from Key Vault)
+6. Initialize Service Bus (ClientCertificateCredential instead of ManagedIdentityCredential)
+7. Initialize service connections (scan per-service modules, build catalog + whitelist)
+8. Initialize SessionPool (PS 5.1, inject forest configs + load per-service modules)
+9. Start health check HTTP server
+10. Register shutdown handler
+11. Start job dispatcher loop
 
 #### Self-Update Mechanism
 
@@ -1517,7 +1512,7 @@ infra/
 | Admin API | C# | .NET 8, Azure Functions v4 (isolated) | Flex Consumption | Dapper + raw SQL |
 | Admin CLI | C# | .NET, System.CommandLine, Spectre.Console | Global tool / self-contained | HTTP (Admin API) |
 | Cloud Worker | PowerShell 7.4 | MgGraph, ExchangeOnlineManagement | Azure Container Apps | Service Bus .NET SDK |
-| Hybrid Worker | PowerShell 7.4 + 5.1 | MgGraph, EXO, ActiveDirectory, Exchange Server | Windows Service (on-prem) | Service Bus .NET SDK |
+| Hybrid Worker | PowerShell 7.4 + 5.1 | ActiveDirectory, Exchange Server, SPO, Teams | Windows Service (on-prem) | Service Bus .NET SDK |
 | Database | -- | Azure SQL Serverless | GP_S_Gen5_1 | Entra-only auth |
 | Messaging | -- | Azure Service Bus Standard | 3 topics | Managed identity |
 
