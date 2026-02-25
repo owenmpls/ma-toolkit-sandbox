@@ -414,8 +414,22 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --query properties.outputs \
             --output json 2>/dev/null); then
-            echo "account=$(echo "$outputs" | jq -r '.updateStorageAccountName.value')" >> "$GITHUB_OUTPUT"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+            ACCOUNT=$(echo "$outputs" | jq -r '.updateStorageAccountName.value // empty')
+            if [ -z "$ACCOUNT" ]; then
+              # Deployment exists but outputs are empty (e.g. failed RoleAssignmentExists redeploy).
+              # Fall back to querying the storage account by tag.
+              ACCOUNT=$(az storage account list \
+                --resource-group "$RESOURCE_GROUP" \
+                --query "[?tags.component=='hybrid-worker'].name | [0]" \
+                --output tsv 2>/dev/null)
+            fi
+            if [ -n "$ACCOUNT" ]; then
+              echo "account=$ACCOUNT" >> "$GITHUB_OUTPUT"
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::hybrid-worker-shared deployment found but storage account not resolved — skipping. Redeploy infra with: gh workflow run deploy-infra.yml -f stage=hybrid-worker"
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "::warning::hybrid-worker-shared infrastructure not deployed — skipping package upload. Deploy infra first via deploy-infra.yml."
             echo "exists=false" >> "$GITHUB_OUTPUT"

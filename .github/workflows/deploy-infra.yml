@@ -205,6 +205,7 @@ jobs:
       - name: Deploy hybrid-worker-shared
         if: inputs.stage == 'all' || inputs.stage == 'hybrid-worker'
         run: |
+          set -o pipefail
           # RoleAssignmentExists is expected on redeploys (ARM idempotency bug)
           # — the role assignment already exists with identical properties.
           if ! az deployment group create \
