@@ -436,15 +436,29 @@ jobs:
         if: steps.storage.outputs.exists == 'true'
         id: hw-infra
         run: |
-          # Hybrid-worker-shared outputs
-          hw_outputs=$(az deployment group show \
-            --name hybrid-worker-shared \
+          # Query resources directly — deployment outputs may be empty if the
+          # hybrid-worker-shared deployment hit RoleAssignmentExists (ARM bug).
+          IDENTITY_NAME="id-hw-upload-$(jq -r '.parameters.baseName.value' infra/automation/hybrid-worker-shared/deploy.parameters.json)"
+          identity_json=$(az identity show \
+            --name "$IDENTITY_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --query properties.outputs \
-            --output json)
-          echo "managed_identity_id=$(echo "$hw_outputs" | jq -r '.uploadManagedIdentityId.value')" >> "$GITHUB_OUTPUT"
-          echo "managed_identity_client_id=$(echo "$hw_outputs" | jq -r '.uploadManagedIdentityClientId.value')" >> "$GITHUB_OUTPUT"
-          echo "script_storage_account=$(echo "$hw_outputs" | jq -r '.uploadScriptStorageAccountName.value')" >> "$GITHUB_OUTPUT"
+            --output json 2>/dev/null || true)
+          if [ -z "$identity_json" ] || [ "$identity_json" = "null" ]; then
+            echo "::error::Upload managed identity '$IDENTITY_NAME' not found. Deploy infra first: gh workflow run deploy-infra.yml -f stage=hybrid-worker"
+            exit 1
+          fi
+          echo "managed_identity_id=$(echo "$identity_json" | jq -r '.id')" >> "$GITHUB_OUTPUT"
+          echo "managed_identity_client_id=$(echo "$identity_json" | jq -r '.clientId')" >> "$GITHUB_OUTPUT"
+
+          SCRIPT_ACCOUNT=$(az storage account list \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[?starts_with(name, 'sthwds')].name | [0]" \
+            --output tsv 2>/dev/null)
+          if [ -z "$SCRIPT_ACCOUNT" ]; then
+            echo "::error::Deployment script storage account not found. Deploy infra first: gh workflow run deploy-infra.yml -f stage=hybrid-worker"
+            exit 1
+          fi
+          echo "script_storage_account=$SCRIPT_ACCOUNT" >> "$GITHUB_OUTPUT"
 
           # Shared infra outputs (for deployment scripts subnet)
           shared_outputs=$(az deployment group show \
