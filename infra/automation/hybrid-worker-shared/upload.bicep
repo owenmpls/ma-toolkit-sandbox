@@ -27,9 +27,12 @@ param packageVersion string
 @description('Expected SHA256 hash of the package zip.')
 param packageSha256 string
 
+@description('GitHub Actions artifact download URL (REST API).')
+param artifactUrl string
+
 @secure()
-@description('Base64-encoded hybrid worker zip package.')
-param packageBase64 string
+@description('GitHub token for downloading the artifact.')
+param githubToken string
 
 param tags object = { component: 'hybrid-worker', project: 'ma-toolkit' }
 param deployTimestamp string = utcNow()
@@ -65,7 +68,8 @@ resource uploadScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
       { name: 'PACKAGE_VERSION', value: packageVersion }
       { name: 'PACKAGE_SHA256', value: packageSha256 }
       { name: 'IDENTITY_CLIENT_ID', value: managedIdentityClientId }
-      { secureValue: packageBase64, name: 'PACKAGE_BASE64' }
+      { name: 'ARTIFACT_URL', value: artifactUrl }
+      { secureValue: githubToken, name: 'GITHUB_TOKEN' }
     ]
     scriptContent: '''
       #!/bin/bash
@@ -79,11 +83,20 @@ resource uploadScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
       echo "Storage: ${STORAGE_ACCOUNT}/${CONTAINER_NAME}"
       echo "Expected SHA256: ${PACKAGE_SHA256}"
 
-      # Decode base64 package
-      echo "Decoding base64 package..."
-      echo "$PACKAGE_BASE64" | base64 -d > "$ZIP_FILE"
+      # Download package from GitHub Actions artifact
+      echo "Downloading artifact from GitHub..."
+      curl -fsSL \
+        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github+json" \
+        "${ARTIFACT_URL}" \
+        -o /tmp/artifact.zip
+      echo "Downloaded artifact: $(stat -c%s /tmp/artifact.zip) bytes"
+
+      # GitHub wraps artifacts in a zip — extract to get the actual package
+      unzip -o /tmp/artifact.zip -d /tmp/artifact/
+      mv /tmp/artifact/hybrid-worker-*.zip "$ZIP_FILE"
       FILE_SIZE=$(stat -c%s "$ZIP_FILE")
-      echo "Decoded file size: ${FILE_SIZE} bytes"
+      echo "Package size: ${FILE_SIZE} bytes"
 
       # Verify SHA256
       ACTUAL_SHA256=$(sha256sum "$ZIP_FILE" | cut -d' ' -f1)

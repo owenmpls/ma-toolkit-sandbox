@@ -23,6 +23,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 env:
   AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -422,27 +423,14 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check package size
+      - name: Upload package artifact
         if: steps.storage.outputs.exists == 'true'
-        run: |
-          ZIP_PATH="src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip"
-          SIZE=$(stat --format=%s "$ZIP_PATH")
-          echo "Package size: $SIZE bytes"
-          # Base64 expands ~33%. ARM request body limit is 4MB.
-          # Fail fast if zip > 2.5MB to leave headroom.
-          MAX_SIZE=$((2500000))
-          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
-            echo "::error::Package is ${SIZE} bytes (max ${MAX_SIZE}). Base64-encoded payload would exceed ARM request body limits."
-            exit 1
-          fi
-
-      - name: Base64 encode package
-        if: steps.storage.outputs.exists == 'true'
-        run: |
-          base64 -w 0 \
-            "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            > /tmp/package-b64.txt
-          echo "Base64 size: $(stat --format=%s /tmp/package-b64.txt) bytes"
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hybrid-worker-package
+          path: src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip
+          retention-days: 1
 
       - name: Fetch infrastructure outputs for upload
         if: steps.storage.outputs.exists == 'true'
@@ -469,33 +457,19 @@ jobs:
       - name: Upload package via ARM deployment script
         if: steps.storage.outputs.exists == 'true'
         run: |
-          # Build parameters file via jq (avoids shell argument length limits for base64)
-          jq -n \
-            --arg account "${{ steps.storage.outputs.account }}" \
-            --arg scriptAccount "${{ steps.hw-infra.outputs.script_storage_account }}" \
-            --arg identityId "${{ steps.hw-infra.outputs.managed_identity_id }}" \
-            --arg identityClientId "${{ steps.hw-infra.outputs.managed_identity_client_id }}" \
-            --arg subnetId "${{ steps.hw-infra.outputs.ds_subnet_id }}" \
-            --arg version "${{ steps.version.outputs.version }}" \
-            --arg sha256 "${{ steps.hash.outputs.sha256 }}" \
-            --rawfile b64 /tmp/package-b64.txt \
-            '{
-              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-              "contentVersion": "1.0.0.0",
-              "parameters": {
-                "updateStorageAccountName": { "value": $account },
-                "scriptStorageAccountName": { "value": $scriptAccount },
-                "managedIdentityId": { "value": $identityId },
-                "managedIdentityClientId": { "value": $identityClientId },
-                "subnetId": { "value": $subnetId },
-                "packageVersion": { "value": $version },
-                "packageSha256": { "value": $sha256 },
-                "packageBase64": { "value": $b64 }
-              }
-            }' > /tmp/upload-params.json
+          ARTIFACT_URL="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ steps.artifact.outputs.artifact-id }}/zip"
 
           az deployment group create \
             --name "hw-upload-$(date -u +%Y%m%d%H%M%S)" \
             --resource-group "$RESOURCE_GROUP" \
             --template-file infra/automation/hybrid-worker-shared/upload.bicep \
-            --parameters @/tmp/upload-params.json
+            --parameters \
+              updateStorageAccountName="${{ steps.storage.outputs.account }}" \
+              scriptStorageAccountName="${{ steps.hw-infra.outputs.script_storage_account }}" \
+              managedIdentityId="${{ steps.hw-infra.outputs.managed_identity_id }}" \
+              managedIdentityClientId="${{ steps.hw-infra.outputs.managed_identity_client_id }}" \
+              subnetId="${{ steps.hw-infra.outputs.ds_subnet_id }}" \
+              packageVersion="${{ steps.version.outputs.version }}" \
+              packageSha256="${{ steps.hash.outputs.sha256 }}" \
+              artifactUrl="$ARTIFACT_URL" \
+              githubToken="${{ github.token }}"
