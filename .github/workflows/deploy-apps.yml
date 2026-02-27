@@ -422,61 +422,33 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Ensure storage access for runner
+      - name: Open storage firewall for upload
         if: steps.storage.outputs.exists == 'true'
-        id: storage-access
         run: |
-          STORAGE_ACCOUNT="${{ steps.storage.outputs.account }}"
-
-          # 1. Add runner IP to firewall (account uses defaultAction: Deny)
-          RUNNER_IP=$(curl -sf https://checkip.amazonaws.com || curl -sf https://api.ipify.org)
-          echo "runner_ip=$RUNNER_IP" >> "$GITHUB_OUTPUT"
-          echo "Adding runner IP $RUNNER_IP to storage firewall"
-          az storage account network-rule add \
-            --account-name "$STORAGE_ACCOUNT" \
+          # GitHub Actions runners are in Azure datacenters. Azure Storage
+          # firewall IP rules don't apply to intra-Azure traffic (the storage
+          # service sees backbone IPs, not the runner's public IP). The only
+          # way to allow access from a GitHub-hosted runner is to temporarily
+          # open the firewall via defaultAction: Allow.
+          az storage account update \
+            --name "${{ steps.storage.outputs.account }}" \
             --resource-group "$RESOURCE_GROUP" \
-            --ip-address "$RUNNER_IP" --output none
-
-          # 2. Ensure RBAC — Storage Blob Data Contributor for the CI/CD SP.
-          SP_OBJECT_ID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)
-          STORAGE_ID=$(az storage account show \
-            --name "$STORAGE_ACCOUNT" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query id -o tsv)
-
-          echo "SP Object ID: $SP_OBJECT_ID"
-          echo "Storage ID: $STORAGE_ID"
-
-          az role assignment create \
-            --role "Storage Blob Data Contributor" \
-            --assignee-object-id "$SP_OBJECT_ID" \
-            --assignee-principal-type ServicePrincipal \
-            --scope "$STORAGE_ID" \
-            --output none 2>/dev/null || true
-
-          # Wait for firewall rule propagation
-          sleep 30
+            --default-action Allow --output none
+          sleep 15
 
       - name: Upload package to blob storage
         if: steps.storage.outputs.exists == 'true'
         run: |
-          BLOB_BASE="https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker"
-          TOKEN=$(az account get-access-token --resource https://storage.azure.com/ --query accessToken -o tsv)
-
-          curl -sS --fail-with-body -X PUT \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "x-ms-version: 2023-11-03" \
-            -H "x-ms-blob-type: BlockBlob" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @"src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            "$BLOB_BASE/hybrid-worker-${{ steps.version.outputs.version }}.zip"
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --container-name "hybrid-worker" \
+            --name "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --file "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --overwrite --auth-mode login
 
       - name: Update version manifest
         if: steps.storage.outputs.exists == 'true'
         run: |
-          BLOB_BASE="https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker"
-          TOKEN=$(az account get-access-token --resource https://storage.azure.com/ --query accessToken -o tsv)
-
           cat > /tmp/version.json << EOF
           {
             "version": "${{ steps.version.outputs.version }}",
@@ -486,19 +458,17 @@ jobs:
             "releaseNotes": "Automated build from commit ${{ github.sha }}"
           }
           EOF
-          curl -sS --fail-with-body -X PUT \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "x-ms-version: 2023-11-03" \
-            -H "x-ms-blob-type: BlockBlob" \
-            -H "Content-Type: application/json" \
-            --data-binary @"/tmp/version.json" \
-            "$BLOB_BASE/version.json"
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --container-name "hybrid-worker" \
+            --name "version.json" \
+            --file "/tmp/version.json" \
+            --overwrite --auth-mode login
 
-      - name: Remove runner IP from storage firewall
+      - name: Close storage firewall
         if: always() && steps.storage.outputs.exists == 'true'
         run: |
-          az storage account network-rule remove \
-            --account-name "${{ steps.storage.outputs.account }}" \
+          az storage account update \
+            --name "${{ steps.storage.outputs.account }}" \
             --resource-group "$RESOURCE_GROUP" \
-            --ip-address "${{ steps.storage-access.outputs.runner_ip }}" \
-            --output none 2>/dev/null || true
+            --default-action Deny --output none
