@@ -463,7 +463,7 @@ jobs:
           BLOB_BASE="https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker"
           TOKEN=$(az account get-access-token --resource https://storage.azure.com/ --query accessToken -o tsv)
 
-          curl -sf -X PUT \
+          curl -sS --fail-with-body -X PUT \
             -H "Authorization: Bearer $TOKEN" \
             -H "x-ms-version: 2023-11-03" \
             -H "x-ms-blob-type: BlockBlob" \
@@ -486,7 +486,7 @@ jobs:
             "releaseNotes": "Automated build from commit ${{ github.sha }}"
           }
           EOF
-          curl -sf -X PUT \
+          curl -sS --fail-with-body -X PUT \
             -H "Authorization: Bearer $TOKEN" \
             -H "x-ms-version: 2023-11-03" \
             -H "x-ms-blob-type: BlockBlob" \
