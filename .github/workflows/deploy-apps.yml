@@ -438,39 +438,44 @@ jobs:
             --ip-address "$RUNNER_IP" --output none
 
           # 2. Ensure RBAC — Storage Blob Data Contributor for the CI/CD SP.
-          #    The Bicep creates this during infra deployment, but the
-          #    RoleAssignmentExists error on redeploys can leave the deployment
-          #    in a failed state. Self-heal here to avoid a hard dependency on
-          #    infra deploy ordering.
           SP_OBJECT_ID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)
           STORAGE_ID=$(az storage account show \
             --name "$STORAGE_ACCOUNT" \
             --resource-group "$RESOURCE_GROUP" \
             --query id -o tsv)
+
+          echo "SP Object ID: $SP_OBJECT_ID"
+          echo "Storage ID: $STORAGE_ID"
+
+          echo "=== Current RBAC assignments on storage account ==="
+          az role assignment list --scope "$STORAGE_ID" --output table || true
+
+          echo "=== Attempting to create role assignment ==="
           az role assignment create \
             --role "Storage Blob Data Contributor" \
             --assignee-object-id "$SP_OBJECT_ID" \
             --assignee-principal-type ServicePrincipal \
             --scope "$STORAGE_ID" \
-            --output none 2>/dev/null || true
+            --output json 2>&1 || true
+
+          echo "=== Testing storage token acquisition ==="
+          az account get-access-token --resource https://storage.azure.com/ --query "{ expiresOn: expiresOn, tokenLength: accessToken | length(@) }" -o json 2>&1 || true
 
           # Wait for firewall rule + RBAC propagation
           sleep 30
 
       - name: Upload package to blob storage
         if: steps.storage.outputs.exists == 'true'
-        env:
-          AZCOPY_AUTO_LOGIN_TYPE: AZCLI
         run: |
-          azcopy copy \
-            "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            "https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --overwrite=true
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --container-name "hybrid-worker" \
+            --name "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --file "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --overwrite --auth-mode login
 
       - name: Update version manifest
         if: steps.storage.outputs.exists == 'true'
-        env:
-          AZCOPY_AUTO_LOGIN_TYPE: AZCLI
         run: |
           cat > /tmp/version.json << EOF
           {
@@ -481,10 +486,12 @@ jobs:
             "releaseNotes": "Automated build from commit ${{ github.sha }}"
           }
           EOF
-          azcopy copy \
-            "/tmp/version.json" \
-            "https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker/version.json" \
-            --overwrite=true
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --container-name "hybrid-worker" \
+            --name "version.json" \
+            --file "/tmp/version.json" \
+            --overwrite --auth-mode login
 
       - name: Remove runner IP from storage firewall
         if: always() && steps.storage.outputs.exists == 'true'
