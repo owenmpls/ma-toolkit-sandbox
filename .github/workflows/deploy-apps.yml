@@ -422,53 +422,80 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open storage firewall for upload
+      - name: Check package size
         if: steps.storage.outputs.exists == 'true'
         run: |
-          # GitHub Actions runners are in Azure datacenters. Azure Storage
-          # firewall IP rules don't apply to intra-Azure traffic (the storage
-          # service sees backbone IPs, not the runner's public IP). The only
-          # way to allow access from a GitHub-hosted runner is to temporarily
-          # open the firewall via defaultAction: Allow.
-          az storage account update \
-            --name "${{ steps.storage.outputs.account }}" \
+          ZIP_PATH="src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip"
+          SIZE=$(stat --format=%s "$ZIP_PATH")
+          echo "Package size: $SIZE bytes"
+          # Base64 expands ~33%. ARM request body limit is 4MB.
+          # Fail fast if zip > 2.5MB to leave headroom.
+          MAX_SIZE=$((2500000))
+          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "::error::Package is ${SIZE} bytes (max ${MAX_SIZE}). Base64-encoded payload would exceed ARM request body limits."
+            exit 1
+          fi
+
+      - name: Base64 encode package
+        if: steps.storage.outputs.exists == 'true'
+        run: |
+          base64 -w 0 \
+            "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            > /tmp/package-b64.txt
+          echo "Base64 size: $(stat --format=%s /tmp/package-b64.txt) bytes"
+
+      - name: Fetch infrastructure outputs for upload
+        if: steps.storage.outputs.exists == 'true'
+        id: hw-infra
+        run: |
+          # Hybrid-worker-shared outputs
+          hw_outputs=$(az deployment group show \
+            --name hybrid-worker-shared \
             --resource-group "$RESOURCE_GROUP" \
-            --default-action Allow --output none
-          sleep 15
+            --query properties.outputs \
+            --output json)
+          echo "managed_identity_id=$(echo "$hw_outputs" | jq -r '.uploadManagedIdentityId.value')" >> "$GITHUB_OUTPUT"
+          echo "managed_identity_client_id=$(echo "$hw_outputs" | jq -r '.uploadManagedIdentityClientId.value')" >> "$GITHUB_OUTPUT"
+          echo "script_storage_account=$(echo "$hw_outputs" | jq -r '.uploadScriptStorageAccountName.value')" >> "$GITHUB_OUTPUT"
 
-      - name: Upload package to blob storage
-        if: steps.storage.outputs.exists == 'true'
-        run: |
-          az storage blob upload \
-            --account-name "${{ steps.storage.outputs.account }}" \
-            --container-name "hybrid-worker" \
-            --name "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --file "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --overwrite --auth-mode login
-
-      - name: Update version manifest
-        if: steps.storage.outputs.exists == 'true'
-        run: |
-          cat > /tmp/version.json << EOF
-          {
-            "version": "${{ steps.version.outputs.version }}",
-            "sha256": "${{ steps.hash.outputs.sha256 }}",
-            "fileName": "hybrid-worker-${{ steps.version.outputs.version }}.zip",
-            "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "releaseNotes": "Automated build from commit ${{ github.sha }}"
-          }
-          EOF
-          az storage blob upload \
-            --account-name "${{ steps.storage.outputs.account }}" \
-            --container-name "hybrid-worker" \
-            --name "version.json" \
-            --file "/tmp/version.json" \
-            --overwrite --auth-mode login
-
-      - name: Close storage firewall
-        if: always() && steps.storage.outputs.exists == 'true'
-        run: |
-          az storage account update \
-            --name "${{ steps.storage.outputs.account }}" \
+          # Shared infra outputs (for deployment scripts subnet)
+          shared_outputs=$(az deployment group show \
+            --name shared-infra \
             --resource-group "$RESOURCE_GROUP" \
-            --default-action Deny --output none
+            --query properties.outputs \
+            --output json)
+          echo "ds_subnet_id=$(echo "$shared_outputs" | jq -r '.deploymentScriptsSubnetId.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package via ARM deployment script
+        if: steps.storage.outputs.exists == 'true'
+        run: |
+          # Build parameters file via jq (avoids shell argument length limits for base64)
+          jq -n \
+            --arg account "${{ steps.storage.outputs.account }}" \
+            --arg scriptAccount "${{ steps.hw-infra.outputs.script_storage_account }}" \
+            --arg identityId "${{ steps.hw-infra.outputs.managed_identity_id }}" \
+            --arg identityClientId "${{ steps.hw-infra.outputs.managed_identity_client_id }}" \
+            --arg subnetId "${{ steps.hw-infra.outputs.ds_subnet_id }}" \
+            --arg version "${{ steps.version.outputs.version }}" \
+            --arg sha256 "${{ steps.hash.outputs.sha256 }}" \
+            --rawfile b64 /tmp/package-b64.txt \
+            '{
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "updateStorageAccountName": { "value": $account },
+                "scriptStorageAccountName": { "value": $scriptAccount },
+                "managedIdentityId": { "value": $identityId },
+                "managedIdentityClientId": { "value": $identityClientId },
+                "subnetId": { "value": $subnetId },
+                "packageVersion": { "value": $version },
+                "packageSha256": { "value": $sha256 },
+                "packageBase64": { "value": $b64 }
+              }
+            }' > /tmp/upload-params.json
+
+          az deployment group create \
+            --name "hw-upload-$(date -u +%Y%m%d%H%M%S)" \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/automation/hybrid-worker-shared/upload.bicep \
+            --parameters @/tmp/upload-params.json

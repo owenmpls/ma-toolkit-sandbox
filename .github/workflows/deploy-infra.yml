@@ -58,7 +58,7 @@ jobs:
 
       # --- Fetch shared outputs (needed by all components) ---
       - name: Fetch shared deployment outputs
-        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator' || inputs.stage == 'admin-api' || inputs.stage == 'cloud-worker'
+        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator' || inputs.stage == 'admin-api' || inputs.stage == 'cloud-worker' || inputs.stage == 'hybrid-worker'
         id: shared
         run: |
           outputs=$(az deployment group show \
@@ -214,7 +214,8 @@ jobs:
             --template-file infra/automation/hybrid-worker-shared/deploy.bicep \
             --parameters infra/automation/hybrid-worker-shared/deploy.parameters.json \
             --parameters location="$LOCATION" \
-            --parameters cicdSpObjectId="${{ steps.cicd-sp.outputs.object_id }}" 2>&1 | tee /tmp/hw-shared-deploy.log; then
+            --parameters cicdSpObjectId="${{ steps.cicd-sp.outputs.object_id }}" \
+            --parameters deploymentScriptsSubnetId="${{ steps.shared.outputs.deployment_scripts_subnet_id }}" 2>&1 | tee /tmp/hw-shared-deploy.log; then
             if grep -q 'RoleAssignmentExists' /tmp/hw-shared-deploy.log; then
               echo "::warning::Role assignment already exists (expected on redeploy) — continuing."
             else
