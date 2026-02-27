@@ -447,36 +447,36 @@ jobs:
           echo "SP Object ID: $SP_OBJECT_ID"
           echo "Storage ID: $STORAGE_ID"
 
-          echo "=== Current RBAC assignments on storage account ==="
-          az role assignment list --scope "$STORAGE_ID" --output table || true
-
-          echo "=== Attempting to create role assignment ==="
           az role assignment create \
             --role "Storage Blob Data Contributor" \
             --assignee-object-id "$SP_OBJECT_ID" \
             --assignee-principal-type ServicePrincipal \
             --scope "$STORAGE_ID" \
-            --output json 2>&1 || true
+            --output none 2>/dev/null || true
 
-          echo "=== Testing storage token acquisition ==="
-          az account get-access-token --resource https://storage.azure.com/ --query "{ expiresOn: expiresOn, tokenLength: accessToken | length(@) }" -o json 2>&1 || true
-
-          # Wait for firewall rule + RBAC propagation
+          # Wait for firewall rule propagation
           sleep 30
 
       - name: Upload package to blob storage
         if: steps.storage.outputs.exists == 'true'
         run: |
-          az storage blob upload \
-            --account-name "${{ steps.storage.outputs.account }}" \
-            --container-name "hybrid-worker" \
-            --name "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --file "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --overwrite --auth-mode login
+          BLOB_BASE="https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker"
+          TOKEN=$(az account get-access-token --resource https://storage.azure.com/ --query accessToken -o tsv)
+
+          curl -sf -X PUT \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-ms-version: 2023-11-03" \
+            -H "x-ms-blob-type: BlockBlob" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            "$BLOB_BASE/hybrid-worker-${{ steps.version.outputs.version }}.zip"
 
       - name: Update version manifest
         if: steps.storage.outputs.exists == 'true'
         run: |
+          BLOB_BASE="https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker"
+          TOKEN=$(az account get-access-token --resource https://storage.azure.com/ --query accessToken -o tsv)
+
           cat > /tmp/version.json << EOF
           {
             "version": "${{ steps.version.outputs.version }}",
@@ -486,12 +486,13 @@ jobs:
             "releaseNotes": "Automated build from commit ${{ github.sha }}"
           }
           EOF
-          az storage blob upload \
-            --account-name "${{ steps.storage.outputs.account }}" \
-            --container-name "hybrid-worker" \
-            --name "version.json" \
-            --file "/tmp/version.json" \
-            --overwrite --auth-mode login
+          curl -sf -X PUT \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-ms-version: 2023-11-03" \
+            -H "x-ms-blob-type: BlockBlob" \
+            -H "Content-Type: application/json" \
+            --data-binary @"/tmp/version.json" \
+            "$BLOB_BASE/version.json"
 
       - name: Remove runner IP from storage firewall
         if: always() && steps.storage.outputs.exists == 'true'
