@@ -61,28 +61,32 @@ Test-Assert '.gitignore excludes dotnet-libs/' {
     $content -match 'dotnet-libs/'
 }
 
-Test-Assert 'service-host/HybridWorker.ServiceHost.csproj exists' {
-    Test-Path (Join-Path $projectRoot 'service-host/HybridWorker.ServiceHost.csproj')
+Test-Assert 'Start-HybridWorker.ps1 exists' {
+    Test-Path (Join-Path $projectRoot 'Start-HybridWorker.ps1')
 }
 
-Test-Assert 'service-host/Program.cs exists' {
-    Test-Path (Join-Path $projectRoot 'service-host/Program.cs')
+Test-Assert 'Install-HybridWorkerTask.ps1 exists' {
+    Test-Path (Join-Path $projectRoot 'Install-HybridWorkerTask.ps1')
 }
 
-Test-Assert 'service-host/WorkerProcessService.cs exists' {
-    Test-Path (Join-Path $projectRoot 'service-host/WorkerProcessService.cs')
+Test-Assert 'Uninstall-HybridWorkerTask.ps1 exists' {
+    Test-Path (Join-Path $projectRoot 'Uninstall-HybridWorkerTask.ps1')
 }
 
 Test-Assert 'config/worker-config.example.json exists' {
     Test-Path (Join-Path $projectRoot 'config/worker-config.example.json')
 }
 
-Test-Assert 'Install-HybridWorker.ps1 exists' {
-    Test-Path (Join-Path $projectRoot 'Install-HybridWorker.ps1')
+Test-Assert 'service-host/ directory does NOT exist (removed)' {
+    -not (Test-Path (Join-Path $projectRoot 'service-host'))
 }
 
-Test-Assert 'Uninstall-HybridWorker.ps1 exists' {
-    Test-Path (Join-Path $projectRoot 'Uninstall-HybridWorker.ps1')
+Test-Assert 'Install-HybridWorker.ps1 does NOT exist (removed)' {
+    -not (Test-Path (Join-Path $projectRoot 'Install-HybridWorker.ps1'))
+}
+
+Test-Assert 'Uninstall-HybridWorker.ps1 does NOT exist (removed)' {
+    -not (Test-Path (Join-Path $projectRoot 'Uninstall-HybridWorker.ps1'))
 }
 
 # ============================================================================
@@ -115,6 +119,23 @@ foreach ($file in $srcFiles) {
     }
 }
 
+# Parse launcher and installer scripts
+$rootScripts = @(
+    'Start-HybridWorker.ps1',
+    'Install-HybridWorkerTask.ps1',
+    'Uninstall-HybridWorkerTask.ps1'
+)
+
+foreach ($file in $rootScripts) {
+    Test-Assert "$file parses without errors" {
+        $filePath = Join-Path $projectRoot $file
+        if (-not (Test-Path $filePath)) { throw "File not found: $filePath" }
+        $errors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($filePath, [ref]$null, [ref]$errors)
+        $errors.Count -eq 0
+    }
+}
+
 # ============================================================================
 # Section 3: src/ directory has exactly 11 .ps1 files
 # ============================================================================
@@ -127,7 +148,7 @@ Test-Assert 'src/ contains exactly 11 .ps1 files' {
 }
 
 # ============================================================================
-# Section 4: Module Validation — Per-Service Modules
+# Section 4: Module Validation -- Per-Service Modules
 # ============================================================================
 Write-Host ''
 Write-Host '=== Module Validation ===' -ForegroundColor Cyan
@@ -245,6 +266,24 @@ Test-Assert 'Example config has serviceConnections with forests' {
     $null -ne $json.serviceConnections.activeDirectory.forests -and $json.serviceConnections.activeDirectory.forests.Count -ge 1
 }
 
+Test-Assert 'Example config has healthCheckEnabled = false' {
+    $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
+    $json = Get-Content $configPath -Raw | ConvertFrom-Json
+    $json.healthCheckEnabled -eq $false
+}
+
+Test-Assert 'Example config has scheduledTaskIntervalMinutes' {
+    $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
+    $json = Get-Content $configPath -Raw | ConvertFrom-Json
+    $null -ne $json.scheduledTaskIntervalMinutes -and $json.scheduledTaskIntervalMinutes -gt 0
+}
+
+Test-Assert 'Example config has idleTimeoutSeconds > 0' {
+    $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
+    $json = Get-Content $configPath -Raw | ConvertFrom-Json
+    $json.idleTimeoutSeconds -gt 0
+}
+
 Test-Assert 'Example config does not have targetTenant' {
     $configPath = Join-Path $projectRoot 'config/worker-config.example.json'
     $json = Get-Content $configPath -Raw | ConvertFrom-Json
@@ -264,24 +303,34 @@ Test-Assert 'Example config does not have entra/exchangeOnline' {
 }
 
 # ============================================================================
-# Section 6: Service Host Validation
+# Section 6: Launcher Validation
 # ============================================================================
 Write-Host ''
-Write-Host '=== Service Host ===' -ForegroundColor Cyan
+Write-Host '=== Launcher Validation ===' -ForegroundColor Cyan
 
-Test-Assert 'csproj targets net8.0' {
-    $csproj = Get-Content (Join-Path $projectRoot 'service-host/HybridWorker.ServiceHost.csproj') -Raw
-    $csproj -match 'net8.0'
+Test-Assert 'Start-HybridWorker.ps1 dot-sources worker.ps1' {
+    $content = Get-Content (Join-Path $projectRoot 'Start-HybridWorker.ps1') -Raw
+    $content -match "worker\.ps1"
 }
 
-Test-Assert 'csproj references WindowsServices package' {
-    $csproj = Get-Content (Join-Path $projectRoot 'service-host/HybridWorker.ServiceHost.csproj') -Raw
-    $csproj -match 'Microsoft.Extensions.Hosting.WindowsServices'
+Test-Assert 'Start-HybridWorker.ps1 calls PeekMessagesAsync' {
+    $content = Get-Content (Join-Path $projectRoot 'Start-HybridWorker.ps1') -Raw
+    $content -match 'PeekMessagesAsync'
 }
 
-Test-Assert 'Program.cs configures MaToolkitHybridWorker service' {
-    $cs = Get-Content (Join-Path $projectRoot 'service-host/Program.cs') -Raw
-    $cs -match 'MaToolkitHybridWorker'
+Test-Assert 'Start-HybridWorker.ps1 logs LauncherTick event' {
+    $content = Get-Content (Join-Path $projectRoot 'Start-HybridWorker.ps1') -Raw
+    $content -match 'LauncherTick'
+}
+
+Test-Assert 'Install-HybridWorkerTask.ps1 uses Register-ScheduledTask' {
+    $content = Get-Content (Join-Path $projectRoot 'Install-HybridWorkerTask.ps1') -Raw
+    $content -match 'Register-ScheduledTask'
+}
+
+Test-Assert 'Uninstall-HybridWorkerTask.ps1 uses Unregister-ScheduledTask' {
+    $content = Get-Content (Join-Path $projectRoot 'Uninstall-HybridWorkerTask.ps1') -Raw
+    $content -match 'Unregister-ScheduledTask'
 }
 
 # ============================================================================

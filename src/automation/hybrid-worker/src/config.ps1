@@ -3,7 +3,8 @@
     Configuration loader for the Hybrid Worker.
 .DESCRIPTION
     Reads configuration from a JSON file with environment variable overrides.
-    The config file path is set by the .NET service host via HYBRID_WORKER_CONFIG_PATH.
+    The config file path defaults to the standard install location or can be
+    set via the HYBRID_WORKER_CONFIG_PATH environment variable.
 #>
 
 function Get-WorkerConfiguration {
@@ -44,6 +45,7 @@ function Get-WorkerConfiguration {
         MaxRetryDelaySeconds       = [int]($json.maxRetryDelaySeconds ?? '120')
         IdleTimeoutSeconds         = [int]($json.idleTimeoutSeconds ?? '0')
         ShutdownGraceSeconds       = [int]($json.shutdownGraceSeconds ?? '30')
+        HealthCheckEnabled         = [bool]($json.healthCheckEnabled ?? $false)
         HealthCheckPort            = [int]($json.healthCheckPort ?? '8080')
         LogPath                    = ($json.logPath ?? 'C:\ProgramData\MaToolkit\HybridWorker\logs')
         InstallPath                = ($env:HYBRID_WORKER_INSTALL_PATH ?? 'C:\ProgramData\MaToolkit\HybridWorker')

@@ -57,7 +57,7 @@ See `src/automation/admin-api/CLAUDE.md` for project context. Full API reference
 
 ### hybrid-worker (`src/automation/hybrid-worker/`)
 
-On-premises PowerShell 7.4 worker running as a native Windows Service. Executes migration functions against on-premises systems (Active Directory, Exchange Server) and cloud services (SharePoint Online, Teams) using a PS 5.1 PSSession pool. Supports multi-forest AD environments (20+ forests) with lazy connection validation. Per-service modules enable capability gating — if a service is disabled, its functions are cataloged but not whitelisted, returning informative errors. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage.
+On-premises PowerShell 7.4 worker running as a Scheduled Task. A lightweight launcher (`Start-HybridWorker.ps1`) fires every N minutes, peeks Service Bus for messages, and boots the full worker only when work is found. Executes migration functions against on-premises systems (Active Directory, Exchange Server) and cloud services (SharePoint Online, Teams) using a PS 5.1 PSSession pool. Supports multi-forest AD environments (20+ forests) with lazy connection validation. Per-service modules enable capability gating — if a service is disabled, its functions are cataloged but not whitelisted, returning informative errors. Authenticates to Azure via service principal + certificate (not managed identity). Self-updates from blob storage. No .NET SDK required on the target server.
 
 See `src/automation/hybrid-worker/CLAUDE.md` for project context. Reference: [`docs/automation/hybrid-worker.md`](docs/automation/hybrid-worker.md). Deployment: [`docs/automation/hybrid-worker-deployment.md`](docs/automation/hybrid-worker-deployment.md)
 
@@ -149,8 +149,8 @@ pwsh -File tests/Test-WorkerLocal.ps1
 # Download .NET dependencies (NuGet packages for Service Bus SDK, etc.)
 pwsh -File Download-Dependencies.ps1
 
-# Install as Windows Service (run as admin on target server)
-.\Install-HybridWorker.ps1 -ConfigPath .\config\worker-config.json `
+# Install as Scheduled Task (run as admin on target server)
+.\Install-HybridWorkerTask.ps1 -ConfigPath .\config\worker-config.json `
     -CertificatePath .\worker-sp.pfx -CertificatePassword $securePass `
     -ServiceAccount 'CORP\svc-matoolkit$'
 ```
@@ -269,7 +269,7 @@ The system follows an **event-driven, queue-based pattern**:
 2. **Scheduler** → Timer-triggered, queries data sources (when automation enabled), detects batches, dispatches events to Service Bus
 3. **Orchestrator** → Consumes scheduler events, coordinates step execution, dispatches jobs to workers
 4. **Cloud Worker** → Executes cloud migration operations (Entra ID, Exchange Online) via RunspacePool in ACA
-5. **Hybrid Worker** → Executes on-prem + cloud operations (AD, Exchange Server, SPO, Teams) via PS 5.1 SessionPool as a Windows Service
+5. **Hybrid Worker** → Executes on-prem + cloud operations (AD, Exchange Server, SPO, Teams) via PS 5.1 SessionPool as a Scheduled Task
 
 ### Cloud Worker Details
 

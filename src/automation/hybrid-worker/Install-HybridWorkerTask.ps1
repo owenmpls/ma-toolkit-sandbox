@@ -3,12 +3,11 @@
 
 <#
 .SYNOPSIS
-    Installs the MA Toolkit Hybrid Worker as a native Windows Service.
+    Installs the MA Toolkit Hybrid Worker as a Scheduled Task.
 .DESCRIPTION
     Deploys the hybrid-worker to C:\ProgramData\MaToolkit\HybridWorker\,
-    builds the .NET service host, and registers a native Windows Service
-    via New-Service. Supports Group Managed Service Accounts (gMSA) and
-    configures service recovery for automatic restarts on failure.
+    registers a Scheduled Task that runs Start-HybridWorker.ps1 on a
+    configurable interval (default 5 minutes). No .NET SDK required.
 .PARAMETER ConfigPath
     Path to a pre-filled worker-config.json. If not provided, copies the
     example and prompts for edits.
@@ -17,26 +16,28 @@
 .PARAMETER CertificatePassword
     Password for the PFX file.
 .PARAMETER ServiceAccount
-    Account to run the service under. Supports:
+    Account to run the task under. Supports:
       - gMSA: 'DOMAIN\gmsaAccount$' (recommended for production)
       - Standard: 'DOMAIN\serviceAccount' (requires -ServiceAccountPassword)
-      - LocalSystem: omit this parameter (default, not recommended for production)
+      - SYSTEM: omit this parameter (default, not recommended for production)
 .PARAMETER ServiceAccountPassword
     Password for a standard service account. Not needed for gMSA.
+.PARAMETER IntervalMinutes
+    How often the scheduled task fires (default: 5 minutes).
 #>
 param(
     [string]$ConfigPath,
     [string]$CertificatePath,
     [SecureString]$CertificatePassword,
     [string]$ServiceAccount,
-    [SecureString]$ServiceAccountPassword
+    [SecureString]$ServiceAccountPassword,
+    [int]$IntervalMinutes = 5
 )
 
 $ErrorActionPreference = 'Stop'
 $installBase = 'C:\ProgramData\MaToolkit\HybridWorker'
-$serviceName = 'MaToolkitHybridWorker'
-$serviceDisplayName = 'MA Toolkit Hybrid Worker'
-$serviceDescription = 'Migration Automation Toolkit - Hybrid Worker Service'
+$taskName = 'MaToolkitHybridWorker'
+$taskDescription = 'Migration Automation Toolkit - Hybrid Worker (runs every {0} min, processes migration jobs from Service Bus)' -f $IntervalMinutes
 
 # --- 1. Verify prerequisites ---
 $pwshVersion = $PSVersionTable.PSVersion
@@ -45,8 +46,8 @@ if ($pwshVersion -lt [Version]'7.4') { throw "PowerShell 7.4+ required. Got: $pw
 $winps = Get-Command powershell.exe -ErrorAction SilentlyContinue
 if (-not $winps) { throw 'Windows PowerShell 5.1 (powershell.exe) not found.' }
 
-$dotnetSdk = Get-Command dotnet -ErrorAction SilentlyContinue
-if (-not $dotnetSdk) { throw '.NET SDK required to build the service host. Install from https://dot.net' }
+$pwshExe = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
+if (-not $pwshExe) { throw 'pwsh.exe not found in PATH.' }
 
 # Verify WinRM is running (needed for PSSession pool)
 $winrm = Get-Service WinRM -ErrorAction SilentlyContinue
@@ -55,10 +56,10 @@ if (-not $winrm -or $winrm.Status -ne 'Running') {
     Enable-PSRemoting -Force -SkipNetworkProfileCheck
 }
 
-# Check for existing service
-$existingService = Get-Service $serviceName -ErrorAction SilentlyContinue
-if ($existingService) {
-    throw "Service '$serviceName' already exists. Run Uninstall-HybridWorker.ps1 first or stop and update manually."
+# Check for existing task
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    throw "Scheduled task '$taskName' already exists. Run Uninstall-HybridWorkerTask.ps1 first."
 }
 
 # --- 2. Create directory structure ---
@@ -69,8 +70,8 @@ foreach ($dir in $dirs) {
 }
 
 # --- 3. Copy worker files to current\ ---
-$sourceDir = Split-Path -Parent $PSScriptRoot  # hybrid-worker/ root
-$itemsToCopy = @('src', 'modules', 'dotnet-libs', 'version.txt')
+$sourceDir = $PSScriptRoot  # hybrid-worker/ root
+$itemsToCopy = @('src', 'modules', 'dotnet-libs', 'version.txt', 'Start-HybridWorker.ps1')
 foreach ($item in $itemsToCopy) {
     $src = Join-Path $sourceDir $item
     $dst = Join-Path $installBase "current\$item"
@@ -79,32 +80,17 @@ foreach ($item in $itemsToCopy) {
     }
 }
 
-# --- 4. Build and publish the .NET service host ---
-Write-Host 'Building .NET service host...'
-$serviceHostProject = Join-Path $sourceDir 'service-host'
-$publishOutput = Join-Path $installBase 'current\service-host'
-
-dotnet publish $serviceHostProject `
-    -c Release `
-    -r win-x64 `
-    --self-contained `
-    -o $publishOutput `
-    --nologo
-
-if ($LASTEXITCODE -ne 0) { throw 'Failed to build .NET service host.' }
-Write-Host 'Service host built successfully.'
-
-# --- 5. Configuration ---
+# --- 4. Configuration ---
 if ($ConfigPath -and (Test-Path $ConfigPath)) {
     Copy-Item $ConfigPath -Destination (Join-Path $installBase 'config\worker-config.json') -Force
 }
 elseif (-not (Test-Path (Join-Path $installBase 'config\worker-config.json'))) {
     $exampleConfig = Join-Path $sourceDir 'config\worker-config.example.json'
     Copy-Item $exampleConfig -Destination (Join-Path $installBase 'config\worker-config.json')
-    Write-Host 'IMPORTANT: Edit config\worker-config.json before starting the service.' -ForegroundColor Yellow
+    Write-Host 'IMPORTANT: Edit config\worker-config.json before enabling the task.' -ForegroundColor Yellow
 }
 
-# --- 6. Import certificate if provided ---
+# --- 5. Import certificate if provided ---
 if ($CertificatePath) {
     $certFlags = [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet -bor
                  [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet
@@ -131,44 +117,77 @@ if ($CertificatePath) {
     }
 }
 
-# --- 7. Register Windows Service ---
-$serviceHostExe = Join-Path $publishOutput 'HybridWorker.ServiceHost.exe'
+# --- 6. Register Scheduled Task ---
+$launcherScript = Join-Path $installBase 'current\Start-HybridWorker.ps1'
 
-$newServiceParams = @{
-    Name           = $serviceName
-    BinaryPathName = $serviceHostExe
-    DisplayName    = $serviceDisplayName
-    Description    = $serviceDescription
-    StartupType    = 'Automatic'
-}
+$taskAction = New-ScheduledTaskAction `
+    -Execute $pwshExe `
+    -Argument "-NoProfile -NonInteractive -File `"$launcherScript`"" `
+    -WorkingDirectory (Join-Path $installBase 'current')
 
-# Configure service account
+# Trigger: repeating every N minutes, indefinitely
+$taskTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+    -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
+    -RepetitionDuration ([TimeSpan]::Zero)  # Zero = indefinite
+
+$taskSettings = New-ScheduledTaskSettingsSet `
+    -MultipleInstances IgnoreNew `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
+    -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -StartWhenAvailable `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries
+
+# Configure principal (who the task runs as)
 if ($ServiceAccount) {
     if ($ServiceAccount.EndsWith('$')) {
-        # gMSA — no password needed
-        $newServiceParams['Credential'] = [PSCredential]::new($ServiceAccount, (New-Object SecureString))
-        Write-Host "Service will run as gMSA: $ServiceAccount"
-    }
-    elseif ($ServiceAccountPassword) {
-        $newServiceParams['Credential'] = [PSCredential]::new($ServiceAccount, $ServiceAccountPassword)
-        Write-Host "Service will run as: $ServiceAccount"
+        # gMSA -- LogonType Password with empty password
+        $taskPrincipal = New-ScheduledTaskPrincipal `
+            -UserId $ServiceAccount `
+            -LogonType Password `
+            -RunLevel Highest
+        Write-Host "Task will run as gMSA: $ServiceAccount"
     }
     else {
-        throw "ServiceAccountPassword required for non-gMSA account '$ServiceAccount'."
+        $taskPrincipal = New-ScheduledTaskPrincipal `
+            -UserId $ServiceAccount `
+            -LogonType Password `
+            -RunLevel Highest
+        Write-Host "Task will run as: $ServiceAccount"
     }
 }
 else {
-    Write-Host 'Service will run as LocalSystem (not recommended for production).' -ForegroundColor Yellow
+    $taskPrincipal = New-ScheduledTaskPrincipal `
+        -UserId 'NT AUTHORITY\SYSTEM' `
+        -LogonType ServiceAccount `
+        -RunLevel Highest
+    Write-Host 'Task will run as SYSTEM (not recommended for production).' -ForegroundColor Yellow
 }
 
-New-Service @newServiceParams
+$registerParams = @{
+    TaskName    = $taskName
+    Action      = $taskAction
+    Trigger     = $taskTrigger
+    Settings    = $taskSettings
+    Principal   = $taskPrincipal
+    Description = $taskDescription
+    Force       = $true
+}
 
-# --- 8. Configure service recovery (restart on failure) ---
-# sc.exe failure: restart after 10s, 30s, 60s; reset counter after 1 day
-& sc.exe failure $serviceName reset= 86400 actions= restart/10000/restart/30000/restart/60000
-& sc.exe failureflag $serviceName 1
+# For non-gMSA standard accounts, supply the password
+if ($ServiceAccount -and -not $ServiceAccount.EndsWith('$') -and $ServiceAccountPassword) {
+    $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ServiceAccountPassword))
+    $registerParams['User'] = $ServiceAccount
+    $registerParams['Password'] = $plainPassword
+    # Remove Principal when supplying User/Password directly
+    $registerParams.Remove('Principal')
+}
 
-# --- 9. Set directory permissions ---
+Register-ScheduledTask @registerParams | Out-Null
+
+# --- 7. Set directory permissions ---
 # Restrict config directory to service account + Administrators
 $configDir = Join-Path $installBase 'config'
 $acl = Get-Acl $configDir
@@ -189,11 +208,12 @@ else {
 Set-Acl $configDir $acl
 
 Write-Host ''
-Write-Host "Service '$serviceName' installed successfully." -ForegroundColor Green
+Write-Host "Scheduled task '$taskName' installed successfully." -ForegroundColor Green
 Write-Host ''
 Write-Host 'Next steps:' -ForegroundColor Cyan
 Write-Host "  1. Edit configuration:  notepad $installBase\config\worker-config.json"
-Write-Host "  2. Start the service:   Start-Service $serviceName"
-Write-Host "  3. Check status:        Get-Service $serviceName"
-Write-Host "  4. View logs:           Get-Content $installBase\logs\worker.log -Tail 50"
-Write-Host "  5. Event Log:           Get-WinEvent -ProviderName $serviceName -MaxEvents 20"
+Write-Host "  2. Enable the task:     Enable-ScheduledTask -TaskName $taskName"
+Write-Host "  3. Run manually:        Start-ScheduledTask -TaskName $taskName"
+Write-Host "  4. Check status:        Get-ScheduledTask -TaskName $taskName"
+Write-Host "  5. View logs:           Get-Content $installBase\logs\worker.log -Tail 50"
+Write-Host "  6. Task Scheduler GUI:  taskschd.msc"

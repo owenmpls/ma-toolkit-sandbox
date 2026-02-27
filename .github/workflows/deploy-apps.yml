@@ -369,11 +369,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup .NET 8 SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
       - name: Set version
         id: version
         run: |
@@ -382,13 +377,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
-      - name: Build service host
-        run: |
-          dotnet publish src/automation/hybrid-worker/service-host/ \
-            -c Release -r win-x64 --self-contained \
-            -o src/automation/hybrid-worker/service-host-publish/ \
-            --nologo
-
       - name: Download .NET dependencies
         run: pwsh -File src/automation/hybrid-worker/Download-Dependencies.ps1
 
@@ -396,9 +384,8 @@ jobs:
         run: |
           cd src/automation/hybrid-worker
           zip -r "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            src/ modules/ dotnet-libs/ version.txt \
-            service-host-publish/ \
-            -x "tests/*" "config/*" "*.md" "service-host/*.cs" "service-host/*.csproj"
+            src/ modules/ dotnet-libs/ version.txt Start-HybridWorker.ps1 \
+            -x "tests/*" "config/*" "*.md"
 
       - name: Compute SHA256
         id: hash

@@ -2,7 +2,7 @@
 
 <#
 .SYNOPSIS
-    Uninstalls the MA Toolkit Hybrid Worker Windows Service.
+    Uninstalls the MA Toolkit Hybrid Worker Scheduled Task.
 .PARAMETER RemoveFiles
     If specified, removes all worker files including configuration and logs.
 #>
@@ -10,28 +10,21 @@ param(
     [switch]$RemoveFiles
 )
 
-$serviceName = 'MaToolkitHybridWorker'
+$taskName = 'MaToolkitHybridWorker'
 $installBase = 'C:\ProgramData\MaToolkit\HybridWorker'
 
-# Stop the service if running
-$service = Get-Service $serviceName -ErrorAction SilentlyContinue
-if ($service) {
-    if ($service.Status -eq 'Running') {
-        Write-Host "Stopping service '$serviceName'..."
-        Stop-Service $serviceName -Force
-        # Wait for the service to fully stop
-        $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(60))
+# Stop and unregister the scheduled task
+$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($task) {
+    if ($task.State -eq 'Running') {
+        Write-Host "Stopping task '$taskName'..."
+        Stop-ScheduledTask -TaskName $taskName
     }
-
-    # Remove the service
-    Write-Host "Removing service '$serviceName'..."
-    & sc.exe delete $serviceName
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: sc.exe delete returned exit code $LASTEXITCODE" -ForegroundColor Yellow
-    }
+    Write-Host "Removing task '$taskName'..."
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 else {
-    Write-Host "Service '$serviceName' not found."
+    Write-Host "Scheduled task '$taskName' not found."
 }
 
 # Optionally remove installation directory
@@ -51,4 +44,4 @@ elseif (Test-Path $installBase) {
     }
 }
 
-Write-Host "Service '$serviceName' uninstalled." -ForegroundColor Green
+Write-Host "Task '$taskName' uninstalled." -ForegroundColor Green

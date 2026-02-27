@@ -1,6 +1,6 @@
 # Hybrid Worker Deployment Guide
 
-Step-by-step instructions to deploy the Azure infrastructure for a hybrid worker instance and install the worker as a Windows Service on an on-premises server.
+Step-by-step instructions to deploy the Azure infrastructure for a hybrid worker instance and install the worker as a Scheduled Task on an on-premises server.
 
 ## Prerequisites
 
@@ -9,7 +9,6 @@ Step-by-step instructions to deploy the Azure infrastructure for a hybrid worker
 - Access to an on-premises Windows Server with:
   - PowerShell 7.4+ (`pwsh.exe`)
   - Windows PowerShell 5.1 (`powershell.exe`)
-  - .NET 8 SDK (for building the service host)
   - WinRM enabled (for the PSSession pool)
   - Network access to Azure (Service Bus, Key Vault, Storage) and to on-prem services (AD domain controller, Exchange Server)
 - Permissions to create app registrations and assign RBAC roles in the Azure subscription
@@ -20,7 +19,7 @@ Deploying a hybrid worker instance involves three stages:
 
 1. **Azure setup** -- Create a service principal, generate a certificate, and deploy the Bicep template (Service Bus subscription, RBAC, update storage)
 2. **Key Vault secrets** -- Upload on-premises service account credentials
-3. **Windows installation** -- Install the worker on the target server, configure, and start the service
+3. **Windows installation** -- Install the worker on the target server, configure, and register the scheduled task
 
 Each hybrid worker instance gets its own service principal, certificate, Service Bus subscription, and configuration. Multiple instances can share the same update storage account.
 
@@ -203,15 +202,16 @@ Update the values to match your environment. See the [Configuration Reference](h
 - `auth.tenantId`, `auth.appId`, `auth.certificateThumbprint` -- SP details from Steps 1-2
 - `auth.keyVaultName` -- Your Key Vault name
 - `serviceConnections.*` -- Enable the services this worker will use
+- `idleTimeoutSeconds` -- Recommended: `300` (worker exits after 5 min idle, next tick picks up new work)
 
 ### 5c. Run the Installer
 
-Run the installer as Administrator. The installer builds the .NET service host, copies files to `C:\ProgramData\MaToolkit\HybridWorker\`, imports the certificate, registers the Windows Service, and configures service recovery.
+Run the installer as Administrator. The installer copies files to `C:\ProgramData\MaToolkit\HybridWorker\`, imports the certificate, registers the Scheduled Task, and sets directory ACLs.
 
 **With a Group Managed Service Account (recommended for production):**
 
 ```powershell
-.\Install-HybridWorker.ps1 `
+.\Install-HybridWorkerTask.ps1 `
     -ConfigPath .\config\worker-config.json `
     -CertificatePath .\hybrid-worker-01.pfx `
     -CertificatePassword (Read-Host -AsSecureString "PFX password") `
@@ -221,7 +221,7 @@ Run the installer as Administrator. The installer builds the .NET service host, 
 **With a standard service account:**
 
 ```powershell
-.\Install-HybridWorker.ps1 `
+.\Install-HybridWorkerTask.ps1 `
     -ConfigPath .\config\worker-config.json `
     -CertificatePath .\hybrid-worker-01.pfx `
     -CertificatePassword (Read-Host -AsSecureString "PFX password") `
@@ -229,28 +229,41 @@ Run the installer as Administrator. The installer builds the .NET service host, 
     -ServiceAccountPassword (Read-Host -AsSecureString "Account password")
 ```
 
-**With LocalSystem (development/testing only):**
+**With SYSTEM (development/testing only):**
 
 ```powershell
-.\Install-HybridWorker.ps1 `
+.\Install-HybridWorkerTask.ps1 `
     -ConfigPath .\config\worker-config.json `
     -CertificatePath .\hybrid-worker-01.pfx `
     -CertificatePassword (Read-Host -AsSecureString "PFX password")
 ```
 
+**With a custom interval (default is 5 minutes):**
+
+```powershell
+.\Install-HybridWorkerTask.ps1 `
+    -ConfigPath .\config\worker-config.json `
+    -CertificatePath .\hybrid-worker-01.pfx `
+    -CertificatePassword (Read-Host -AsSecureString "PFX password") `
+    -IntervalMinutes 10
+```
+
 The installer performs these steps:
 
-1. Verifies prerequisites (PS 7.4+, powershell.exe, dotnet, WinRM)
+1. Verifies prerequisites (PS 7.4+, powershell.exe, pwsh.exe, WinRM)
 2. Creates `C:\ProgramData\MaToolkit\HybridWorker\{current,staging,previous,config,logs}`
-3. Copies `src/`, `modules/`, `dotnet-libs/`, `version.txt` into `current\`
-4. Builds and publishes the .NET service host (`dotnet publish -c Release -r win-x64 --self-contained`)
-5. Copies configuration to `config\worker-config.json`
-6. Imports the PFX into `Cert:\LocalMachine\My` and grants private key read access to the service account
-7. Registers the Windows Service (`MaToolkitHybridWorker`, startup: Automatic)
-8. Configures service recovery: restart at 10s, 30s, 60s; reset counter after 1 day
-9. Locks down `config\` directory ACL (Administrators: FullControl, service account: Read)
+3. Copies `src/`, `modules/`, `dotnet-libs/`, `version.txt`, `Start-HybridWorker.ps1` into `current\`
+4. Copies configuration to `config\worker-config.json`
+5. Imports the PFX into `Cert:\LocalMachine\My` and grants private key read access to the task account
+6. Registers the Scheduled Task (`MaToolkitHybridWorker`) with:
+   - Trigger: every N minutes (configurable, default 5)
+   - `MultipleInstances = IgnoreNew` (overlap prevention)
+   - `ExecutionTimeLimit = 2 hours` (safety net)
+   - `RestartCount = 3` (retry on failure)
+   - `StartWhenAvailable` (catch up missed triggers)
+7. Locks down `config\` directory ACL (Administrators: FullControl, task account: Read)
 
-## Step 6: Verify Configuration and Start
+## Step 6: Verify and Enable
 
 ### 6a. Verify the Certificate
 
@@ -259,31 +272,34 @@ The installer performs these steps:
 Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq "YOUR_THUMBPRINT" }
 ```
 
-### 6b. Start the Service
+### 6b. Enable and Start the Task
 
 ```powershell
-Start-Service MaToolkitHybridWorker
+# Enable the scheduled task
+Enable-ScheduledTask -TaskName MaToolkitHybridWorker
+
+# Run a tick manually to verify
+Start-ScheduledTask -TaskName MaToolkitHybridWorker
 ```
 
-### 6c. Check Startup Logs
+### 6c. Check Task History
 
 ```powershell
-# Watch the worker log for boot sequence
-Get-Content C:\ProgramData\MaToolkit\HybridWorker\logs\worker.log -Tail 50 -Wait
+# View recent task runs
+Get-ScheduledTask -TaskName MaToolkitHybridWorker | Get-ScheduledTaskInfo
 ```
 
-You should see all 11 boot phases completing successfully. If the worker connects to Service Bus and starts the dispatcher loop, the installation is complete.
+### 6d. Verify in App Insights
 
-### 6d. Check Health Endpoint
+Query for `LauncherTick` events in App Insights to confirm the worker is alive:
 
-```powershell
-Invoke-RestMethod http://localhost:8080/health
-```
-
-### 6e. Check Windows Event Log
-
-```powershell
-Get-WinEvent -ProviderName MaToolkitHybridWorker -MaxEvents 10
+```kusto
+customEvents
+| where name == "LauncherTick"
+| where customDimensions.WorkerId == "hybrid-worker-01"
+| project timestamp, customDimensions.Version, customDimensions.MessagesFound, customDimensions.Action
+| order by timestamp desc
+| take 10
 ```
 
 ---
@@ -320,36 +336,26 @@ After completing all steps, verify:
 - [ ] **Service Bus subscription** -- In Azure Portal, navigate to Service Bus > Topics > worker-jobs > Subscriptions; verify `worker-hybrid-worker-01` exists with the SQL filter
 - [ ] **RBAC assignments** -- Verify the SP has Service Bus Data Receiver, Service Bus Data Sender, and Key Vault Secrets User roles
 - [ ] **Certificate** -- `Get-ChildItem Cert:\LocalMachine\My` shows the imported certificate with the correct thumbprint
-- [ ] **Service registered** -- `Get-Service MaToolkitHybridWorker` returns the service with `Automatic` startup type
-- [ ] **Service running** -- `Get-Service MaToolkitHybridWorker` shows `Running` status
-- [ ] **Boot sequence** -- Worker log shows all 11 phases completing without errors
-- [ ] **Health endpoint** -- `Invoke-RestMethod http://localhost:8080/health` returns a healthy response
-- [ ] **Service Bus connected** -- Health response shows `serviceBus.connected = true`
-- [ ] **Test job** -- Send a test job to the `worker-jobs` topic with `WorkerId = 'hybrid-worker-01'` and verify a result appears on the `worker-results` topic
+- [ ] **Task registered** -- `Get-ScheduledTask -TaskName MaToolkitHybridWorker` returns the task
+- [ ] **Task enabled** -- Task state shows `Ready`
+- [ ] **Manual tick** -- `Start-ScheduledTask -TaskName MaToolkitHybridWorker` completes without error
+- [ ] **App Insights** -- `LauncherTick` event appears with correct WorkerId, Version, and `Action = NoWork`
+- [ ] **Test job** -- Send a test job to the `worker-jobs` topic with `WorkerId = 'hybrid-worker-01'` and verify a result appears on the `worker-results` topic (LauncherTick shows `MessagesFound = 1, Action = StartingWorker`)
 
 ---
 
 ## Troubleshooting
 
-### Installer fails at "Building .NET service host"
+### Task fires but fails immediately
 
-Verify the .NET 8 SDK is installed:
-
-```powershell
-dotnet --list-sdks
-```
-
-If missing, install from https://dot.net.
-
-### Service starts but immediately stops
-
-Check the Event Log for the exit reason:
+Check Task Scheduler history and exit code:
 
 ```powershell
-Get-WinEvent -ProviderName MaToolkitHybridWorker -MaxEvents 10
+Get-ScheduledTask -TaskName MaToolkitHybridWorker | Get-ScheduledTaskInfo
 ```
 
 Common causes:
+- PowerShell 7.4+ not installed or `pwsh.exe` not in PATH
 - Configuration file not found at `C:\ProgramData\MaToolkit\HybridWorker\config\worker-config.json`
 - Invalid JSON in the configuration file
 - Certificate thumbprint does not match any certificate in `Cert:\LocalMachine\My`
@@ -370,31 +376,31 @@ Common causes:
 
 - Verify WinRM is running on the worker server: `Get-Service WinRM`
 - Verify PSRemoting is enabled: `Test-WSMan localhost`
-- Check that the service account can create local PSSessions: `Enter-PSSession -ComputerName localhost -ConfigurationName Microsoft.PowerShell`
+- Check that the task account can create local PSSessions: `Enter-PSSession -ComputerName localhost -ConfigurationName Microsoft.PowerShell`
 - For AD functions: verify the domain controller is reachable and the credential in Key Vault is correct
 
 ### Self-update downloads but fails to apply
 
 Check the worker log for update-related errors. The update mechanism:
 
-1. Downloads `version.json` from blob storage
+1. Launcher checks `version.json` from blob storage each tick
 2. Downloads the zip and verifies SHA256
 3. Extracts to `staging/`
 4. Writes `update-pending.json`
-5. On next boot: renames `current/ -> previous/`, `staging/ -> current/`
+5. On next tick: renames `current/ -> previous/`, `staging/ -> current/`
 
-If the rename fails (e.g., file locks), the rollback restores `previous/ -> current/`. Check that no other process is locking files in the `current/` directory.
+If the rename fails (e.g., file locks from a running worker), the rollback restores `previous/ -> current/`. Verify the worker isn't still running from a previous tick (Task Scheduler's IgnoreNew should prevent this).
 
 ---
 
 ## Uninstalling
 
 ```powershell
-# Stop and remove the service, prompt for file removal
-.\Uninstall-HybridWorker.ps1
+# Stop and remove the task, prompt for file removal
+.\Uninstall-HybridWorkerTask.ps1
 
 # Stop and remove everything including config and logs
-.\Uninstall-HybridWorker.ps1 -RemoveFiles
+.\Uninstall-HybridWorkerTask.ps1 -RemoveFiles
 ```
 
 After uninstalling, you may also want to:

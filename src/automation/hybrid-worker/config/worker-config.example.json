@@ -58,8 +58,10 @@
     "pollIntervalMinutes": 5
   },
 
-  "idleTimeoutSeconds": 0,
+  "idleTimeoutSeconds": 300,
   "shutdownGraceSeconds": 30,
+  "healthCheckEnabled": false,
   "healthCheckPort": 8080,
+  "scheduledTaskIntervalMinutes": 5,
   "logPath": "C:\\ProgramData\\MaToolkit\\HybridWorker\\logs"
 }

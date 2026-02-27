@@ -2,12 +2,15 @@
 .SYNOPSIS
     PowerShell Hybrid Worker - Main entry point.
 .DESCRIPTION
-    On-premises PowerShell worker that runs as a native Windows Service. Processes
-    migration automation jobs via Azure Service Bus using a PS 5.1 PSSession pool
-    for on-prem and cloud service functions (AD, Exchange Server, SPO, Teams).
+    On-premises PowerShell worker that processes migration automation jobs via
+    Azure Service Bus using a PS 5.1 PSSession pool for on-prem and cloud
+    service functions (AD, Exchange Server, SPO, Teams).
+
+    Can be invoked directly or dot-sourced from Start-HybridWorker.ps1 (the
+    scheduled task launcher). When launched via the launcher, logging and Az
+    auth are already initialized and those phases are skipped.
 .NOTES
     Configuration is loaded from a JSON file. See config.ps1 for details.
-    The .NET service host sets HYBRID_WORKER_CONFIG_PATH and HYBRID_WORKER_INSTALL_PATH.
 #>
 
 #Requires -Version 7.4
@@ -63,29 +66,39 @@ catch {
 }
 
 # --- Phase 3: Initialize Logging ---
-Write-Host '[BOOT] Phase 3: Initializing logging...'
-try {
-    Initialize-WorkerLogging -Config $config
-    Write-WorkerLog -Message "Worker '$($config.WorkerId)' starting up..."
-    Write-WorkerEvent -EventName 'WorkerStarting' -Properties @{
-        MaxPs51Sessions     = $config.MaxPs51Sessions
-        ServiceBusNamespace = $config.ServiceBusNamespace
+if ($script:LoggingInitialized) {
+    Write-WorkerLog -Message 'Phase 3: Logging already initialized (launcher mode). Skipping.'
+}
+else {
+    Write-Host '[BOOT] Phase 3: Initializing logging...'
+    try {
+        Initialize-WorkerLogging -Config $config
+    }
+    catch {
+        Write-Host "[FATAL] Logging initialization error: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
     }
 }
-catch {
-    Write-Host "[FATAL] Logging initialization error: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+Write-WorkerLog -Message "Worker '$($config.WorkerId)' starting up..."
+Write-WorkerEvent -EventName 'WorkerStarting' -Properties @{
+    MaxPs51Sessions     = $config.MaxPs51Sessions
+    ServiceBusNamespace = $config.ServiceBusNamespace
 }
 
 # --- Phase 4: Authenticate to Azure (SP + cert) ---
-Write-WorkerLog -Message 'Phase 4: Azure authentication (service principal + certificate)...'
-try {
-    Connect-HybridWorkerAzure -Config $config
+if (Get-AzContext -ErrorAction SilentlyContinue) {
+    Write-WorkerLog -Message 'Phase 4: Azure context already established (launcher mode). Skipping.'
 }
-catch {
-    Write-WorkerLog -Message "Azure authentication failed: $($_.Exception.Message)" -Severity Critical
-    Flush-WorkerTelemetry
-    exit 1
+else {
+    Write-WorkerLog -Message 'Phase 4: Azure authentication (service principal + certificate)...'
+    try {
+        Connect-HybridWorkerAzure -Config $config
+    }
+    catch {
+        Write-WorkerLog -Message "Azure authentication failed: $($_.Exception.Message)" -Severity Critical
+        Flush-WorkerTelemetry
+        exit 1
+    }
 }
 
 # --- Phase 5: Retrieve Credentials ---
@@ -193,13 +206,19 @@ else {
 }
 
 # --- Phase 9: Start Health Check Server ---
-Write-WorkerLog -Message 'Phase 9: Starting health check server...'
-$healthCheckJob = Start-Job -ScriptBlock {
-    param($srcPath, $Port, $WorkerRunning, $SessionPool, $ServiceBusReceiver, $Config)
-    . (Join-Path $srcPath 'health-check.ps1')
-    Start-HealthCheckServer -Port $Port -WorkerRunning $WorkerRunning -SessionPool $SessionPool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
-} -ArgumentList $srcPath, $config.HealthCheckPort, ([ref]$script:WorkerRunning), $sessionPool, $sbReceiver, $config
-Write-WorkerLog -Message "Health check server started on port $($config.HealthCheckPort)"
+$healthCheckJob = $null
+if ($config.HealthCheckEnabled) {
+    Write-WorkerLog -Message 'Phase 9: Starting health check server...'
+    $healthCheckJob = Start-Job -ScriptBlock {
+        param($srcPath, $Port, $WorkerRunning, $SessionPool, $ServiceBusReceiver, $Config)
+        . (Join-Path $srcPath 'health-check.ps1')
+        Start-HealthCheckServer -Port $Port -WorkerRunning $WorkerRunning -SessionPool $SessionPool -ServiceBusReceiver $ServiceBusReceiver -Config $Config
+    } -ArgumentList $srcPath, $config.HealthCheckPort, ([ref]$script:WorkerRunning), $sessionPool, $sbReceiver, $config
+    Write-WorkerLog -Message "Health check server started on port $($config.HealthCheckPort)"
+}
+else {
+    Write-WorkerLog -Message 'Phase 9: Health check disabled. Skipping.'
+}
 
 # --- Phase 10: Register Shutdown Handler ---
 Write-WorkerLog -Message 'Phase 10: Registering shutdown handler...'
