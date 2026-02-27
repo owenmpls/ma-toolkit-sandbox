@@ -459,16 +459,18 @@ jobs:
 
       - name: Upload package to blob storage
         if: steps.storage.outputs.exists == 'true'
+        env:
+          AZCOPY_AUTO_LOGIN_TYPE: AZCLI
         run: |
-          az storage blob upload \
-            --account-name "${{ steps.storage.outputs.account }}" \
-            --container-name "hybrid-worker" \
-            --name "hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --file "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
-            --overwrite --auth-mode login
+          azcopy copy \
+            "src/automation/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            "https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker/hybrid-worker-${{ steps.version.outputs.version }}.zip" \
+            --overwrite=true
 
       - name: Update version manifest
         if: steps.storage.outputs.exists == 'true'
+        env:
+          AZCOPY_AUTO_LOGIN_TYPE: AZCLI
         run: |
           cat > /tmp/version.json << EOF
           {
@@ -479,12 +481,10 @@ jobs:
             "releaseNotes": "Automated build from commit ${{ github.sha }}"
           }
           EOF
-          az storage blob upload \
-            --account-name "${{ steps.storage.outputs.account }}" \
-            --container-name "hybrid-worker" \
-            --name "version.json" \
-            --file "/tmp/version.json" \
-            --overwrite --auth-mode login
+          azcopy copy \
+            "/tmp/version.json" \
+            "https://${{ steps.storage.outputs.account }}.blob.core.windows.net/hybrid-worker/version.json" \
+            --overwrite=true
 
       - name: Remove runner IP from storage firewall
         if: always() && steps.storage.outputs.exists == 'true'
