@@ -18,7 +18,7 @@ resource updateStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
     publicNetworkAccess: 'Enabled'
     allowSharedKeyAccess: false
     networkAcls: {
-      defaultAction: 'Allow'
+      defaultAction: 'Deny'
       bypass: 'AzureServices'
     }
   }

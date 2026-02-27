@@ -422,6 +422,19 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Open storage firewall for runner
+        if: steps.storage.outputs.exists == 'true'
+        id: firewall
+        run: |
+          RUNNER_IP=$(curl -sf https://checkip.amazonaws.com || curl -sf https://api.ipify.org)
+          echo "runner_ip=$RUNNER_IP" >> "$GITHUB_OUTPUT"
+          echo "Adding runner IP $RUNNER_IP to storage firewall"
+          az storage account network-rule add \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --ip-address "$RUNNER_IP" --output none
+          sleep 15
+
       - name: Upload package to blob storage
         if: steps.storage.outputs.exists == 'true'
         run: |
@@ -450,3 +463,12 @@ jobs:
             --name "version.json" \
             --file "/tmp/version.json" \
             --overwrite --auth-mode login
+
+      - name: Remove runner IP from storage firewall
+        if: always() && steps.storage.outputs.exists == 'true'
+        run: |
+          az storage account network-rule remove \
+            --account-name "${{ steps.storage.outputs.account }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --ip-address "${{ steps.firewall.outputs.runner_ip }}" \
+            --output none 2>/dev/null || true
