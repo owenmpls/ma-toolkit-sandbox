@@ -219,7 +219,13 @@
       "Bash(az storage account update:*)",
       "Bash(az storage blob download:*)",
       "Bash(ls:*)",
-      "Bash(gh issue edit:*)"
+      "Bash(gh issue edit:*)",
+      "WebFetch(domain:amirsayes.co.uk)",
+      "WebFetch(domain:4sysops.com)",
+      "WebFetch(domain:www.bloggingforlogging.com)",
+      "WebFetch(domain:techcommunity.microsoft.com)",
+      "WebFetch(domain:www.mobzystems.com)",
+      "WebFetch(domain:pnp.github.io)"
     ]
   }
 }
