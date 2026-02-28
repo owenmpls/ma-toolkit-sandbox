@@ -1,0 +1,134 @@
+{
+  "name": "pl_orchestrate_ondemand",
+  "properties": {
+    "description": "On-demand ingestion for specific tenant and entities. Trigger from ADF Studio, REST API, or CLI.",
+    "activities": [
+      {
+        "name": "Run_Graph_If_Needed",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(or(or(contains(pipeline().parameters.entityNames, 'entra_users'), contains(pipeline().parameters.entityNames, 'entra_groups')), contains(pipeline().parameters.entityNames, 'entra_contacts')), contains(pipeline().parameters.entityNames, 'entra_group_members'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Execute_Graph_Job",
+              "type": "ExecutePipeline",
+              "typeProperties": {
+                "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
+                "parameters": {
+                  "containerJobName": { "value": "@pipeline().parameters.graphJobName", "type": "Expression" },
+                  "tenantKey": { "value": "@pipeline().parameters.tenantKey", "type": "Expression" },
+                  "scheduleTier": { "value": "@pipeline().parameters.scheduleTier", "type": "Expression" },
+                  "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                  "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                  "maxParallelism": { "value": "@pipeline().parameters.maxParallelism", "type": "Expression" },
+                  "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                  "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Run_EXO_If_Needed",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(or(or(or(contains(pipeline().parameters.entityNames, 'exo_mailboxes'), contains(pipeline().parameters.entityNames, 'exo_contacts')), contains(pipeline().parameters.entityNames, 'exo_distribution_groups')), contains(pipeline().parameters.entityNames, 'exo_unified_groups')), contains(pipeline().parameters.entityNames, 'exo_group_members'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Execute_EXO_Job",
+              "type": "ExecutePipeline",
+              "typeProperties": {
+                "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
+                "parameters": {
+                  "containerJobName": { "value": "@pipeline().parameters.exoJobName", "type": "Expression" },
+                  "tenantKey": { "value": "@pipeline().parameters.tenantKey", "type": "Expression" },
+                  "scheduleTier": { "value": "@pipeline().parameters.scheduleTier", "type": "Expression" },
+                  "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                  "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                  "maxParallelism": { "value": "@pipeline().parameters.maxParallelism", "type": "Expression" },
+                  "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                  "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Run_SPO_If_Needed",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@contains(pipeline().parameters.entityNames, 'spo_sites')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Execute_SPO_Job",
+              "type": "ExecutePipeline",
+              "typeProperties": {
+                "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
+                "parameters": {
+                  "containerJobName": { "value": "@pipeline().parameters.spoJobName", "type": "Expression" },
+                  "tenantKey": { "value": "@pipeline().parameters.tenantKey", "type": "Expression" },
+                  "scheduleTier": { "value": "@pipeline().parameters.scheduleTier", "type": "Expression" },
+                  "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                  "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                  "maxParallelism": { "value": "@pipeline().parameters.maxParallelism", "type": "Expression" },
+                  "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                  "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Run_DLT",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Run_Graph_If_Needed", "dependencyConditions": ["Succeeded"] },
+          { "activity": "Run_EXO_If_Needed", "dependencyConditions": ["Succeeded"] },
+          { "activity": "Run_SPO_If_Needed", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "pipeline": { "referenceName": "pl_run_dlt", "type": "PipelineReference" },
+          "parameters": {
+            "dltPipelineId": { "value": "@pipeline().parameters.dltPipelineId", "type": "Expression" },
+            "databricksWorkspaceUrl": { "value": "@pipeline().parameters.databricksWorkspaceUrl", "type": "Expression" }
+          },
+          "waitOnCompletion": true
+        }
+      }
+    ],
+    "parameters": {
+      "tenantKey": { "type": "string" },
+      "entityNames": { "type": "string", "defaultValue": "entra_users,entra_groups" },
+      "scheduleTier": { "type": "string", "defaultValue": "core" },
+      "keyVaultName": { "type": "string" },
+      "storageAccountName": { "type": "string" },
+      "graphJobName": { "type": "string" },
+      "exoJobName": { "type": "string" },
+      "spoJobName": { "type": "string" },
+      "maxParallelism": { "type": "string", "defaultValue": "10" },
+      "resourceGroupName": { "type": "string" },
+      "subscriptionId": { "type": "string" },
+      "dltPipelineId": { "type": "string" },
+      "databricksWorkspaceUrl": { "type": "string" }
+    },
+    "variables": {}
+  }
+}

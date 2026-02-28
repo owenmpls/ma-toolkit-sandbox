@@ -1,0 +1,157 @@
+{
+  "name": "pl_run_container_job",
+  "properties": {
+    "description": "Start an ACA Job execution and poll until completion",
+    "activities": [
+      {
+        "name": "Start_Job",
+        "type": "WebActivity",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "url": {
+            "value": "@concat('https://management.azure.com/subscriptions/', pipeline().parameters.subscriptionId, '/resourceGroups/', pipeline().parameters.resourceGroupName, '/providers/Microsoft.App/jobs/', pipeline().parameters.containerJobName, '/start?api-version=2024-03-01')",
+            "type": "Expression"
+          },
+          "method": "POST",
+          "body": {
+            "value": "@json(concat('{\"template\":{\"containers\":[{\"name\":\"ingest\",\"env\":[{\"name\":\"TENANT_KEY\",\"value\":\"', pipeline().parameters.tenantKey, '\"},{\"name\":\"SCHEDULE_TIER\",\"value\":\"', pipeline().parameters.scheduleTier, '\"},{\"name\":\"KEYVAULT_NAME\",\"value\":\"', pipeline().parameters.keyVaultName, '\"},{\"name\":\"STORAGE_ACCOUNT_NAME\",\"value\":\"', pipeline().parameters.storageAccountName, '\"},{\"name\":\"MAX_PARALLELISM\",\"value\":\"', pipeline().parameters.maxParallelism, '\"},{\"name\":\"LANDING_CONTAINER\",\"value\":\"landing\"}]}]}}'))",
+            "type": "Expression"
+          },
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://management.azure.com/"
+          }
+        }
+      },
+      {
+        "name": "Set_Execution_Name",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Start_Job",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "executionName",
+          "value": {
+            "value": "@last(split(activity('Start_Job').output.id, '/'))",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Wait_For_Job",
+        "type": "Until",
+        "dependsOn": [
+          {
+            "activity": "Set_Execution_Name",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(equals(variables('jobStatus'), 'Succeeded'), equals(variables('jobStatus'), 'Failed'))",
+            "type": "Expression"
+          },
+          "timeout": "0.08:00:00",
+          "activities": [
+            {
+              "name": "Wait_30s",
+              "type": "Wait",
+              "typeProperties": {
+                "waitTimeInSeconds": 30
+              }
+            },
+            {
+              "name": "Check_Status",
+              "type": "WebActivity",
+              "dependsOn": [
+                {
+                  "activity": "Wait_30s",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "url": {
+                  "value": "@concat('https://management.azure.com/subscriptions/', pipeline().parameters.subscriptionId, '/resourceGroups/', pipeline().parameters.resourceGroupName, '/providers/Microsoft.App/jobs/', pipeline().parameters.containerJobName, '/executions/', variables('executionName'), '?api-version=2024-03-01')",
+                  "type": "Expression"
+                },
+                "method": "GET",
+                "authentication": {
+                  "type": "MSI",
+                  "resource": "https://management.azure.com/"
+                }
+              }
+            },
+            {
+              "name": "Set_Status",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Check_Status",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "variableName": "jobStatus",
+                "value": {
+                  "value": "@activity('Check_Status').output.properties.status",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Check_Success",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Wait_For_Job",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(variables('jobStatus'), 'Succeeded')",
+            "type": "Expression"
+          },
+          "ifFalseActivities": [
+            {
+              "name": "Fail_Pipeline",
+              "type": "Fail",
+              "typeProperties": {
+                "message": {
+                  "value": "@concat('ACA Job ', pipeline().parameters.containerJobName, ' failed for tenant ', pipeline().parameters.tenantKey)",
+                  "type": "Expression"
+                },
+                "errorCode": "ACAJobFailed"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "containerJobName": { "type": "string" },
+      "tenantKey": { "type": "string" },
+      "scheduleTier": { "type": "string" },
+      "keyVaultName": { "type": "string" },
+      "storageAccountName": { "type": "string" },
+      "maxParallelism": { "type": "string", "defaultValue": "10" },
+      "resourceGroupName": { "type": "string" },
+      "subscriptionId": { "type": "string" }
+    },
+    "variables": {
+      "executionName": { "type": "String" },
+      "jobStatus": { "type": "String" }
+    }
+  }
+}

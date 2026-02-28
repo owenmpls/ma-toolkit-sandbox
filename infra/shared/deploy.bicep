@@ -265,6 +265,20 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
           ]
         }
       }
+      {
+        name: 'snet-analytics'
+        properties: {
+          addressPrefix: '10.0.6.0/24'
+          delegations: [
+            {
+              name: 'delegation-aca'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+        }
+      }
     ]
   }
 }
@@ -305,6 +319,12 @@ resource stQueueDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 
 resource stTableDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: 'privatelink.table.${environment().suffixes.storage}'
+  location: 'global'
+  tags: tags
+}
+
+resource stDfsDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: 'privatelink.dfs.${environment().suffixes.storage}'
   location: 'global'
   tags: tags
 }
@@ -381,6 +401,19 @@ resource stQueueDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
 resource stTableDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
   parent: stTableDnsZone
   name: '${baseName}-st-table-link'
+  location: 'global'
+  tags: tags
+  properties: {
+    virtualNetwork: {
+      id: vnet.id
+    }
+    registrationEnabled: false
+  }
+}
+
+resource stDfsDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: stDfsDnsZone
+  name: '${baseName}-st-dfs-link'
   location: 'global'
   tags: tags
   properties: {
@@ -488,6 +521,7 @@ output adminApiSubnetId string = vnet.properties.subnets[2].id
 output cloudWorkerSubnetId string = vnet.properties.subnets[3].id
 output privateEndpointsSubnetId string = vnet.properties.subnets[4].id
 output deploymentScriptsSubnetId string = vnet.properties.subnets[5].id
+output analyticsSubnetId string = vnet.properties.subnets[6].id
 
 // Private DNS Zone IDs (consumed by component templates for their own PEs)
 output sqlDnsZoneId string = sqlDnsZone.id
@@ -496,3 +530,4 @@ output sbDnsZoneId string = sbDnsZone.id
 output stBlobDnsZoneId string = stBlobDnsZone.id
 output stQueueDnsZoneId string = stQueueDnsZone.id
 output stTableDnsZoneId string = stTableDnsZone.id
+output stDfsDnsZoneId string = stDfsDnsZone.id

@@ -1,0 +1,36 @@
+services:
+  graph-ingest:
+    build:
+      context: .
+      dockerfile: containers/graph-ingest/Dockerfile
+    environment:
+      - TENANT_KEY=contoso
+      - SCHEDULE_TIER=core
+      - KEYVAULT_NAME=kv-matoolkit-analytics
+      - STORAGE_ACCOUNT_NAME=stmatoolkitanalytics
+      - MAX_PARALLELISM=5
+      - LANDING_CONTAINER=landing
+
+  exo-ingest:
+    build:
+      context: .
+      dockerfile: containers/exo-ingest/Dockerfile
+    environment:
+      - TENANT_KEY=contoso
+      - SCHEDULE_TIER=core
+      - KEYVAULT_NAME=kv-matoolkit-analytics
+      - STORAGE_ACCOUNT_NAME=stmatoolkitanalytics
+      - MAX_PARALLELISM=5
+      - LANDING_CONTAINER=landing
+
+  spo-ingest:
+    build:
+      context: .
+      dockerfile: containers/spo-ingest/Dockerfile
+    environment:
+      - TENANT_KEY=contoso
+      - SCHEDULE_TIER=core
+      - KEYVAULT_NAME=kv-matoolkit-analytics
+      - STORAGE_ACCOUNT_NAME=stmatoolkitanalytics
+      - MAX_PARALLELISM=5
+      - LANDING_CONTAINER=landing

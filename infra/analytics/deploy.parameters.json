@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": {
+      "value": "matoolkit"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "keyVaultName": {
+      "value": "matoolkit-kv"
+    },
+    "acrName": {
+      "value": "matoolkitacr"
+    },
+    "logAnalyticsName": {
+      "value": "matoolkit-logs"
+    },
+    "tags": {
+      "value": {
+        "project": "ma-toolkit",
+        "subsystem": "analytics",
+        "environment": "dev"
+      }
+    }
+  }
+}

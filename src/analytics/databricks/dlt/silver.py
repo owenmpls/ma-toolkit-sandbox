@@ -1,0 +1,495 @@
+import dlt
+from pyspark.sql.functions import (
+    col,
+    concat_ws,
+    current_timestamp,
+    expr,
+    lit,
+    lower,
+    trim,
+    when,
+)
+
+
+# ============================================================================
+# Users
+# ============================================================================
+@dlt.view(name="v_users")
+def v_users():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.entra_users")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("userPrincipalName").alias("user_principal_name"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("displayName").alias("display_name"),
+            col("givenName").alias("given_name"),
+            col("surname"),
+            col("jobTitle").alias("job_title"),
+            col("department"),
+            col("officeLocation").alias("office_location"),
+            col("city"),
+            col("state"),
+            col("country"),
+            col("companyName").alias("company_name"),
+            col("accountEnabled").alias("account_enabled"),
+            col("userType").alias("user_type"),
+            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
+            col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+            col("createdDateTime").alias("created_at"),
+            when(
+                expr(
+                    "exists(assignedLicenses, x -> x.skuId = '06ebc4ee-1bb5-47dd-8120-11324bc54e06')"
+                ),
+                lit("E5"),
+            )
+            .when(
+                expr(
+                    "exists(assignedLicenses, x -> x.skuId = '05e9a617-0261-4cee-bb44-138d3ef5d965')"
+                ),
+                lit("E3"),
+            )
+            .when(
+                expr(
+                    "exists(assignedLicenses, x -> x.skuId = '66b55226-6b4f-492c-910c-a3b7a3c9d993')"
+                ),
+                lit("F3"),
+            )
+            .when(
+                expr(
+                    "exists(assignedLicenses, x -> x.skuId = '18181a46-0d4e-45cd-891e-60aabd171b4e')"
+                ),
+                lit("E1"),
+            )
+            .otherwise(lit(None))
+            .alias("license_type"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="users",
+    comment="Cleaned and deduplicated Entra users across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.users",
+    source="v_users",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Groups
+# ============================================================================
+@dlt.view(name="v_groups")
+def v_groups():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.entra_groups")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("description"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("mailEnabled").alias("mail_enabled"),
+            col("mailNickname").alias("mail_nickname"),
+            col("securityEnabled").alias("security_enabled"),
+            col("visibility"),
+            when(
+                expr("array_contains(groupTypes, 'Unified')"), lit("Microsoft 365")
+            )
+            .when(
+                col("mailEnabled") & col("securityEnabled"),
+                lit("Mail-enabled Security"),
+            )
+            .when(col("mailEnabled"), lit("Distribution"))
+            .when(col("securityEnabled"), lit("Security"))
+            .otherwise(lit("Other"))
+            .alias("group_type"),
+            col("membershipRule").alias("membership_rule"),
+            col("membershipRuleProcessingState").alias(
+                "membership_rule_processing_state"
+            ),
+            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
+            col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+            col("createdDateTime").alias("created_at"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="groups",
+    comment="Cleaned and deduplicated Entra groups across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.groups",
+    source="v_groups",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Group Members (Entra)
+# ============================================================================
+@dlt.view(name="v_group_members")
+def v_group_members():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.entra_group_members")
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("groupId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("groupId").alias("group_id"),
+            col("id").alias("member_id"),
+            col("displayName").alias("display_name"),
+            col("userPrincipalName").alias("user_principal_name"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("@odata.type").alias("member_type"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="group_members",
+    comment="Entra group memberships across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.group_members",
+    source="v_group_members",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Contacts (Entra organizational contacts)
+# ============================================================================
+@dlt.view(name="v_contacts")
+def v_contacts():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.entra_contacts")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("givenName").alias("given_name"),
+            col("surname"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("companyName").alias("company_name"),
+            col("department"),
+            col("jobTitle").alias("job_title"),
+            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="contacts",
+    comment="Cleaned Entra organizational contacts across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.contacts",
+    source="v_contacts",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Mailboxes
+# ============================================================================
+@dlt.view(name="v_mailboxes")
+def v_mailboxes():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.exo_mailboxes")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("ExchangeGuid")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("ExchangeGuid").alias("exchange_guid"),
+            col("ExternalDirectoryObjectId").alias("external_directory_object_id"),
+            col("UserPrincipalName").alias("user_principal_name"),
+            lower(trim(col("PrimarySmtpAddress"))).alias("primary_smtp_address"),
+            col("DisplayName").alias("display_name"),
+            col("RecipientType").alias("recipient_type"),
+            col("RecipientTypeDetails").alias("recipient_type_details"),
+            col("Alias").alias("alias"),
+            col("Database").alias("database"),
+            col("WhenCreated").alias("when_created"),
+            col("WhenMailboxCreated").alias("when_mailbox_created"),
+            col("IsMailboxEnabled").alias("is_mailbox_enabled"),
+            col("HiddenFromAddressListsEnabled").alias("hidden_from_address_lists"),
+            col("ForwardingAddress").alias("forwarding_address"),
+            col("ForwardingSmtpAddress").alias("forwarding_smtp_address"),
+            col("DeliverToMailboxAndForward").alias("deliver_to_mailbox_and_forward"),
+            col("ArchiveStatus").alias("archive_status"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="mailboxes",
+    comment="Cleaned Exchange Online mailboxes across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.mailboxes",
+    source="v_mailboxes",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# EXO Contacts
+# ============================================================================
+@dlt.view(name="v_exo_contacts")
+def v_exo_contacts():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.exo_contacts")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("ExternalDirectoryObjectId")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("ExternalDirectoryObjectId").alias("external_directory_object_id"),
+            col("DisplayName").alias("display_name"),
+            lower(trim(col("PrimarySmtpAddress"))).alias("primary_smtp_address"),
+            col("RecipientType").alias("recipient_type"),
+            col("Alias").alias("alias"),
+            col("ExternalEmailAddress").alias("external_email_address"),
+            col("HiddenFromAddressListsEnabled").alias("hidden_from_address_lists"),
+            col("WhenCreated").alias("when_created"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="exo_contacts",
+    comment="Cleaned Exchange Online mail contacts across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.exo_contacts",
+    source="v_exo_contacts",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Distribution Groups
+# ============================================================================
+@dlt.view(name="v_distribution_groups")
+def v_distribution_groups():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.exo_distribution_groups")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("ExternalDirectoryObjectId")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("ExternalDirectoryObjectId").alias("external_directory_object_id"),
+            col("DisplayName").alias("display_name"),
+            lower(trim(col("PrimarySmtpAddress"))).alias("primary_smtp_address"),
+            col("Alias").alias("alias"),
+            col("GroupType").alias("group_type"),
+            col("ManagedBy").alias("managed_by"),
+            col("MemberCount").alias("member_count"),
+            col("HiddenFromAddressListsEnabled").alias("hidden_from_address_lists"),
+            col("RequireSenderAuthenticationEnabled").alias("require_sender_auth"),
+            col("WhenCreated").alias("when_created"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="distribution_groups",
+    comment="Cleaned Exchange Online distribution groups across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.distribution_groups",
+    source="v_distribution_groups",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Unified Groups (Microsoft 365 Groups)
+# ============================================================================
+@dlt.view(name="v_unified_groups")
+def v_unified_groups():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.exo_unified_groups")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("ExternalDirectoryObjectId")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("ExternalDirectoryObjectId").alias("external_directory_object_id"),
+            col("DisplayName").alias("display_name"),
+            lower(trim(col("PrimarySmtpAddress"))).alias("primary_smtp_address"),
+            col("Alias").alias("alias"),
+            col("ManagedBy").alias("managed_by"),
+            col("GroupMemberCount").alias("member_count"),
+            col("GroupExternalMemberCount").alias("external_member_count"),
+            col("SharePointSiteUrl").alias("sharepoint_site_url"),
+            col("SharePointDocumentsUrl").alias("sharepoint_documents_url"),
+            col("HiddenFromAddressListsEnabled").alias("hidden_from_address_lists"),
+            col("AccessType").alias("access_type"),
+            col("WhenCreated").alias("when_created"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="unified_groups",
+    comment="Cleaned Exchange Online unified (M365) groups across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.unified_groups",
+    source="v_unified_groups",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# EXO Group Members
+# ============================================================================
+@dlt.view(name="v_exo_group_members")
+def v_exo_group_members():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.exo_group_members")
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("groupIdentity"),
+                col("memberName"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("groupIdentity").alias("group_identity"),
+            col("groupType").alias("group_type"),
+            col("memberName").alias("member_name"),
+            col("memberType").alias("member_type"),
+            lower(trim(col("primarySmtp"))).alias("primary_smtp_address"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="exo_group_members",
+    comment="Exchange Online group memberships across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.exo_group_members",
+    source="v_exo_group_members",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Sites (SharePoint Online)
+# ============================================================================
+@dlt.view(name="v_sites")
+def v_sites():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.spo_sites")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("Url")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("Url").alias("url"),
+            col("Title").alias("title"),
+            col("Template").alias("template"),
+            col("Owner").alias("owner"),
+            lower(trim(col("OwnerEmail"))).alias("owner_email"),
+            col("StorageQuota").alias("storage_quota_mb"),
+            col("StorageUsageCurrent").alias("storage_usage_mb"),
+            col("Status").alias("status"),
+            col("LockState").alias("lock_state"),
+            col("SharingCapability").alias("sharing_capability"),
+            col("ConditionalAccessPolicy").alias("conditional_access_policy"),
+            col("HubSiteId").alias("hub_site_id"),
+            col("IsHubSite").alias("is_hub_site"),
+            col("LastContentModifiedDate").alias("last_content_modified"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sites",
+    comment="Cleaned SharePoint Online sites across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.sites",
+    source="v_sites",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)

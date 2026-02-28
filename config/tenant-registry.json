@@ -1,0 +1,35 @@
+{
+  "tenants": [
+    {
+      "tenant_key": "contoso",
+      "tenant_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "display_name": "Contoso Corp",
+      "organization": "contoso.onmicrosoft.com",
+      "client_id": "11111111-2222-3333-4444-555555555555",
+      "cert_name": "cert-contoso",
+      "admin_url": "https://contoso-admin.sharepoint.com",
+      "enabled": true,
+      "core_entities": [
+        "entra_users",
+        "entra_groups",
+        "entra_contacts",
+        "exo_mailboxes",
+        "exo_contacts",
+        "exo_distribution_groups",
+        "exo_unified_groups",
+        "spo_sites"
+      ],
+      "core_enrichment_entities": [
+        "entra_group_members",
+        "exo_group_members"
+      ],
+      "enrichment_entities": [],
+      "schedules": {
+        "core": "every_6h",
+        "core_enrichment": "daily",
+        "enrichment": "weekly"
+      },
+      "max_parallelism": 10
+    }
+  ]
+}

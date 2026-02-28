@@ -1,0 +1,29 @@
+{
+  "name": "tr_enrichment",
+  "properties": {
+    "description": "Trigger enrichment tier ingestion weekly on Sundays at 4 AM UTC",
+    "type": "ScheduleTrigger",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Week",
+        "interval": 1,
+        "startTime": "2026-01-01T04:00:00Z",
+        "timeZone": "UTC",
+        "schedule": {
+          "hours": [4],
+          "minutes": [0],
+          "weekDays": ["Sunday"]
+        }
+      }
+    },
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "pl_orchestrate_enrichment",
+          "type": "PipelineReference"
+        },
+        "parameters": {}
+      }
+    ]
+  }
+}

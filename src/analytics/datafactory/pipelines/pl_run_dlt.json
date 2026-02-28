@@ -1,0 +1,150 @@
+{
+  "name": "pl_run_dlt",
+  "properties": {
+    "description": "Trigger a Databricks DLT pipeline update and poll until completion",
+    "activities": [
+      {
+        "name": "Start_DLT_Update",
+        "type": "WebActivity",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "url": {
+            "value": "@concat(pipeline().parameters.databricksWorkspaceUrl, '/api/2.0/pipelines/', pipeline().parameters.dltPipelineId, '/updates')",
+            "type": "Expression"
+          },
+          "method": "POST",
+          "body": {
+            "full_refresh": false
+          },
+          "authentication": {
+            "type": "MSI",
+            "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+          }
+        }
+      },
+      {
+        "name": "Set_Update_Id",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Start_DLT_Update",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "updateId",
+          "value": {
+            "value": "@activity('Start_DLT_Update').output.update_id",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Wait_For_DLT",
+        "type": "Until",
+        "dependsOn": [
+          {
+            "activity": "Set_Update_Id",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(or(equals(variables('dltStatus'), 'COMPLETED'), equals(variables('dltStatus'), 'FAILED')), equals(variables('dltStatus'), 'CANCELED'))",
+            "type": "Expression"
+          },
+          "timeout": "0.02:00:00",
+          "activities": [
+            {
+              "name": "Wait_60s",
+              "type": "Wait",
+              "typeProperties": {
+                "waitTimeInSeconds": 60
+              }
+            },
+            {
+              "name": "Check_DLT_Status",
+              "type": "WebActivity",
+              "dependsOn": [
+                {
+                  "activity": "Wait_60s",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "url": {
+                  "value": "@concat(pipeline().parameters.databricksWorkspaceUrl, '/api/2.0/pipelines/', pipeline().parameters.dltPipelineId, '/updates/', variables('updateId'))",
+                  "type": "Expression"
+                },
+                "method": "GET",
+                "authentication": {
+                  "type": "MSI",
+                  "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+                }
+              }
+            },
+            {
+              "name": "Set_DLT_Status",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Check_DLT_Status",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "variableName": "dltStatus",
+                "value": {
+                  "value": "@activity('Check_DLT_Status').output.update.state",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Check_DLT_Success",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Wait_For_DLT",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(variables('dltStatus'), 'COMPLETED')",
+            "type": "Expression"
+          },
+          "ifFalseActivities": [
+            {
+              "name": "Fail_DLT",
+              "type": "Fail",
+              "typeProperties": {
+                "message": {
+                  "value": "@concat('DLT pipeline update ', variables('updateId'), ' ended with status: ', variables('dltStatus'))",
+                  "type": "Expression"
+                },
+                "errorCode": "DLTUpdateFailed"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "dltPipelineId": { "type": "string" },
+      "databricksWorkspaceUrl": { "type": "string" }
+    },
+    "variables": {
+      "updateId": { "type": "String" },
+      "dltStatus": { "type": "String" }
+    }
+  }
+}
