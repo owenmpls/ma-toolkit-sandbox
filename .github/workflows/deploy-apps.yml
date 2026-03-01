@@ -702,37 +702,51 @@ jobs:
           PIPELINE_NAME="matoolkit-analytics-dlt"
 
           # Check if pipeline already exists
-          EXISTING=$(curl -sSf "${WORKSPACE_URL}/api/2.0/pipelines?filter=name%20LIKE%20'${PIPELINE_NAME}'" \
-            -H "Authorization: Bearer ${TOKEN}" | jq -r '.statuses[0].pipeline_id // empty')
+          LIST_RESPONSE=$(curl -sS "${WORKSPACE_URL}/api/2.0/pipelines?filter=name%20LIKE%20'${PIPELINE_NAME}'" \
+            -H "Authorization: Bearer ${TOKEN}")
+          echo "List response: ${LIST_RESPONSE}"
+          EXISTING=$(echo "$LIST_RESPONSE" | jq -r '.statuses[0].pipeline_id // empty')
 
-          PIPELINE_SPEC='{
-            "name": "'"${PIPELINE_NAME}"'",
+          PIPELINE_SPEC=$(cat <<SPEC
+          {
+            "name": "${PIPELINE_NAME}",
             "catalog": "matoolkit_analytics",
             "libraries": [
               {"notebook": {"path": "/Shared/analytics/dlt/bronze"}},
               {"notebook": {"path": "/Shared/analytics/dlt/silver"}}
             ],
             "configuration": {
-              "analytics.storage_account_name": "'"${STORAGE_ACCOUNT}"'"
+              "analytics.storage_account_name": "${STORAGE_ACCOUNT}"
             },
-            "channel": "CURRENT",
-            "continuous": false
-          }'
+            "development": true,
+            "channel": "CURRENT"
+          }
+          SPEC
+          )
+          echo "Pipeline spec: ${PIPELINE_SPEC}"
 
           if [ -n "$EXISTING" ]; then
             echo "Updating existing pipeline: ${EXISTING}"
-            curl -sSf -X PUT "${WORKSPACE_URL}/api/2.0/pipelines/${EXISTING}" \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$PIPELINE_SPEC"
-            echo "pipeline_id=${EXISTING}" >> "$GITHUB_OUTPUT"
-          else
-            echo "Creating new pipeline: ${PIPELINE_NAME}"
-            RESULT=$(curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/pipelines" \
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X PUT "${WORKSPACE_URL}/api/2.0/pipelines/${EXISTING}" \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "Content-Type: application/json" \
               -d "$PIPELINE_SPEC")
-            PIPELINE_ID=$(echo "$RESULT" | jq -r '.pipeline_id')
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "Response (${HTTP_CODE}): ${BODY}"
+            if [ "$HTTP_CODE" -ge 400 ]; then exit 1; fi
+            echo "pipeline_id=${EXISTING}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Creating new pipeline: ${PIPELINE_NAME}"
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${WORKSPACE_URL}/api/2.0/pipelines" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$PIPELINE_SPEC")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "Response (${HTTP_CODE}): ${BODY}"
+            if [ "$HTTP_CODE" -ge 400 ]; then exit 1; fi
+            PIPELINE_ID=$(echo "$BODY" | jq -r '.pipeline_id')
             echo "Created pipeline: ${PIPELINE_ID}"
             echo "pipeline_id=${PIPELINE_ID}" >> "$GITHUB_OUTPUT"
           fi
