@@ -28,9 +28,6 @@ param acrName string = '${baseName}acr'
 @description('Log Analytics workspace name (existing shared resource)')
 param logAnalyticsName string = '${baseName}-logs'
 
-@description('Databricks access connector principal ID (for UC storage access)')
-param databricksAccessConnectorPrincipalId string = ''
-
 @description('Tags for all resources')
 param tags object = {
   project: 'ma-toolkit'
@@ -84,6 +81,36 @@ module storageAccount 'modules/storage-account/main.bicep' = {
     privateEndpointSubnetId: privateEndpointSubnetId
     blobPrivateDnsZoneId: blobPrivateDnsZoneId
     dfsPrivateDnsZoneId: dfsPrivateDnsZoneId
+    tags: tags
+  }
+}
+
+// --- Databricks Workspace ---
+module databricksWorkspace 'modules/databricks-workspace/main.bicep' = {
+  name: 'analytics-databricks-workspace'
+  params: {
+    workspaceName: '${baseName}-analytics-dbw-${environment}'
+    location: location
+    tags: tags
+  }
+}
+
+// --- Databricks Access Connector ---
+module databricksAccessConnector 'modules/databricks-access-connector/main.bicep' = {
+  name: 'analytics-databricks-access-connector'
+  params: {
+    accessConnectorName: '${baseName}-analytics-dbac-${environment}'
+    location: location
+    tags: tags
+  }
+}
+
+// --- Data Factory ---
+module dataFactory 'modules/data-factory/main.bicep' = {
+  name: 'analytics-data-factory'
+  params: {
+    factoryName: '${baseName}-analytics-adf-${environment}'
+    location: location
     tags: tags
   }
 }
@@ -252,12 +279,34 @@ resource storageBlobRole2 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 }
 
 // Storage Blob Data Contributor for Databricks Access Connector (UC metastore root)
-resource databricksStorageRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(databricksAccessConnectorPrincipalId)) {
-  name: guid(analyticsStorage.id, databricksAccessConnectorPrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+resource databricksStorageRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(analyticsStorage.id, 'databricks-access-connector', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
   scope: analyticsStorage
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-    principalId: databricksAccessConnectorPrincipalId
+    principalId: databricksAccessConnector.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Key Vault Secrets User for Data Factory (read tenant registry secrets)
+resource adfKvSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, 'data-factory', '4633458b-17de-408a-b874-0445c86b69e6')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: dataFactory.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Contributor on ACA Environment for Data Factory (start ACA Jobs via ARM)
+resource adfAcaContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acaEnvironment.id, 'data-factory', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+  scope: acaEnvironment
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+    principalId: dataFactory.outputs.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -267,3 +316,5 @@ output storageAccountName string = storageAccountName
 output acaEnvironmentId string = acaEnvironment.id
 output jobNames array = [acaJobs[0].outputs.jobName, acaJobs[1].outputs.jobName, acaJobs[2].outputs.jobName]
 output jobPrincipalIds array = [acaJobs[0].outputs.systemAssignedPrincipalId, acaJobs[1].outputs.systemAssignedPrincipalId, acaJobs[2].outputs.systemAssignedPrincipalId]
+output databricksWorkspaceUrl string = databricksWorkspace.outputs.workspaceUrl
+output dataFactoryName string = dataFactory.outputs.factoryName
