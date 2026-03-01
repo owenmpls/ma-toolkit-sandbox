@@ -598,7 +598,7 @@ jobs:
 
       # --- Databricks: upload DLT notebooks and create/update pipeline ---
 
-      - name: Get Databricks API token
+      - name: Get Databricks API tokens
         if: steps.analytics-infra.outputs.exists == 'true'
         id: dbx-token
         run: |
@@ -607,6 +607,14 @@ jobs:
             --query accessToken -o tsv)
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+          # ARM management token — required by Unity Catalog storage credential API
+          # when called by a service principal
+          ARM_TOKEN=$(az account get-access-token \
+            --resource https://management.azure.com/ \
+            --query accessToken -o tsv)
+          echo "::add-mask::$ARM_TOKEN"
+          echo "arm_token=$ARM_TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: Ensure Unity Catalog schemas exist
         if: steps.analytics-infra.outputs.exists == 'true'
@@ -669,9 +677,11 @@ jobs:
             echo "Storage credential '${CRED_NAME}' already exists"
           else
             echo "Creating storage credential '${CRED_NAME}'"
+            ARM_TOKEN="${{ steps.dbx-token.outputs.arm_token }}"
             CRED_RESULT=$(curl -sS -w "\n%{http_code}" -X POST \
               "${WORKSPACE_URL}/api/2.1/unity-catalog/storage-credentials" \
               -H "Authorization: Bearer ${TOKEN}" \
+              -H "X-Databricks-Azure-SP-Management-Token: ${ARM_TOKEN}" \
               -H "Content-Type: application/json" \
               -d "{
                 \"name\": \"${CRED_NAME}\",
