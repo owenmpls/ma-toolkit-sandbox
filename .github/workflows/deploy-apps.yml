@@ -650,19 +650,32 @@ jobs:
           done
 
           # Run catalog/schema setup (idempotent)
-          for stmt in \
-            "CREATE CATALOG IF NOT EXISTS matoolkit_analytics COMMENT 'M&A Toolkit analytics data'" \
-            "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.bronze COMMENT 'Raw data from Microsoft tenant APIs'" \
-            "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.silver COMMENT 'Cleaned and deduplicated data - SCD Type 1'"; do
+          STORAGE_ACCOUNT="${{ steps.jobs.outputs.storage_account }}"
+          CATALOG_LOCATION="abfss://unity-catalog@${STORAGE_ACCOUNT}.dfs.core.windows.net/"
+
+          STATEMENTS=(
+            "CREATE CATALOG IF NOT EXISTS matoolkit_analytics MANAGED LOCATION '${CATALOG_LOCATION}' COMMENT 'M&A Toolkit analytics data'"
+            "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.bronze COMMENT 'Raw data from Microsoft tenant APIs'"
+            "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.silver COMMENT 'Cleaned and deduplicated data - SCD Type 1'"
+          )
+
+          for stmt in "${STATEMENTS[@]}"; do
             echo "Executing: ${stmt}"
-            curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/sql/statements" \
+            RESULT=$(curl -sS -X POST "${WORKSPACE_URL}/api/2.0/sql/statements" \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "Content-Type: application/json" \
               -d "{
                 \"warehouse_id\": \"${WAREHOUSE_ID}\",
                 \"statement\": \"${stmt}\",
                 \"wait_timeout\": \"30s\"
-              }"
+              }")
+            STATE=$(echo "$RESULT" | jq -r '.status.state')
+            if [ "$STATE" = "FAILED" ]; then
+              ERROR=$(echo "$RESULT" | jq -r '.status.error.message')
+              echo "::error::SQL failed: ${ERROR}"
+              exit 1
+            fi
+            echo "SQL state: ${STATE}"
           done
           echo "Unity Catalog setup complete"
 
