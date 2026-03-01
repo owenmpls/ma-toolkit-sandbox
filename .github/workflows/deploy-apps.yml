@@ -653,7 +653,7 @@ jobs:
           STORAGE_ACCOUNT="${{ steps.jobs.outputs.storage_account }}"
           CATALOG_LOCATION="abfss://unity-catalog@${STORAGE_ACCOUNT}.dfs.core.windows.net/"
 
-          # Get access connector resource ID for storage credential
+          # Create storage credential via REST API (idempotent)
           ACCESS_CONNECTOR_ID=$(az resource show \
             --name matoolkit-analytics-dbac-dev \
             --resource-group "$RESOURCE_GROUP" \
@@ -661,9 +661,56 @@ jobs:
             --query id -o tsv)
           echo "Access connector: ${ACCESS_CONNECTOR_ID}"
 
+          CRED_NAME="matoolkit-analytics-access-connector"
+          CRED_CHECK=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "${WORKSPACE_URL}/api/2.1/unity-catalog/storage-credentials/${CRED_NAME}" \
+            -H "Authorization: Bearer ${TOKEN}")
+          if [ "$CRED_CHECK" = "200" ]; then
+            echo "Storage credential '${CRED_NAME}' already exists"
+          else
+            echo "Creating storage credential '${CRED_NAME}'"
+            CRED_RESULT=$(curl -sS -w "\n%{http_code}" -X POST \
+              "${WORKSPACE_URL}/api/2.1/unity-catalog/storage-credentials" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"name\": \"${CRED_NAME}\",
+                \"azure_managed_identity\": {
+                  \"access_connector_id\": \"${ACCESS_CONNECTOR_ID}\"
+                }
+              }")
+            CRED_HTTP=$(echo "$CRED_RESULT" | tail -1)
+            CRED_BODY=$(echo "$CRED_RESULT" | sed '$d')
+            echo "Storage credential response (${CRED_HTTP}): ${CRED_BODY}"
+            if [ "$CRED_HTTP" -ge 400 ]; then exit 1; fi
+          fi
+
+          # Create external location via REST API (idempotent)
+          EXTLOC_NAME="matoolkit-analytics-unity-catalog"
+          EXTLOC_CHECK=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "${WORKSPACE_URL}/api/2.1/unity-catalog/external-locations/${EXTLOC_NAME}" \
+            -H "Authorization: Bearer ${TOKEN}")
+          if [ "$EXTLOC_CHECK" = "200" ]; then
+            echo "External location '${EXTLOC_NAME}' already exists"
+          else
+            echo "Creating external location '${EXTLOC_NAME}'"
+            EXTLOC_RESULT=$(curl -sS -w "\n%{http_code}" -X POST \
+              "${WORKSPACE_URL}/api/2.1/unity-catalog/external-locations" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"name\": \"${EXTLOC_NAME}\",
+                \"url\": \"${CATALOG_LOCATION}\",
+                \"credential_name\": \"${CRED_NAME}\"
+              }")
+            EXTLOC_HTTP=$(echo "$EXTLOC_RESULT" | tail -1)
+            EXTLOC_BODY=$(echo "$EXTLOC_RESULT" | sed '$d')
+            echo "External location response (${EXTLOC_HTTP}): ${EXTLOC_BODY}"
+            if [ "$EXTLOC_HTTP" -ge 400 ]; then exit 1; fi
+          fi
+
+          # Create catalog and schemas via SQL (idempotent)
           STATEMENTS=(
-            "CREATE STORAGE CREDENTIAL IF NOT EXISTS \`matoolkit-analytics-access-connector\` WITH AZURE_MANAGED_IDENTITY ON '${ACCESS_CONNECTOR_ID}'"
-            "CREATE EXTERNAL LOCATION IF NOT EXISTS \`matoolkit-analytics-unity-catalog\` URL '${CATALOG_LOCATION}' WITH (STORAGE CREDENTIAL \`matoolkit-analytics-access-connector\`)"
             "CREATE CATALOG IF NOT EXISTS matoolkit_analytics MANAGED LOCATION '${CATALOG_LOCATION}' COMMENT 'M&A Toolkit analytics data'"
             "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.bronze COMMENT 'Raw data from Microsoft tenant APIs'"
             "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.silver COMMENT 'Cleaned and deduplicated data - SCD Type 1'"
