@@ -14,11 +14,13 @@ on:
           - admin-api
           - cloud-worker
           - hybrid-worker
+          - analytics
 
   push:
     branches: [main]
     paths:
       - 'src/automation/**'
+      - 'src/analytics/**'
 
 permissions:
   id-token: write
@@ -45,6 +47,7 @@ jobs:
       cloud_worker: ${{ steps.filter.outputs.cloud_worker }}
       hybrid_worker: ${{ steps.filter.outputs.hybrid_worker }}
       shared: ${{ steps.filter.outputs.shared }}
+      analytics: ${{ steps.filter.outputs.analytics }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -63,6 +66,8 @@ jobs:
               - 'src/automation/hybrid-worker/**'
             shared:
               - 'src/automation/shared/**'
+            analytics:
+              - 'src/analytics/**'
 
   # ---------------------------------------------------------------
   # Build, test, and publish .NET projects
@@ -78,6 +83,7 @@ jobs:
       deploy_admin_api: ${{ steps.resolve.outputs.admin_api }}
       deploy_cloud_worker: ${{ steps.resolve.outputs.cloud_worker }}
       deploy_hybrid_worker: ${{ steps.resolve.outputs.hybrid_worker }}
+      deploy_analytics: ${{ steps.resolve.outputs.analytics }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,6 +116,7 @@ jobs:
             echo "admin_api=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "admin-api" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "cloud_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "cloud-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "hybrid_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "hybrid-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "analytics=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "analytics" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           else
             # Push trigger — deploy components whose files changed (or all .NET if shared changed)
             SHARED="${{ needs.changes.outputs.shared }}"
@@ -118,6 +125,7 @@ jobs:
             echo "admin_api=$( [ "$SHARED" = "true" ] || [ "${{ needs.changes.outputs.admin_api }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "cloud_worker=$( [ "${{ needs.changes.outputs.cloud_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "hybrid_worker=$( [ "${{ needs.changes.outputs.hybrid_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "analytics=$( [ "${{ needs.changes.outputs.analytics }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup .NET 8 SDK
@@ -487,3 +495,101 @@ jobs:
               packageSha256="${{ steps.hash.outputs.sha256 }}" \
               artifactUrl="$ARTIFACT_URL" \
               githubToken="${{ github.token }}"
+
+  # ---------------------------------------------------------------
+  # Deploy Analytics containers
+  # ---------------------------------------------------------------
+  deploy-analytics:
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: [build-and-test]
+    if: >-
+      always() && needs.build-and-test.result == 'success' &&
+      needs.build-and-test.outputs.deploy_analytics == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch ACR login server
+        id: acr
+        run: |
+          outputs=$(az deployment group show \
+            --name shared-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "login_server=$(echo "$outputs" | jq -r '.containerRegistryLoginServer.value')" >> "$GITHUB_OUTPUT"
+          echo "acr_name=$(echo "$outputs" | jq -r '.containerRegistryName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push graph-ingest
+        run: |
+          az acr build \
+            --registry "${{ steps.acr.outputs.acr_name }}" \
+            --image "analytics/graph-ingest:${{ github.sha }}" \
+            --image "analytics/graph-ingest:latest" \
+            --file src/analytics/containers/graph-ingest/Dockerfile \
+            src/analytics/
+
+      - name: Build and push exo-ingest
+        run: |
+          az acr build \
+            --registry "${{ steps.acr.outputs.acr_name }}" \
+            --image "analytics/exo-ingest:${{ github.sha }}" \
+            --image "analytics/exo-ingest:latest" \
+            --file src/analytics/containers/exo-ingest/Dockerfile \
+            src/analytics/
+
+      - name: Build and push spo-ingest
+        run: |
+          az acr build \
+            --registry "${{ steps.acr.outputs.acr_name }}" \
+            --image "analytics/spo-ingest:${{ github.sha }}" \
+            --image "analytics/spo-ingest:latest" \
+            --file src/analytics/containers/spo-ingest/Dockerfile \
+            src/analytics/
+
+      - name: Check analytics infrastructure exists
+        id: analytics-infra
+        run: |
+          if az deployment group show \
+            --name analytics \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.provisioningState \
+            --output tsv 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Analytics infrastructure not deployed — skipping job image update. Deploy infra first: gh workflow run deploy-infra.yml -f stage=analytics"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch analytics job names
+        if: steps.analytics-infra.outputs.exists == 'true'
+        id: jobs
+        run: |
+          outputs=$(az deployment group show \
+            --name analytics \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          # jobNames is an array output — extract each
+          echo "job_names=$(echo "$outputs" | jq -r '.jobNames.value | join(",")')" >> "$GITHUB_OUTPUT"
+
+      - name: Update ACA Job images
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: |
+          IFS=',' read -ra JOBS <<< "${{ steps.jobs.outputs.job_names }}"
+          IMAGES=("analytics/graph-ingest" "analytics/exo-ingest" "analytics/spo-ingest")
+          for i in "${!JOBS[@]}"; do
+            echo "Updating ${JOBS[$i]} -> ${IMAGES[$i]}:${{ github.sha }}"
+            az containerapp job update \
+              --name "${JOBS[$i]}" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "${{ steps.acr.outputs.login_server }}/${IMAGES[$i]}:${{ github.sha }}"
+          done

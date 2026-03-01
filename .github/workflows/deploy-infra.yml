@@ -14,6 +14,7 @@ on:
           - admin-api
           - cloud-worker
           - hybrid-worker
+          - analytics
 
 permissions:
   id-token: write
@@ -58,7 +59,7 @@ jobs:
 
       # --- Fetch shared outputs (needed by all components) ---
       - name: Fetch shared deployment outputs
-        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator' || inputs.stage == 'admin-api' || inputs.stage == 'cloud-worker' || inputs.stage == 'hybrid-worker'
+        if: inputs.stage == 'all' || inputs.stage == 'scheduler-orchestrator' || inputs.stage == 'admin-api' || inputs.stage == 'cloud-worker' || inputs.stage == 'hybrid-worker' || inputs.stage == 'analytics'
         id: shared
         run: |
           outputs=$(az deployment group show \
@@ -83,6 +84,9 @@ jobs:
           echo "st_queue_dns_zone_id=$(echo "$outputs" | jq -r '.stQueueDnsZoneId.value')" >> "$GITHUB_OUTPUT"
           echo "st_table_dns_zone_id=$(echo "$outputs" | jq -r '.stTableDnsZoneId.value')" >> "$GITHUB_OUTPUT"
           echo "deployment_scripts_subnet_id=$(echo "$outputs" | jq -r '.deploymentScriptsSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "analytics_subnet_id=$(echo "$outputs" | jq -r '.analyticsSubnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "st_blob_dns_zone_id_full=$(echo "$outputs" | jq -r '.stBlobDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+          echo "st_dfs_dns_zone_id=$(echo "$outputs" | jq -r '.stDfsDnsZoneId.value')" >> "$GITHUB_OUTPUT"
 
       # --- Scheduler + Orchestrator ---
       - name: Deploy scheduler-orchestrator
@@ -223,3 +227,21 @@ jobs:
               exit 1
             fi
           fi
+
+      # ---------------------------------------------------------------
+      # Analytics Infrastructure
+      # ---------------------------------------------------------------
+
+      - name: Deploy analytics
+        if: inputs.stage == 'all' || inputs.stage == 'analytics'
+        run: |
+          az deployment group create \
+            --name analytics \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/analytics/deploy.bicep \
+            --parameters infra/analytics/deploy.parameters.json \
+            --parameters location="$LOCATION" \
+            --parameters analyticsSubnetId="${{ steps.shared.outputs.analytics_subnet_id }}" \
+            --parameters privateEndpointSubnetId="${{ steps.shared.outputs.pe_subnet_id }}" \
+            --parameters blobPrivateDnsZoneId="${{ steps.shared.outputs.st_blob_dns_zone_id }}" \
+            --parameters dfsPrivateDnsZoneId="${{ steps.shared.outputs.st_dfs_dns_zone_id }}"
