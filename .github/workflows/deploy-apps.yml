@@ -662,7 +662,7 @@ jobs:
           echo "Access connector: ${ACCESS_CONNECTOR_ID}"
 
           STATEMENTS=(
-            "CREATE STORAGE CREDENTIAL IF NOT EXISTS \`matoolkit-analytics-access-connector\` WITH (AZURE_MANAGED_IDENTITY (ACCESS_CONNECTOR_ID = '${ACCESS_CONNECTOR_ID}'))"
+            "CREATE STORAGE CREDENTIAL IF NOT EXISTS \`matoolkit-analytics-access-connector\` WITH AZURE_MANAGED_IDENTITY ON '${ACCESS_CONNECTOR_ID}'"
             "CREATE EXTERNAL LOCATION IF NOT EXISTS \`matoolkit-analytics-unity-catalog\` URL '${CATALOG_LOCATION}' WITH (STORAGE CREDENTIAL \`matoolkit-analytics-access-connector\`)"
             "CREATE CATALOG IF NOT EXISTS matoolkit_analytics MANAGED LOCATION '${CATALOG_LOCATION}' COMMENT 'M&A Toolkit analytics data'"
             "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.bronze COMMENT 'Raw data from Microsoft tenant APIs'"
