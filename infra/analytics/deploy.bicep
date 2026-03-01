@@ -120,22 +120,22 @@ resource acaEnvironment 'Microsoft.App/managedEnvironments@2025-01-01' = {
 var jobConfigs = [
   {
     name: '${baseName}-graph-ingest-${environment}'
-    image: '${acr.properties.loginServer}/analytics/graph-ingest:latest'
+    imagePath: 'analytics/graph-ingest:latest'
   }
   {
     name: '${baseName}-exo-ingest-${environment}'
-    image: '${acr.properties.loginServer}/analytics/exo-ingest:latest'
+    imagePath: 'analytics/exo-ingest:latest'
   }
   {
     name: '${baseName}-spo-ingest-${environment}'
-    image: '${acr.properties.loginServer}/analytics/spo-ingest:latest'
+    imagePath: 'analytics/spo-ingest:latest'
   }
 ]
 
 var commonEnvVars = [
-  { name: 'KEYVAULT_NAME'; value: keyVaultName }
-  { name: 'STORAGE_ACCOUNT_NAME'; value: storageAccountName }
-  { name: 'LANDING_CONTAINER'; value: 'landing' }
+  { name: 'KEYVAULT_NAME', value: keyVaultName }
+  { name: 'STORAGE_ACCOUNT_NAME', value: storageAccountName }
+  { name: 'LANDING_CONTAINER', value: 'landing' }
 ]
 
 module acaJobs 'modules/container-app-job/main.bicep' = [
@@ -145,7 +145,7 @@ module acaJobs 'modules/container-app-job/main.bicep' = [
       jobName: config.name
       location: location
       environmentId: acaEnvironment.id
-      containerImage: config.image
+      containerImage: '${acr.properties.loginServer}/${config.imagePath}'
       acrLoginServer: acr.properties.loginServer
       acrPullIdentityId: acrPullIdentity.id
       envVars: commonEnvVars
@@ -155,65 +155,108 @@ module acaJobs 'modules/container-app-job/main.bicep' = [
   }
 ]
 
+// --- Reference the analytics storage account for RBAC scoping ---
+resource analyticsStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: storageAccountName
+  dependsOn: [storageAccount]
+}
+
 // --- RBAC for ACA Job system-assigned identities ---
+// Unrolled per job to avoid for-loop limitations with runtime values
 
-// Key Vault Secrets User (4633458b-17de-408a-b874-0445c86b69e6)
-resource kvSecretsUserRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for (config, i) in jobConfigs: {
-    name: guid(keyVault.id, acaJobs[i].outputs.systemAssignedPrincipalId, '4633458b-17de-408a-b874-0445c86b69e6')
-    scope: keyVault
-    properties: {
-      roleDefinitionId: subscriptionResourceId(
-        'Microsoft.Authorization/roleDefinitions',
-        '4633458b-17de-408a-b874-0445c86b69e6'
-      )
-      principalId: acaJobs[i].outputs.systemAssignedPrincipalId
-      principalType: 'ServicePrincipal'
-    }
+// Graph ingest — KV Secrets User
+resource kvSecretsUser0 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, jobConfigs[0].name, '4633458b-17de-408a-b874-0445c86b69e6')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: acaJobs[0].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
   }
-]
+}
+resource kvSecretsUser1 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, jobConfigs[1].name, '4633458b-17de-408a-b874-0445c86b69e6')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: acaJobs[1].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+resource kvSecretsUser2 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, jobConfigs[2].name, '4633458b-17de-408a-b874-0445c86b69e6')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: acaJobs[2].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
-// Key Vault Certificate User (db79e9a7-68ee-4b58-9aeb-b90e7c24fcba)
-resource kvCertUserRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for (config, i) in jobConfigs: {
-    name: guid(keyVault.id, acaJobs[i].outputs.systemAssignedPrincipalId, 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
-    scope: keyVault
-    properties: {
-      roleDefinitionId: subscriptionResourceId(
-        'Microsoft.Authorization/roleDefinitions',
-        'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba'
-      )
-      principalId: acaJobs[i].outputs.systemAssignedPrincipalId
-      principalType: 'ServicePrincipal'
-    }
+// KV Certificate User
+resource kvCertUser0 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, jobConfigs[0].name, 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+    principalId: acaJobs[0].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
   }
-]
+}
+resource kvCertUser1 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, jobConfigs[1].name, 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+    principalId: acaJobs[1].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+resource kvCertUser2 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, jobConfigs[2].name, 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+    principalId: acaJobs[2].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
-// Storage Blob Data Contributor on the storage account (ba92f5b4-2d11-453d-a403-e96b0029c9fe)
-resource storageBlobRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for (config, i) in jobConfigs: {
-    name: guid(storageAccount.outputs.storageAccountId, acaJobs[i].outputs.systemAssignedPrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-    scope: resourceId('Microsoft.Storage/storageAccounts', storageAccountName)
-    properties: {
-      roleDefinitionId: subscriptionResourceId(
-        'Microsoft.Authorization/roleDefinitions',
-        'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-      )
-      principalId: acaJobs[i].outputs.systemAssignedPrincipalId
-      principalType: 'ServicePrincipal'
-    }
+// Storage Blob Data Contributor
+resource storageBlobRole0 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(analyticsStorage.id, jobConfigs[0].name, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  scope: analyticsStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: acaJobs[0].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
   }
-]
+}
+resource storageBlobRole1 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(analyticsStorage.id, jobConfigs[1].name, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  scope: analyticsStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: acaJobs[1].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+resource storageBlobRole2 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(analyticsStorage.id, jobConfigs[2].name, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  scope: analyticsStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: acaJobs[2].outputs.systemAssignedPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 // Storage Blob Data Contributor for Databricks Access Connector (UC metastore root)
 resource databricksStorageRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(databricksAccessConnectorPrincipalId)) {
-  name: guid(storageAccount.outputs.storageAccountId, databricksAccessConnectorPrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-  scope: resourceId('Microsoft.Storage/storageAccounts', storageAccountName)
+  name: guid(analyticsStorage.id, databricksAccessConnectorPrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  scope: analyticsStorage
   properties: {
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-    )
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
     principalId: databricksAccessConnectorPrincipalId
     principalType: 'ServicePrincipal'
   }
@@ -222,5 +265,5 @@ resource databricksStorageRole 'Microsoft.Authorization/roleAssignments@2022-04-
 // --- Outputs ---
 output storageAccountName string = storageAccountName
 output acaEnvironmentId string = acaEnvironment.id
-output jobNames array = [for (config, i) in jobConfigs: acaJobs[i].outputs.jobName]
-output jobPrincipalIds array = [for (config, i) in jobConfigs: acaJobs[i].outputs.systemAssignedPrincipalId]
+output jobNames array = [acaJobs[0].outputs.jobName, acaJobs[1].outputs.jobName, acaJobs[2].outputs.jobName]
+output jobPrincipalIds array = [acaJobs[0].outputs.systemAssignedPrincipalId, acaJobs[1].outputs.systemAssignedPrincipalId, acaJobs[2].outputs.systemAssignedPrincipalId]
