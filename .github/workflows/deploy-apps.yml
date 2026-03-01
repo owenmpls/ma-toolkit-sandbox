@@ -569,7 +569,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fetch analytics job names
+      - name: Fetch analytics deployment outputs
         if: steps.analytics-infra.outputs.exists == 'true'
         id: jobs
         run: |
@@ -580,6 +580,8 @@ jobs:
             --output json)
           # jobNames is an array output — extract each
           echo "job_names=$(echo "$outputs" | jq -r '.jobNames.value | join(",")')" >> "$GITHUB_OUTPUT"
+          echo "workspace_url=https://$(echo "$outputs" | jq -r '.databricksWorkspaceUrl.value')" >> "$GITHUB_OUTPUT"
+          echo "storage_account=$(echo "$outputs" | jq -r '.storageAccountName.value')" >> "$GITHUB_OUTPUT"
 
       - name: Update ACA Job images
         if: steps.analytics-infra.outputs.exists == 'true'
@@ -593,3 +595,144 @@ jobs:
               --resource-group "$RESOURCE_GROUP" \
               --image "${{ steps.acr.outputs.login_server }}/${IMAGES[$i]}:${{ github.sha }}"
           done
+
+      # --- Databricks: upload DLT notebooks and create/update pipeline ---
+
+      - name: Get Databricks API token
+        if: steps.analytics-infra.outputs.exists == 'true'
+        id: dbx-token
+        run: |
+          TOKEN=$(az account get-access-token \
+            --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d \
+            --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure Unity Catalog schemas exist
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: |
+          WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
+          TOKEN="${{ steps.dbx-token.outputs.token }}"
+
+          # Find or create a SQL warehouse
+          WAREHOUSE_ID=$(curl -sSf "${WORKSPACE_URL}/api/2.0/sql/warehouses" \
+            -H "Authorization: Bearer ${TOKEN}" | jq -r '.warehouses[0].id // empty')
+
+          if [ -z "$WAREHOUSE_ID" ]; then
+            echo "No SQL warehouse found — creating one"
+            WAREHOUSE_ID=$(curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/sql/warehouses" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "matoolkit-analytics",
+                "cluster_size": "2X-Small",
+                "auto_stop_mins": 10,
+                "warehouse_type": "PRO",
+                "enable_serverless_compute": true
+              }' | jq -r '.id')
+            echo "Created warehouse: ${WAREHOUSE_ID}"
+          else
+            echo "Using existing warehouse: ${WAREHOUSE_ID}"
+            # Start it if stopped
+            curl -sS -X POST "${WORKSPACE_URL}/api/2.0/sql/warehouses/${WAREHOUSE_ID}/start" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" || true
+          fi
+
+          # Wait for warehouse to be RUNNING (up to 5 minutes)
+          for i in $(seq 1 30); do
+            STATE=$(curl -sSf "${WORKSPACE_URL}/api/2.0/sql/warehouses/${WAREHOUSE_ID}" \
+              -H "Authorization: Bearer ${TOKEN}" | jq -r '.state')
+            echo "Warehouse state: ${STATE}"
+            if [ "$STATE" = "RUNNING" ]; then break; fi
+            if [ "$i" = "30" ]; then echo "::error::Warehouse failed to start"; exit 1; fi
+            sleep 10
+          done
+
+          # Run catalog/schema setup (idempotent)
+          for stmt in \
+            "CREATE CATALOG IF NOT EXISTS matoolkit_analytics COMMENT 'M&A Toolkit analytics data'" \
+            "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.bronze COMMENT 'Raw data from Microsoft tenant APIs'" \
+            "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.silver COMMENT 'Cleaned and deduplicated data - SCD Type 1'"; do
+            echo "Executing: ${stmt}"
+            curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/sql/statements" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"warehouse_id\": \"${WAREHOUSE_ID}\",
+                \"statement\": \"${stmt}\",
+                \"wait_timeout\": \"30s\"
+              }"
+          done
+          echo "Unity Catalog setup complete"
+
+      - name: Upload DLT notebooks to Databricks workspace
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: |
+          WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
+          TOKEN="${{ steps.dbx-token.outputs.token }}"
+
+          # Ensure parent directory exists
+          curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/workspace/mkdirs" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"path": "/Shared/analytics/dlt"}'
+
+          for notebook in bronze silver; do
+            echo "Uploading ${notebook}.py -> /Shared/analytics/dlt/${notebook}"
+            CONTENT=$(base64 -w 0 "src/analytics/databricks/dlt/${notebook}.py")
+            curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/workspace/import" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"path\": \"/Shared/analytics/dlt/${notebook}\",
+                \"language\": \"PYTHON\",
+                \"overwrite\": true,
+                \"format\": \"SOURCE\",
+                \"content\": \"${CONTENT}\"
+              }"
+          done
+
+      - name: Create or update DLT pipeline
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: |
+          WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
+          TOKEN="${{ steps.dbx-token.outputs.token }}"
+          STORAGE_ACCOUNT="${{ steps.jobs.outputs.storage_account }}"
+          PIPELINE_NAME="matoolkit-analytics-dlt"
+
+          # Check if pipeline already exists
+          EXISTING=$(curl -sSf "${WORKSPACE_URL}/api/2.0/pipelines?filter=name%20LIKE%20'${PIPELINE_NAME}'" \
+            -H "Authorization: Bearer ${TOKEN}" | jq -r '.statuses[0].pipeline_id // empty')
+
+          PIPELINE_SPEC='{
+            "name": "'"${PIPELINE_NAME}"'",
+            "catalog": "matoolkit_analytics",
+            "libraries": [
+              {"notebook": {"path": "/Shared/analytics/dlt/bronze"}},
+              {"notebook": {"path": "/Shared/analytics/dlt/silver"}}
+            ],
+            "configuration": {
+              "analytics.storage_account_name": "'"${STORAGE_ACCOUNT}"'"
+            },
+            "channel": "CURRENT",
+            "continuous": false
+          }'
+
+          if [ -n "$EXISTING" ]; then
+            echo "Updating existing pipeline: ${EXISTING}"
+            curl -sSf -X PUT "${WORKSPACE_URL}/api/2.0/pipelines/${EXISTING}" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$PIPELINE_SPEC"
+            echo "pipeline_id=${EXISTING}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Creating new pipeline: ${PIPELINE_NAME}"
+            RESULT=$(curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/pipelines" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$PIPELINE_SPEC")
+            PIPELINE_ID=$(echo "$RESULT" | jq -r '.pipeline_id')
+            echo "Created pipeline: ${PIPELINE_ID}"
+            echo "pipeline_id=${PIPELINE_ID}" >> "$GITHUB_OUTPUT"
+          fi
