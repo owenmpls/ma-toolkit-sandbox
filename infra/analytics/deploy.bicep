@@ -39,7 +39,7 @@ param tags object = {
 }
 
 var uniqueSuffix = uniqueString(resourceGroup().id, baseName)
-var storageAccountName = 'st${baseName}analytics${take(uniqueSuffix, 6)}'
+var storageAccountName = 'stanalytics${take(uniqueSuffix, 12)}'
 
 // --- Existing shared resources ---
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
