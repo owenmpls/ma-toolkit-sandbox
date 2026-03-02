@@ -72,3 +72,4 @@ create_bronze_table("exo_group_members", "core_enrichment", "exchange_online")
 
 # --- Enrichment tier entities ---
 create_bronze_table("exo_mailbox_statistics", "enrichment", "exchange_online", expect_expr="MailboxGuid IS NOT NULL")
+create_bronze_table("onedrive_usage", "enrichment", "graph_api", expect_expr="SiteUrl IS NOT NULL")

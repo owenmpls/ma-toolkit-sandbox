@@ -622,3 +622,46 @@ dlt.apply_changes(
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
 )
+
+
+# ============================================================================
+# OneDrive Usage
+# ============================================================================
+@dlt.view(name="v_onedrive_usage")
+def v_onedrive_usage():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.onedrive_usage")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("SiteUrl")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("SiteUrl").alias("site_url"),
+            col("OwnerDisplayName").alias("owner_display_name"),
+            lower(trim(col("OwnerPrincipalName"))).alias("owner_principal_name"),
+            col("IsDeleted").alias("is_deleted"),
+            col("LastActivityDate").alias("last_activity_date"),
+            col("FileCount").alias("file_count"),
+            col("ActiveFileCount").alias("active_file_count"),
+            col("StorageUsedBytes").alias("storage_used_bytes"),
+            col("StorageAllocatedBytes").alias("storage_allocated_bytes"),
+            col("ReportRefreshDate").alias("report_refresh_date"),
+            col("ReportPeriod").alias("report_period"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="onedrive_usage",
+    comment="OneDrive usage statistics per user across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.onedrive_usage",
+    source="v_onedrive_usage",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
