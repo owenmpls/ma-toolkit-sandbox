@@ -236,23 +236,97 @@ def v_mailboxes():
         .select(
             concat_ws("_", col("_tenant_key"), col("ExchangeGuid")).alias("_scd_key"),
             col("_tenant_key").alias("tenant_key"),
+            # --- Identity ---
             col("ExchangeGuid").alias("exchange_guid"),
             col("ExternalDirectoryObjectId").alias("external_directory_object_id"),
             col("UserPrincipalName").alias("user_principal_name"),
             lower(trim(col("PrimarySmtpAddress"))).alias("primary_smtp_address"),
             col("DisplayName").alias("display_name"),
+            col("Alias").alias("alias"),
+            col("EmailAddresses").alias("email_addresses"),
+            # --- Type & status ---
             col("RecipientType").alias("recipient_type"),
             col("RecipientTypeDetails").alias("recipient_type_details"),
-            col("Alias").alias("alias"),
             col("Database").alias("database"),
             col("WhenCreated").alias("when_created"),
             col("WhenMailboxCreated").alias("when_mailbox_created"),
             col("IsMailboxEnabled").alias("is_mailbox_enabled"),
             col("HiddenFromAddressListsEnabled").alias("hidden_from_address_lists"),
+            # --- Resource ---
+            col("IsResource").alias("is_resource"),
+            col("ResourceType").alias("resource_type"),
+            col("ResourceCapacity").alias("resource_capacity"),
+            col("RoomMailboxAccountEnabled").alias("room_mailbox_account_enabled"),
+            # --- Forwarding ---
             col("ForwardingAddress").alias("forwarding_address"),
             col("ForwardingSmtpAddress").alias("forwarding_smtp_address"),
             col("DeliverToMailboxAndForward").alias("deliver_to_mailbox_and_forward"),
+            # --- Delegation ---
+            col("GrantSendOnBehalfTo").alias("grant_send_on_behalf_to"),
+            col("MessageCopyForSendOnBehalfEnabled").alias(
+                "message_copy_for_send_on_behalf"
+            ),
+            col("MessageCopyForSentAsEnabled").alias("message_copy_for_sent_as"),
+            # --- Archive ---
             col("ArchiveStatus").alias("archive_status"),
+            col("ArchiveState").alias("archive_state"),
+            col("ArchiveGuid").alias("archive_guid"),
+            col("ArchiveName").alias("archive_name"),
+            col("AutoExpandingArchiveEnabled").alias("auto_expanding_archive"),
+            # --- Compliance holds ---
+            col("LitigationHoldEnabled").alias("litigation_hold_enabled"),
+            col("LitigationHoldDate").alias("litigation_hold_date"),
+            col("LitigationHoldOwner").alias("litigation_hold_owner"),
+            col("LitigationHoldDuration").alias("litigation_hold_duration"),
+            col("InPlaceHolds").alias("in_place_holds"),
+            col("ComplianceTagHoldApplied").alias("compliance_tag_hold_applied"),
+            col("DelayHoldApplied").alias("delay_hold_applied"),
+            # --- Retention ---
+            col("RetentionPolicy").alias("retention_policy"),
+            col("RetentionHoldEnabled").alias("retention_hold_enabled"),
+            col("RetainDeletedItemsFor").alias("retain_deleted_items_for"),
+            col("SingleItemRecoveryEnabled").alias("single_item_recovery_enabled"),
+            # --- Quotas ---
+            col("IssueWarningQuota").alias("issue_warning_quota"),
+            col("ProhibitSendQuota").alias("prohibit_send_quota"),
+            col("ProhibitSendReceiveQuota").alias("prohibit_send_receive_quota"),
+            col("UseDatabaseQuotaDefaults").alias("use_database_quota_defaults"),
+            # --- Transport limits ---
+            col("MaxReceiveSize").alias("max_receive_size"),
+            col("MaxSendSize").alias("max_send_size"),
+            col("RecipientLimits").alias("recipient_limits"),
+            # --- Migration state ---
+            col("MailboxMoveStatus").alias("mailbox_move_status"),
+            col("MailboxMoveBatchName").alias("mailbox_move_batch_name"),
+            col("MailboxMoveRemoteHostName").alias("mailbox_move_remote_host_name"),
+            col("MailboxMoveFlags").alias("mailbox_move_flags"),
+            # --- Soft-delete / inactive ---
+            col("IsInactiveMailbox").alias("is_inactive_mailbox"),
+            col("IsSoftDeletedByDisable").alias("is_soft_deleted_by_disable"),
+            col("IsSoftDeletedByRemove").alias("is_soft_deleted_by_remove"),
+            col("WhenSoftDeleted").alias("when_soft_deleted"),
+            # --- Custom attributes ---
+            col("CustomAttribute1").alias("custom_attribute_1"),
+            col("CustomAttribute2").alias("custom_attribute_2"),
+            col("CustomAttribute3").alias("custom_attribute_3"),
+            col("CustomAttribute4").alias("custom_attribute_4"),
+            col("CustomAttribute5").alias("custom_attribute_5"),
+            col("CustomAttribute6").alias("custom_attribute_6"),
+            col("CustomAttribute7").alias("custom_attribute_7"),
+            col("CustomAttribute8").alias("custom_attribute_8"),
+            col("CustomAttribute9").alias("custom_attribute_9"),
+            col("CustomAttribute10").alias("custom_attribute_10"),
+            col("CustomAttribute11").alias("custom_attribute_11"),
+            col("CustomAttribute12").alias("custom_attribute_12"),
+            col("CustomAttribute13").alias("custom_attribute_13"),
+            col("CustomAttribute14").alias("custom_attribute_14"),
+            col("CustomAttribute15").alias("custom_attribute_15"),
+            col("ExtensionCustomAttribute1").alias("extension_custom_attribute_1"),
+            col("ExtensionCustomAttribute2").alias("extension_custom_attribute_2"),
+            col("ExtensionCustomAttribute3").alias("extension_custom_attribute_3"),
+            col("ExtensionCustomAttribute4").alias("extension_custom_attribute_4"),
+            col("ExtensionCustomAttribute5").alias("extension_custom_attribute_5"),
+            # --- Metadata ---
             col("_source_file"),
             col("_dlt_ingested_at"),
         )
