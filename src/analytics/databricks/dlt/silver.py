@@ -524,6 +524,54 @@ dlt.apply_changes(
 
 
 # ============================================================================
+# Mailbox Statistics
+# ============================================================================
+@dlt.view(name="v_mailbox_statistics")
+def v_mailbox_statistics():
+    return (
+        dlt.read_stream("matoolkit_analytics.bronze.exo_mailbox_statistics")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("MailboxGuid")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("MailboxGuid").alias("mailbox_guid"),
+            col("DisplayName").alias("display_name"),
+            col("ItemCount").alias("item_count"),
+            col("TotalItemSize").alias("total_item_size"),
+            col("DeletedItemCount").alias("deleted_item_count"),
+            col("TotalDeletedItemSize").alias("total_deleted_item_size"),
+            col("AssociatedItemCount").alias("associated_item_count"),
+            col("LastLogonTime").alias("last_logon_time"),
+            col("LastLogoffTime").alias("last_logoff_time"),
+            col("IsArchiveMailbox").alias("is_archive_mailbox"),
+            col("MailboxType").alias("mailbox_type"),
+            col("MailboxTypeDetail").alias("mailbox_type_detail"),
+            col("StorageLimitStatus").alias("storage_limit_status"),
+            col("SystemMessageCount").alias("system_message_count"),
+            col("SystemMessageSize").alias("system_message_size"),
+            col("DatabaseName").alias("database_name"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="mailbox_statistics",
+    comment="Exchange Online mailbox statistics across all tenants",
+    schema="matoolkit_analytics.silver",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="matoolkit_analytics.silver.mailbox_statistics",
+    source="v_mailbox_statistics",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
 # Sites (SharePoint Online)
 # ============================================================================
 @dlt.view(name="v_sites")

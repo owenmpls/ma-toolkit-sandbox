@@ -6,7 +6,12 @@ LANDING_CONTAINER = "landing"
 BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net"
 
 
-def create_bronze_table(entity_type: str, schedule_tier: str, source_system: str):
+def create_bronze_table(
+    entity_type: str,
+    schedule_tier: str,
+    source_system: str,
+    expect_expr: str = "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL",
+):
     """Factory function to create a bronze streaming table for any entity type.
 
     Reads JSONL files from the landing container using Auto Loader,
@@ -23,7 +28,7 @@ def create_bronze_table(entity_type: str, schedule_tier: str, source_system: str
             "delta.columnMapping.mode": "name",
         },
     )
-    @dlt.expect("valid_record", "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL")
+    @dlt.expect("valid_record", expect_expr)
     def bronze_table():
         # Wildcard * reads across all tenant_key folders
         landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
@@ -64,3 +69,6 @@ create_bronze_table("spo_sites", "core", "sharepoint_online")
 # --- Core enrichment tier entities ---
 create_bronze_table("entra_group_members", "core_enrichment", "graph_api")
 create_bronze_table("exo_group_members", "core_enrichment", "exchange_online")
+
+# --- Enrichment tier entities ---
+create_bronze_table("exo_mailbox_statistics", "enrichment", "exchange_online", expect_expr="MailboxGuid IS NOT NULL")
