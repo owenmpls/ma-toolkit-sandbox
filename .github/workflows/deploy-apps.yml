@@ -724,6 +724,7 @@ jobs:
             "CREATE CATALOG IF NOT EXISTS matoolkit_analytics MANAGED LOCATION '${CATALOG_LOCATION}' COMMENT 'M&A Toolkit analytics data'"
             "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.bronze COMMENT 'Raw data from Microsoft tenant APIs'"
             "CREATE SCHEMA IF NOT EXISTS matoolkit_analytics.silver COMMENT 'Cleaned and deduplicated data - SCD Type 1'"
+            "GRANT USE_CATALOG, USE_SCHEMA, SELECT, CREATE_SCHEMA, CREATE_TABLE ON CATALOG matoolkit_analytics TO \`account users\`"
           )
 
           for stmt in "${STATEMENTS[@]}"; do
