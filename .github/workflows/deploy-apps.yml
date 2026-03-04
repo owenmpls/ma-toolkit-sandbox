@@ -875,11 +875,14 @@ jobs:
         run: |
           KV_NAME="${{ steps.kv.outputs.name }}"
 
-          # Temporarily allow public access (runner is not on the VNet)
-          az keyvault update --name "$KV_NAME" --public-network-access Enabled --output none
+          # Temporarily open the firewall (runner is not on the VNet)
+          az keyvault update --name "$KV_NAME" \
+            --public-network-access Enabled \
+            --default-action Allow \
+            --output none
 
           # Wait for firewall change to propagate
-          sleep 10
+          sleep 15
 
           az keyvault secret set \
             --vault-name "$KV_NAME" \
@@ -888,5 +891,8 @@ jobs:
             --content-type application/json \
             --output none
 
-          # Re-disable public access
-          az keyvault update --name "$KV_NAME" --public-network-access Disabled --output none
+          # Re-lock the firewall
+          az keyvault update --name "$KV_NAME" \
+            --default-action Deny \
+            --public-network-access Disabled \
+            --output none
