@@ -784,6 +784,7 @@ jobs:
 
       - name: Create or update DLT pipeline
         if: steps.analytics-infra.outputs.exists == 'true'
+        id: create-dlt
         run: |
           WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
           TOKEN="${{ steps.dbx-token.outputs.token }}"
@@ -839,6 +840,125 @@ jobs:
             echo "Created pipeline: ${PIPELINE_ID}"
             echo "pipeline_id=${PIPELINE_ID}" >> "$GITHUB_OUTPUT"
           fi
+
+      # --- ADF: deploy pipelines and triggers ---
+
+      - name: Install Data Factory CLI extension
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: az extension add --name datafactory --yes
+
+      - name: Fetch ADF deployment parameters
+        if: steps.analytics-infra.outputs.exists == 'true'
+        id: adf-params
+        run: |
+          # Key Vault name from shared infra
+          shared_outputs=$(az deployment group show \
+            --name shared-infra \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "kv_name=$(echo "$shared_outputs" | jq -r '.keyVaultName.value')" >> "$GITHUB_OUTPUT"
+
+          # Data Factory name from analytics infra
+          analytics_outputs=$(az deployment group show \
+            --name analytics \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          echo "adf_name=$(echo "$analytics_outputs" | jq -r '.dataFactoryName.value')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy ADF pipelines
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: |
+          ADF_NAME="${{ steps.adf-params.outputs.adf_name }}"
+
+          # Build parameter defaults from deployment outputs
+          KV_NAME="${{ steps.adf-params.outputs.kv_name }}"
+          STORAGE="${{ steps.jobs.outputs.storage_account }}"
+          WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
+          DLT_PIPELINE_ID="${{ steps.create-dlt.outputs.pipeline_id }}"
+
+          IFS=',' read -ra JOBS <<< "${{ steps.jobs.outputs.job_names }}"
+          GRAPH_JOB="${JOBS[0]}"
+          EXO_JOB="${JOBS[1]}"
+          SPO_JOB="${JOBS[2]}"
+
+          DEFAULTS=$(jq -n \
+            --arg kv "$KV_NAME" \
+            --arg storage "$STORAGE" \
+            --arg graph "$GRAPH_JOB" \
+            --arg exo "$EXO_JOB" \
+            --arg spo "$SPO_JOB" \
+            --arg rg "$RESOURCE_GROUP" \
+            --arg sub "$AZURE_SUBSCRIPTION_ID" \
+            --arg dlt "$DLT_PIPELINE_ID" \
+            --arg dbx "$WORKSPACE_URL" \
+            '{
+              keyVaultName: $kv,
+              storageAccountName: $storage,
+              graphJobName: $graph,
+              exoJobName: $exo,
+              spoJobName: $spo,
+              resourceGroupName: $rg,
+              subscriptionId: $sub,
+              dltPipelineId: $dlt,
+              databricksWorkspaceUrl: $dbx
+            }')
+
+          # Deploy in dependency order (helpers first, then orchestrators)
+          PIPELINE_ORDER=(
+            pl_run_container_job
+            pl_run_dlt
+            pl_orchestrate_core
+            pl_orchestrate_core_enrichment
+            pl_orchestrate_enrichment
+            pl_orchestrate_ondemand
+          )
+
+          for pipeline in "${PIPELINE_ORDER[@]}"; do
+            echo "Deploying pipeline: ${pipeline}"
+            FILE="src/analytics/datafactory/pipelines/${pipeline}.json"
+
+            # Inject defaultValue into parameters that exist in this pipeline
+            PROPS=$(jq --argjson defaults "$DEFAULTS" '
+              .properties | .parameters = (
+                .parameters | to_entries | map(
+                  if $defaults[.key] then
+                    .value.defaultValue = $defaults[.key]
+                  else . end
+                ) | from_entries
+              )
+            ' "$FILE")
+
+            az datafactory pipeline create \
+              --factory-name "$ADF_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$pipeline" \
+              --pipeline "$PROPS" \
+              --output none
+            echo "  Deployed: ${pipeline}"
+          done
+
+      - name: Deploy ADF triggers
+        if: steps.analytics-infra.outputs.exists == 'true'
+        run: |
+          ADF_NAME="${{ steps.adf-params.outputs.adf_name }}"
+
+          for trigger_file in src/analytics/datafactory/triggers/tr_*.json; do
+            TRIGGER_NAME=$(jq -r '.name' "$trigger_file")
+            echo "Deploying trigger: ${TRIGGER_NAME}"
+
+            PROPS=$(jq '.properties' "$trigger_file")
+
+            az datafactory trigger create \
+              --factory-name "$ADF_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$TRIGGER_NAME" \
+              --properties "$PROPS" \
+              --output none
+            echo "  Deployed: ${TRIGGER_NAME} (stopped)"
+          done
+          echo "Triggers deployed in stopped state. Start them manually or via workflow when ready."
 
   # ---------------------------------------------------------------
   # Deploy tenant registry to Key Vault
