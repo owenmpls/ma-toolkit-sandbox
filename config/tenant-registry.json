@@ -1,13 +1,12 @@
 {
   "tenants": [
     {
-      "tenant_key": "contoso",
-      "tenant_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-      "display_name": "Contoso Corp",
-      "organization": "contoso.onmicrosoft.com",
-      "client_id": "11111111-2222-3333-4444-555555555555",
-      "cert_name": "cert-contoso",
-      "admin_url": "https://contoso-admin.sharepoint.com",
+      "tenant_key": "madev1",
+      "tenant_id": "2b1943ef-f207-4cd2-884f-3d1c420dbe58",
+      "organization": "xtlab1.onmicrosoft.com",
+      "client_id": "def7a1ab-6584-460d-8849-15e887d38bc8",
+      "cert_name": "cert-analytics-madev1",
+      "admin_url": "https://xtlab1-admin.sharepoint.com",
       "enabled": true,
       "core_entities": [
         "entra_users",
@@ -23,13 +22,49 @@
         "entra_group_members",
         "exo_group_members"
       ],
-      "enrichment_entities": [],
+      "enrichment_entities": [
+        "exo_mailbox_statistics",
+        "onedrive_usage"
+      ],
       "schedules": {
-        "core": "every_6h",
+        "core": "daily",
         "core_enrichment": "daily",
         "enrichment": "weekly"
       },
-      "max_parallelism": 10
+      "max_parallelism": 5
+    },
+    {
+      "tenant_key": "madev2",
+      "tenant_id": "1978a689-e7e8-4fcd-86a5-4bae4621eb8f",
+      "organization": "xtlab2.onmicrosoft.com",
+      "client_id": "aeb3f316-b11e-4bdc-8b98-8864aaacd363",
+      "cert_name": "cert-analytics-madev2",
+      "admin_url": "https://xtlab2-admin.sharepoint.com",
+      "enabled": true,
+      "core_entities": [
+        "entra_users",
+        "entra_groups",
+        "entra_contacts",
+        "exo_mailboxes",
+        "exo_contacts",
+        "exo_distribution_groups",
+        "exo_unified_groups",
+        "spo_sites"
+      ],
+      "core_enrichment_entities": [
+        "entra_group_members",
+        "exo_group_members"
+      ],
+      "enrichment_entities": [
+        "exo_mailbox_statistics",
+        "onedrive_usage"
+      ],
+      "schedules": {
+        "core": "daily",
+        "core_enrichment": "daily",
+        "enrichment": "weekly"
+      },
+      "max_parallelism": 5
     }
   ]
 }
