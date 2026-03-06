@@ -20,7 +20,19 @@ Connect-MgGraph -Certificate $cert `
     -TenantId $TenantConfig.tenant_id `
     -NoWelcome
 
-Write-Log "Connected to Microsoft Graph for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
+# Log auth context for diagnostics
+$ctx = Get-MgContext
+Write-Log "Connected to Microsoft Graph for tenant '$($TenantConfig.tenant_key)' (AppId=$($ctx.ClientId), TenantId=$($ctx.TenantId), AuthType=$($ctx.AuthType), Scopes=$($ctx.Scopes -join ','))" -TenantKey $TenantConfig.tenant_key
+
+# Sanity check: verify we can read directory data
+try {
+    $me = Invoke-MgGraphRequest -Method GET -Uri '/v1.0/organization' -ErrorAction Stop
+    Write-Log "Graph sanity check passed: org=$($me.value[0].displayName)" -TenantKey $TenantConfig.tenant_key
+}
+catch {
+    Write-Log "Graph sanity check FAILED: $($_.Exception.Message)" -Level ERROR -TenantKey $TenantConfig.tenant_key
+    throw
+}
 
 # Store auth config for RunspacePool reconnection
 $script:AuthConfig = @{
