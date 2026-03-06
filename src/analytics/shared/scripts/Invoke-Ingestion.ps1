@@ -31,6 +31,11 @@ $runId = [guid]::NewGuid().ToString('N').Substring(0, 8)
 
 Write-Log "Starting ingestion run=$runId tenant=$tenantKey tier=$scheduleTier"
 
+# --- Authenticate to Azure (managed identity) ---
+Write-Log "Connecting to Azure with managed identity"
+Connect-AzAccount -Identity -WarningAction SilentlyContinue | Out-Null
+Write-Log "Azure authentication successful"
+
 # --- Load tenant registry ---
 Write-Log "Loading tenant registry from Key Vault '$kvName'"
 $registry = Get-TenantRegistry -VaultName $kvName

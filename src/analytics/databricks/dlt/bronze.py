@@ -21,7 +21,6 @@ def create_bronze_table(
     @dlt.table(
         name=entity_type,
         comment=f"Raw {entity_type} data from all tenants",
-        schema="bronze",
         table_properties={
             "quality": "bronze",
             "pipelines.autoOptimize.managed": "true",
