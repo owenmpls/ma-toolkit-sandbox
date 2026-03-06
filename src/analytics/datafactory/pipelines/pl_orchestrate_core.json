@@ -20,28 +20,11 @@
         }
       },
       {
-        "name": "Parse_Registry",
-        "type": "SetVariable",
-        "dependsOn": [
-          {
-            "activity": "Get_Tenant_Registry",
-            "dependencyConditions": ["Succeeded"]
-          }
-        ],
-        "typeProperties": {
-          "variableName": "tenantRegistry",
-          "value": {
-            "value": "@json(activity('Get_Tenant_Registry').output.value)",
-            "type": "Expression"
-          }
-        }
-      },
-      {
         "name": "ForEach_Tenant",
         "type": "ForEach",
         "dependsOn": [
           {
-            "activity": "Parse_Registry",
+            "activity": "Get_Tenant_Registry",
             "dependencyConditions": ["Succeeded"]
           }
         ],
@@ -53,113 +36,102 @@
           },
           "activities": [
             {
-              "name": "If_Enabled",
+              "name": "Run_Graph_Ingest",
               "type": "IfCondition",
+              "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(item().core_entities), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('entra_users','entra_groups','entra_contacts'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [
                   {
-                    "name": "Run_Graph_Ingest",
-                    "type": "IfCondition",
+                    "name": "Execute_Graph_Job",
+                    "type": "ExecutePipeline",
                     "typeProperties": {
-                      "expression": {
-                        "value": "@greater(length(intersection(item().core_entities, createArray('entra_users','entra_groups','entra_contacts'))), 0)",
-                        "type": "Expression"
+                      "pipeline": {
+                        "referenceName": "pl_run_container_job",
+                        "type": "PipelineReference"
                       },
-                      "ifTrueActivities": [
-                        {
-                          "name": "Execute_Graph_Job",
-                          "type": "ExecutePipeline",
-                          "typeProperties": {
-                            "pipeline": {
-                              "referenceName": "pl_run_container_job",
-                              "type": "PipelineReference"
-                            },
-                            "parameters": {
-                              "containerJobName": { "value": "@pipeline().parameters.graphJobName", "type": "Expression" },
-                              "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
-                              "scheduleTier": "core",
-                              "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
-                              "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
-                              "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
-                              "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
-                              "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
-                            },
-                            "waitOnCompletion": true
-                          }
-                        }
-                      ]
+                      "parameters": {
+                        "containerJobName": { "value": "@pipeline().parameters.graphJobName", "type": "Expression" },
+                        "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
+                        "scheduleTier": "core",
+                        "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                        "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                        "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
+                        "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                        "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
+                      },
+                      "waitOnCompletion": true
                     }
-                  },
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Run_EXO_Ingest",
+              "type": "IfCondition",
+              "dependsOn": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('exo_mailboxes','exo_contacts','exo_distribution_groups','exo_unified_groups'))), 0))",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
                   {
-                    "name": "Run_EXO_Ingest",
-                    "type": "IfCondition",
-                    "dependsOn": [],
+                    "name": "Execute_EXO_Job",
+                    "type": "ExecutePipeline",
                     "typeProperties": {
-                      "expression": {
-                        "value": "@greater(length(intersection(item().core_entities, createArray('exo_mailboxes','exo_contacts','exo_distribution_groups','exo_unified_groups'))), 0)",
-                        "type": "Expression"
+                      "pipeline": {
+                        "referenceName": "pl_run_container_job",
+                        "type": "PipelineReference"
                       },
-                      "ifTrueActivities": [
-                        {
-                          "name": "Execute_EXO_Job",
-                          "type": "ExecutePipeline",
-                          "typeProperties": {
-                            "pipeline": {
-                              "referenceName": "pl_run_container_job",
-                              "type": "PipelineReference"
-                            },
-                            "parameters": {
-                              "containerJobName": { "value": "@pipeline().parameters.exoJobName", "type": "Expression" },
-                              "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
-                              "scheduleTier": "core",
-                              "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
-                              "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
-                              "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
-                              "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
-                              "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
-                            },
-                            "waitOnCompletion": true
-                          }
-                        }
-                      ]
+                      "parameters": {
+                        "containerJobName": { "value": "@pipeline().parameters.exoJobName", "type": "Expression" },
+                        "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
+                        "scheduleTier": "core",
+                        "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                        "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                        "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
+                        "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                        "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
+                      },
+                      "waitOnCompletion": true
                     }
-                  },
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Run_SPO_Ingest",
+              "type": "IfCondition",
+              "dependsOn": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('spo_sites'))), 0))",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
                   {
-                    "name": "Run_SPO_Ingest",
-                    "type": "IfCondition",
-                    "dependsOn": [],
+                    "name": "Execute_SPO_Job",
+                    "type": "ExecutePipeline",
                     "typeProperties": {
-                      "expression": {
-                        "value": "@greater(length(intersection(item().core_entities, createArray('spo_sites'))), 0)",
-                        "type": "Expression"
+                      "pipeline": {
+                        "referenceName": "pl_run_container_job",
+                        "type": "PipelineReference"
                       },
-                      "ifTrueActivities": [
-                        {
-                          "name": "Execute_SPO_Job",
-                          "type": "ExecutePipeline",
-                          "typeProperties": {
-                            "pipeline": {
-                              "referenceName": "pl_run_container_job",
-                              "type": "PipelineReference"
-                            },
-                            "parameters": {
-                              "containerJobName": { "value": "@pipeline().parameters.spoJobName", "type": "Expression" },
-                              "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
-                              "scheduleTier": "core",
-                              "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
-                              "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
-                              "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
-                              "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
-                              "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
-                            },
-                            "waitOnCompletion": true
-                          }
-                        }
-                      ]
+                      "parameters": {
+                        "containerJobName": { "value": "@pipeline().parameters.spoJobName", "type": "Expression" },
+                        "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
+                        "scheduleTier": "core",
+                        "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                        "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                        "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
+                        "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                        "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
+                      },
+                      "waitOnCompletion": true
                     }
                   }
                 ]
@@ -201,8 +173,6 @@
       "dltPipelineId": { "type": "string" },
       "databricksWorkspaceUrl": { "type": "string" }
     },
-    "variables": {
-      "tenantRegistry": { "type": "String" }
-    }
+    "variables": {}
   }
 }

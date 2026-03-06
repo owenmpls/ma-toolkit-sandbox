@@ -36,104 +36,93 @@
           },
           "activities": [
             {
-              "name": "If_Enabled",
+              "name": "Run_Graph_Enrichment",
               "type": "IfCondition",
+              "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(item().enrichment_entities), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('entra_users','entra_groups'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [
                   {
-                    "name": "Run_Graph_Enrichment",
-                    "type": "IfCondition",
+                    "name": "Execute_Graph_Job",
+                    "type": "ExecutePipeline",
                     "typeProperties": {
-                      "expression": {
-                        "value": "@greater(length(intersection(item().enrichment_entities, createArray('entra_users','entra_groups'))), 0)",
-                        "type": "Expression"
+                      "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
+                      "parameters": {
+                        "containerJobName": { "value": "@pipeline().parameters.graphJobName", "type": "Expression" },
+                        "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
+                        "scheduleTier": "enrichment",
+                        "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                        "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                        "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
+                        "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                        "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
                       },
-                      "ifTrueActivities": [
-                        {
-                          "name": "Execute_Graph_Job",
-                          "type": "ExecutePipeline",
-                          "typeProperties": {
-                            "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
-                            "parameters": {
-                              "containerJobName": { "value": "@pipeline().parameters.graphJobName", "type": "Expression" },
-                              "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
-                              "scheduleTier": "enrichment",
-                              "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
-                              "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
-                              "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
-                              "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
-                              "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
-                            },
-                            "waitOnCompletion": true
-                          }
-                        }
-                      ]
+                      "waitOnCompletion": true
                     }
-                  },
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Run_EXO_Enrichment",
+              "type": "IfCondition",
+              "dependsOn": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('exo_mailbox_statistics','exo_folder_statistics'))), 0))",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
                   {
-                    "name": "Run_EXO_Enrichment",
-                    "type": "IfCondition",
-                    "dependsOn": [],
+                    "name": "Execute_EXO_Job",
+                    "type": "ExecutePipeline",
                     "typeProperties": {
-                      "expression": {
-                        "value": "@greater(length(intersection(item().enrichment_entities, createArray('exo_mailbox_statistics','exo_folder_statistics'))), 0)",
-                        "type": "Expression"
+                      "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
+                      "parameters": {
+                        "containerJobName": { "value": "@pipeline().parameters.exoJobName", "type": "Expression" },
+                        "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
+                        "scheduleTier": "enrichment",
+                        "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                        "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                        "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
+                        "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                        "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
                       },
-                      "ifTrueActivities": [
-                        {
-                          "name": "Execute_EXO_Job",
-                          "type": "ExecutePipeline",
-                          "typeProperties": {
-                            "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
-                            "parameters": {
-                              "containerJobName": { "value": "@pipeline().parameters.exoJobName", "type": "Expression" },
-                              "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
-                              "scheduleTier": "enrichment",
-                              "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
-                              "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
-                              "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
-                              "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
-                              "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
-                            },
-                            "waitOnCompletion": true
-                          }
-                        }
-                      ]
+                      "waitOnCompletion": true
                     }
-                  },
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Run_SPO_Enrichment",
+              "type": "IfCondition",
+              "dependsOn": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('spo_site_details'))), 0))",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
                   {
-                    "name": "Run_SPO_Enrichment",
-                    "type": "IfCondition",
-                    "dependsOn": [],
+                    "name": "Execute_SPO_Job",
+                    "type": "ExecutePipeline",
                     "typeProperties": {
-                      "expression": {
-                        "value": "@greater(length(intersection(item().enrichment_entities, createArray('spo_site_details'))), 0)",
-                        "type": "Expression"
+                      "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
+                      "parameters": {
+                        "containerJobName": { "value": "@pipeline().parameters.spoJobName", "type": "Expression" },
+                        "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
+                        "scheduleTier": "enrichment",
+                        "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
+                        "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
+                        "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
+                        "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
+                        "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
                       },
-                      "ifTrueActivities": [
-                        {
-                          "name": "Execute_SPO_Job",
-                          "type": "ExecutePipeline",
-                          "typeProperties": {
-                            "pipeline": { "referenceName": "pl_run_container_job", "type": "PipelineReference" },
-                            "parameters": {
-                              "containerJobName": { "value": "@pipeline().parameters.spoJobName", "type": "Expression" },
-                              "tenantKey": { "value": "@item().tenant_key", "type": "Expression" },
-                              "scheduleTier": "enrichment",
-                              "keyVaultName": { "value": "@pipeline().parameters.keyVaultName", "type": "Expression" },
-                              "storageAccountName": { "value": "@pipeline().parameters.storageAccountName", "type": "Expression" },
-                              "maxParallelism": { "value": "@string(item().max_parallelism)", "type": "Expression" },
-                              "resourceGroupName": { "value": "@pipeline().parameters.resourceGroupName", "type": "Expression" },
-                              "subscriptionId": { "value": "@pipeline().parameters.subscriptionId", "type": "Expression" }
-                            },
-                            "waitOnCompletion": true
-                          }
-                        }
-                      ]
+                      "waitOnCompletion": true
                     }
                   }
                 ]
