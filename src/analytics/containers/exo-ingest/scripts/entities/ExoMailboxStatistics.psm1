@@ -20,7 +20,6 @@ function Invoke-Phase1 {
     # Lightweight enumeration — collect ExchangeGuid values only.
     # No records written (Phase 1 upload is skipped when $RecordCount -eq 0).
     Get-EXOMailbox -PropertySets StatisticsSeed -ResultSize Unlimited | ForEach-Object {
-        if (-not $script:Running) { return }
         $EntityIds.Add($_.ExchangeGuid.ToString())
     }
 

@@ -21,7 +21,6 @@ function Invoke-Phase1 {
     $sites = Get-PnPTenantSite -IncludeOneDriveSites -Detailed
 
     foreach ($site in $sites) {
-        if (-not $script:Running) { return }
         $Writer.WriteLine(($site | ConvertTo-Json -Compress -Depth 5))
         $EntityIds.Add($site.Url)
         $count++

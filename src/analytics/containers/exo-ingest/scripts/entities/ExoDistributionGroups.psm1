@@ -19,7 +19,6 @@ function Invoke-Phase1 {
 
     $count = 0
     Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
-        if (-not $script:Running) { return }
         $Writer.WriteLine(($_ | ConvertTo-Json -Compress -Depth 5))
         $EntityIds.Add($_.ExternalDirectoryObjectId)
         $count++

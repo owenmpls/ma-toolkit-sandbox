@@ -29,7 +29,6 @@ function Invoke-Phase1 {
 
         # Import CSV and normalize column names to PascalCase for JSONL
         Import-Csv $tempCsv | ForEach-Object {
-            if (-not $script:Running) { return }
 
             $record = @{
                 ReportRefreshDate    = $_.'Report Refresh Date'

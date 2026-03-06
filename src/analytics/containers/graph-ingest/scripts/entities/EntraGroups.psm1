@@ -24,7 +24,6 @@ function Invoke-Phase1 {
     do {
         $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
         foreach ($group in $response.value) {
-            if (-not $script:Running) { return }
             $Writer.WriteLine(($group | ConvertTo-Json -Compress -Depth 5))
             $EntityIds.Add($group.id)
             $count++

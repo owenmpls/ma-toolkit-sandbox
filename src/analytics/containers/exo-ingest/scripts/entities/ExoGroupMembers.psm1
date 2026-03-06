@@ -21,7 +21,6 @@ function Invoke-Phase1 {
 
     # Enumerate distribution groups
     Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
-        if (-not $script:Running) { return }
         $record = @{
             Identity                   = $_.Identity
             ExternalDirectoryObjectId  = $_.ExternalDirectoryObjectId
@@ -37,7 +36,6 @@ function Invoke-Phase1 {
 
     # Enumerate unified groups
     Get-UnifiedGroup -ResultSize Unlimited | ForEach-Object {
-        if (-not $script:Running) { return }
         $record = @{
             Identity                   = $_.Identity
             ExternalDirectoryObjectId  = $_.ExternalDirectoryObjectId

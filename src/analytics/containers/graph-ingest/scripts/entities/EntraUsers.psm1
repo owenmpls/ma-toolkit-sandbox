@@ -23,16 +23,7 @@ function Invoke-Phase1 {
 
     do {
         $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
-        if ($count -eq 0) {
-            Write-Host "[DIAG] URI=$uri"
-            Write-Host "[DIAG] ResponseType=$($response.GetType().FullName) Keys=$($response.Keys -join ',')"
-            Write-Host "[DIAG] ValueType=$($response.value.GetType().FullName) ValueCount=$($response.value.Count)"
-            if ($response.value.Count -eq 0) {
-                Write-Host "[DIAG] FullResponse=$(($response | ConvertTo-Json -Compress -Depth 2))"
-            }
-        }
         foreach ($user in $response.value) {
-            if (-not $script:Running) { return }
             $Writer.WriteLine(($user | ConvertTo-Json -Compress -Depth 5))
             $EntityIds.Add($user.id)
             $count++
