@@ -4,9 +4,35 @@
     "description": "Start an ACA Job execution and poll until completion",
     "activities": [
       {
-        "name": "Start_Job",
+        "name": "Get_Job_Config",
         "type": "WebActivity",
         "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:02:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 10
+        },
+        "typeProperties": {
+          "url": {
+            "value": "@concat('https://management.azure.com/subscriptions/', pipeline().parameters.subscriptionId, '/resourceGroups/', pipeline().parameters.resourceGroupName, '/providers/Microsoft.App/jobs/', pipeline().parameters.containerJobName, '?api-version=2024-03-01')",
+            "type": "Expression"
+          },
+          "method": "GET",
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://management.azure.com/"
+          }
+        }
+      },
+      {
+        "name": "Start_Job",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "Get_Job_Config",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
         "policy": {
           "timeout": "0.00:05:00",
           "retry": 2,
@@ -19,7 +45,7 @@
           },
           "method": "POST",
           "body": {
-            "value": "@json(concat('{\"containers\":[{\"name\":\"ingest\",\"env\":[{\"name\":\"TENANT_KEY\",\"value\":\"', pipeline().parameters.tenantKey, '\"},{\"name\":\"SCHEDULE_TIER\",\"value\":\"', pipeline().parameters.scheduleTier, '\"},{\"name\":\"KEYVAULT_NAME\",\"value\":\"', pipeline().parameters.keyVaultName, '\"},{\"name\":\"STORAGE_ACCOUNT_NAME\",\"value\":\"', pipeline().parameters.storageAccountName, '\"},{\"name\":\"MAX_PARALLELISM\",\"value\":\"', pipeline().parameters.maxParallelism, '\"},{\"name\":\"LANDING_CONTAINER\",\"value\":\"landing\"}]}]}'))",
+            "value": "@json(concat('{\"containers\":[{\"name\":\"ingest\",\"image\":\"', activity('Get_Job_Config').output.properties.template.containers[0].image, '\",\"env\":[{\"name\":\"TENANT_KEY\",\"value\":\"', pipeline().parameters.tenantKey, '\"},{\"name\":\"SCHEDULE_TIER\",\"value\":\"', pipeline().parameters.scheduleTier, '\"},{\"name\":\"KEYVAULT_NAME\",\"value\":\"', pipeline().parameters.keyVaultName, '\"},{\"name\":\"STORAGE_ACCOUNT_NAME\",\"value\":\"', pipeline().parameters.storageAccountName, '\"},{\"name\":\"MAX_PARALLELISM\",\"value\":\"', pipeline().parameters.maxParallelism, '\"},{\"name\":\"LANDING_CONTAINER\",\"value\":\"landing\"}]}]}'))",
             "type": "Expression"
           },
           "authentication": {
