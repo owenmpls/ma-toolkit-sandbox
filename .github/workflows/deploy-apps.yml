@@ -803,8 +803,7 @@ jobs:
             "catalog": "matoolkit_analytics",
             "target": "bronze",
             "libraries": [
-              {"notebook": {"path": "/Shared/analytics/dlt/bronze"}},
-              {"notebook": {"path": "/Shared/analytics/dlt/silver"}}
+              {"notebook": {"path": "/Shared/analytics/dlt/bronze"}}
             ],
             "configuration": {
               "analytics.storage_account_name": "${STORAGE_ACCOUNT}"

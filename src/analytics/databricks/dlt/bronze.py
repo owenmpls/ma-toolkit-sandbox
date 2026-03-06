@@ -6,6 +6,17 @@ LANDING_CONTAINER = "landing"
 BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net"
 
 
+def _path_has_data(schedule_tier, entity_type):
+    """Check if the landing path has any tenant data folders."""
+    path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/"
+    try:
+        entries = dbutils.fs.ls(path)
+        # Filter out internal dirs like _schemas
+        return any(not e.name.startswith("_") for e in entries)
+    except Exception:
+        return False
+
+
 def create_bronze_table(
     entity_type: str,
     schedule_tier: str,
@@ -16,7 +27,12 @@ def create_bronze_table(
 
     Reads JSONL files from the landing container using Auto Loader,
     adds metadata columns, and stores as a Delta streaming table.
+
+    Skips registration if no data exists yet for this entity. The table will
+    be created on the next pipeline run after data arrives.
     """
+    if not _path_has_data(schedule_tier, entity_type):
+        return None
 
     @dlt.table(
         name=entity_type,
