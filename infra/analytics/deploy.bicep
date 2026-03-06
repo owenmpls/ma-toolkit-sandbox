@@ -304,6 +304,22 @@ resource adfKvSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 // Contributor on ACA Jobs for Data Factory (start jobs via ARM) is granted
 // inside the container-app-job module via the contributorPrincipalIds param.
 
+// Contributor on Databricks Workspace for Data Factory (trigger DLT pipelines)
+resource databricksWorkspaceRef 'Microsoft.Databricks/workspaces@2024-05-01' existing = {
+  name: '${baseName}-analytics-dbw-${environment}'
+  dependsOn: [databricksWorkspace]
+}
+
+resource adfDatabricksContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(databricksWorkspaceRef.id, 'data-factory', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+  scope: databricksWorkspaceRef
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+    principalId: dataFactory.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // --- Outputs ---
 output storageAccountName string = storageAccountName
 output acaEnvironmentId string = acaEnvironment.id

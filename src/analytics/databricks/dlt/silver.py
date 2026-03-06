@@ -75,7 +75,7 @@ def v_users():
 dlt.create_streaming_table(
     name="users",
     comment="Cleaned and deduplicated Entra users across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -134,7 +134,7 @@ def v_groups():
 dlt.create_streaming_table(
     name="groups",
     comment="Cleaned and deduplicated Entra groups across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -174,7 +174,7 @@ def v_group_members():
 dlt.create_streaming_table(
     name="group_members",
     comment="Entra group memberships across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -216,7 +216,7 @@ def v_contacts():
 dlt.create_streaming_table(
     name="contacts",
     comment="Cleaned Entra organizational contacts across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -339,7 +339,7 @@ def v_mailboxes():
 dlt.create_streaming_table(
     name="mailboxes",
     comment="Cleaned Exchange Online mailboxes across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -382,7 +382,7 @@ def v_exo_contacts():
 dlt.create_streaming_table(
     name="exo_contacts",
     comment="Cleaned Exchange Online mail contacts across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -427,7 +427,7 @@ def v_distribution_groups():
 dlt.create_streaming_table(
     name="distribution_groups",
     comment="Cleaned Exchange Online distribution groups across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -474,7 +474,7 @@ def v_unified_groups():
 dlt.create_streaming_table(
     name="unified_groups",
     comment="Cleaned Exchange Online unified (M365) groups across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -516,7 +516,7 @@ def v_exo_group_members():
 dlt.create_streaming_table(
     name="exo_group_members",
     comment="Exchange Online group memberships across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -564,7 +564,7 @@ def v_mailbox_statistics():
 dlt.create_streaming_table(
     name="mailbox_statistics",
     comment="Exchange Online mailbox statistics across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -611,7 +611,7 @@ def v_sites():
 dlt.create_streaming_table(
     name="sites",
     comment="Cleaned SharePoint Online sites across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 
@@ -654,7 +654,7 @@ def v_onedrive_usage():
 dlt.create_streaming_table(
     name="onedrive_usage",
     comment="OneDrive usage statistics per user across all tenants",
-    schema="matoolkit_analytics.silver",
+    schema="silver",
     table_properties={"quality": "silver"},
 )
 

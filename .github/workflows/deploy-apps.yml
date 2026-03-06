@@ -801,6 +801,7 @@ jobs:
           {
             "name": "${PIPELINE_NAME}",
             "catalog": "matoolkit_analytics",
+            "target": "bronze",
             "libraries": [
               {"notebook": {"path": "/Shared/analytics/dlt/bronze"}},
               {"notebook": {"path": "/Shared/analytics/dlt/silver"}}
