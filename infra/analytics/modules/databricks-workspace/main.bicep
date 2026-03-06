@@ -30,6 +30,7 @@ resource workspace 'Microsoft.Databricks/workspaces@2024-05-01' = {
           customVirtualNetworkId: { value: vnetId }
           customPublicSubnetName: { value: publicSubnetName }
           customPrivateSubnetName: { value: privateSubnetName }
+          enableNoPublicIp: { value: true }
         }
       : {}
   }

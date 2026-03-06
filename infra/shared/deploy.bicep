@@ -163,6 +163,22 @@ resource kvDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview
 }
 
 // ===========================================================================
+// DATABRICKS NSGs (empty — Databricks manages rules at runtime)
+// ===========================================================================
+
+resource nsgDatabricksHost 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
+  name: 'nsg-${baseName}-dbx-host'
+  location: location
+  tags: tags
+}
+
+resource nsgDatabricksContainer 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
+  name: 'nsg-${baseName}-dbx-container'
+  location: location
+  tags: tags
+}
+
+// ===========================================================================
 // VIRTUAL NETWORK + SUBNETS
 // ===========================================================================
 
@@ -274,6 +290,40 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
               name: 'delegation-aca'
               properties: {
                 serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+        }
+      }
+      {
+        name: 'snet-databricks-host'
+        properties: {
+          addressPrefix: '10.0.7.0/25'
+          networkSecurityGroup: {
+            id: nsgDatabricksHost.id
+          }
+          delegations: [
+            {
+              name: 'delegation-databricks'
+              properties: {
+                serviceName: 'Microsoft.Databricks/workspaces'
+              }
+            }
+          ]
+        }
+      }
+      {
+        name: 'snet-databricks-container'
+        properties: {
+          addressPrefix: '10.0.7.128/25'
+          networkSecurityGroup: {
+            id: nsgDatabricksContainer.id
+          }
+          delegations: [
+            {
+              name: 'delegation-databricks'
+              properties: {
+                serviceName: 'Microsoft.Databricks/workspaces'
               }
             }
           ]
@@ -522,6 +572,8 @@ output cloudWorkerSubnetId string = vnet.properties.subnets[3].id
 output privateEndpointsSubnetId string = vnet.properties.subnets[4].id
 output deploymentScriptsSubnetId string = vnet.properties.subnets[5].id
 output analyticsSubnetId string = vnet.properties.subnets[6].id
+output databricksHostSubnetName string = 'snet-databricks-host'
+output databricksContainerSubnetName string = 'snet-databricks-container'
 
 // Private DNS Zone IDs (consumed by component templates for their own PEs)
 output sqlDnsZoneId string = sqlDnsZone.id

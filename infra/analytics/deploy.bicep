@@ -19,6 +19,15 @@ param blobPrivateDnsZoneId string = ''
 @description('Private DNS zone ID for DFS (ADLS Gen2)')
 param dfsPrivateDnsZoneId string = ''
 
+@description('VNet ID for Databricks VNet injection (optional)')
+param vnetId string = ''
+
+@description('Databricks host subnet name for VNet injection (optional)')
+param databricksHostSubnetName string = ''
+
+@description('Databricks container subnet name for VNet injection (optional)')
+param databricksContainerSubnetName string = ''
+
 @description('Key Vault name (existing shared resource)')
 param keyVaultName string = '${baseName}-kv'
 
@@ -91,6 +100,9 @@ module databricksWorkspace 'modules/databricks-workspace/main.bicep' = {
   params: {
     workspaceName: '${baseName}-analytics-dbw-${environment}'
     location: location
+    vnetId: vnetId
+    publicSubnetName: databricksHostSubnetName
+    privateSubnetName: databricksContainerSubnetName
     tags: tags
   }
 }

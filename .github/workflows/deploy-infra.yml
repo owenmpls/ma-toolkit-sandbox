@@ -87,6 +87,9 @@ jobs:
           echo "analytics_subnet_id=$(echo "$outputs" | jq -r '.analyticsSubnetId.value')" >> "$GITHUB_OUTPUT"
           echo "st_blob_dns_zone_id_full=$(echo "$outputs" | jq -r '.stBlobDnsZoneId.value')" >> "$GITHUB_OUTPUT"
           echo "st_dfs_dns_zone_id=$(echo "$outputs" | jq -r '.stDfsDnsZoneId.value')" >> "$GITHUB_OUTPUT"
+          echo "vnet_id=$(echo "$outputs" | jq -r '.vnetId.value')" >> "$GITHUB_OUTPUT"
+          echo "databricks_host_subnet_name=$(echo "$outputs" | jq -r '.databricksHostSubnetName.value')" >> "$GITHUB_OUTPUT"
+          echo "databricks_container_subnet_name=$(echo "$outputs" | jq -r '.databricksContainerSubnetName.value')" >> "$GITHUB_OUTPUT"
 
       # --- Scheduler + Orchestrator ---
       - name: Deploy scheduler-orchestrator
@@ -232,6 +235,14 @@ jobs:
       # Analytics Infrastructure
       # ---------------------------------------------------------------
 
+      - name: Delete existing Databricks workspace (VNet injection requires recreation)
+        if: inputs.stage == 'all' || inputs.stage == 'analytics'
+        run: |
+          az databricks workspace delete \
+            --name matoolkit-analytics-dbw-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --yes || true
+
       - name: Deploy analytics
         if: inputs.stage == 'all' || inputs.stage == 'analytics'
         run: |
@@ -244,4 +255,7 @@ jobs:
             --parameters analyticsSubnetId="${{ steps.shared.outputs.analytics_subnet_id }}" \
             --parameters privateEndpointSubnetId="${{ steps.shared.outputs.pe_subnet_id }}" \
             --parameters blobPrivateDnsZoneId="${{ steps.shared.outputs.st_blob_dns_zone_id }}" \
-            --parameters dfsPrivateDnsZoneId="${{ steps.shared.outputs.st_dfs_dns_zone_id }}"
+            --parameters dfsPrivateDnsZoneId="${{ steps.shared.outputs.st_dfs_dns_zone_id }}" \
+            --parameters vnetId="${{ steps.shared.outputs.vnet_id }}" \
+            --parameters databricksHostSubnetName="${{ steps.shared.outputs.databricks_host_subnet_name }}" \
+            --parameters databricksContainerSubnetName="${{ steps.shared.outputs.databricks_container_subnet_name }}"
