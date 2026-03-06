@@ -14,7 +14,7 @@ function Invoke-Phase1 {
     param(
         [Parameter(Mandatory)][System.IO.StreamWriter]$Writer,
         [Parameter(Mandatory)][ref]$RecordCount,
-        [Parameter(Mandatory)][System.Collections.Generic.List[string]]$EntityIds
+        [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[string]]$EntityIds
     )
 
     # Lightweight enumeration — collect ExchangeGuid values only.
