@@ -19,7 +19,7 @@
           },
           "method": "POST",
           "body": {
-            "value": "@json(concat('{\"template\":{\"containers\":[{\"name\":\"ingest\",\"env\":[{\"name\":\"TENANT_KEY\",\"value\":\"', pipeline().parameters.tenantKey, '\"},{\"name\":\"SCHEDULE_TIER\",\"value\":\"', pipeline().parameters.scheduleTier, '\"},{\"name\":\"KEYVAULT_NAME\",\"value\":\"', pipeline().parameters.keyVaultName, '\"},{\"name\":\"STORAGE_ACCOUNT_NAME\",\"value\":\"', pipeline().parameters.storageAccountName, '\"},{\"name\":\"MAX_PARALLELISM\",\"value\":\"', pipeline().parameters.maxParallelism, '\"},{\"name\":\"LANDING_CONTAINER\",\"value\":\"landing\"}]}]}}'))",
+            "value": "@json(concat('{\"containers\":[{\"name\":\"ingest\",\"env\":[{\"name\":\"TENANT_KEY\",\"value\":\"', pipeline().parameters.tenantKey, '\"},{\"name\":\"SCHEDULE_TIER\",\"value\":\"', pipeline().parameters.scheduleTier, '\"},{\"name\":\"KEYVAULT_NAME\",\"value\":\"', pipeline().parameters.keyVaultName, '\"},{\"name\":\"STORAGE_ACCOUNT_NAME\",\"value\":\"', pipeline().parameters.storageAccountName, '\"},{\"name\":\"MAX_PARALLELISM\",\"value\":\"', pipeline().parameters.maxParallelism, '\"},{\"name\":\"LANDING_CONTAINER\",\"value\":\"landing\"}]}]}'))",
             "type": "Expression"
           },
           "authentication": {
