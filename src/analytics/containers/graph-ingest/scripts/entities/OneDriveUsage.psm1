@@ -20,7 +20,7 @@ function Invoke-Phase1 {
     $count = 0
 
     # Graph Reports API returns CSV via redirect — save to temp file
-    $tempCsv = Join-Path $env:TEMP "onedrive_usage_report_$([guid]::NewGuid().ToString('N').Substring(0,8)).csv"
+    $tempCsv = Join-Path ([System.IO.Path]::GetTempPath()) "onedrive_usage_report_$([guid]::NewGuid().ToString('N').Substring(0,8)).csv"
 
     try {
         Invoke-MgGraphRequest -Method GET `

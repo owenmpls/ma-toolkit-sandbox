@@ -17,7 +17,7 @@ function Get-CertificateFromKeyVault {
     $secret = Get-AzKeyVaultSecret -VaultName $VaultName -Name $cert.Name -AsPlainText
     $certBytes = [System.Convert]::FromBase64String($secret)
 
-    $pfxPath = Join-Path $env:TEMP "$CertName.pfx"
+    $pfxPath = Join-Path ([System.IO.Path]::GetTempPath()) "$CertName.pfx"
     [System.IO.File]::WriteAllBytes($pfxPath, $certBytes)
 
     return $pfxPath

@@ -101,7 +101,7 @@ try {
 
         try {
             # --- Phase 1: Stream enumeration ---
-            $localFile = Join-Path $env:TEMP "$($config.OutputFile)_${runId}.jsonl"
+            $localFile = Join-Path ([System.IO.Path]::GetTempPath()) "$($config.OutputFile)_${runId}.jsonl"
             $writer = [System.IO.StreamWriter]::new($localFile, $false, [System.Text.Encoding]::UTF8)
             $entityIds = [System.Collections.Generic.List[string]]::new()
 
@@ -135,7 +135,7 @@ try {
             if ($config.Phase2 -and $entityIds.Count -gt 0) {
                 Write-Log "Starting Phase 2 with $($entityIds.Count) items, parallelism=$maxParallelism" -Entity $entityName
 
-                $phase2Dir = Join-Path $env:TEMP "phase2_${entityName}_${runId}"
+                $phase2Dir = Join-Path ([System.IO.Path]::GetTempPath()) "phase2_${entityName}_${runId}"
                 New-Item -ItemType Directory -Path $phase2Dir -Force | Out-Null
 
                 $phase2Result = & "$($entity.Module.Name)\Invoke-Phase2" `
@@ -185,7 +185,7 @@ try {
         }
 
         $manifestJson = $manifest | ConvertTo-Json -Depth 3
-        $manifestPath = Join-Path $env:TEMP "_manifest_${entityName}_${runId}.json"
+        $manifestPath = Join-Path ([System.IO.Path]::GetTempPath()) "_manifest_${entityName}_${runId}.json"
         [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.Encoding]::UTF8)
 
         $manifestBlobPath = "$basePath/_manifest_${runId}.json"
