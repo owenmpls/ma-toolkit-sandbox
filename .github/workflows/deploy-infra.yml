@@ -235,20 +235,10 @@ jobs:
       # Analytics Infrastructure
       # ---------------------------------------------------------------
 
-      - name: Delete existing Databricks workspace (VNet injection requires recreation)
-        if: inputs.stage == 'all' || inputs.stage == 'analytics'
-        run: |
-          az databricks workspace delete \
-            --name matoolkit-analytics-dbw-dev \
-            --resource-group "$RESOURCE_GROUP" \
-            --yes || true
-
       - name: Deploy analytics
         if: inputs.stage == 'all' || inputs.stage == 'analytics'
         run: |
-          set -o pipefail
-          # RoleAssignmentExists is expected on redeploys (ARM idempotency bug)
-          if ! az deployment group create \
+          az deployment group create \
             --name analytics \
             --resource-group "$RESOURCE_GROUP" \
             --template-file infra/analytics/deploy.bicep \
@@ -260,11 +250,27 @@ jobs:
             --parameters dfsPrivateDnsZoneId="${{ steps.shared.outputs.st_dfs_dns_zone_id }}" \
             --parameters vnetId="${{ steps.shared.outputs.vnet_id }}" \
             --parameters databricksHostSubnetName="${{ steps.shared.outputs.databricks_host_subnet_name }}" \
-            --parameters databricksContainerSubnetName="${{ steps.shared.outputs.databricks_container_subnet_name }}" 2>&1 | tee /tmp/analytics-deploy.log; then
-            if grep -q 'RoleAssignmentExists' /tmp/analytics-deploy.log; then
-              echo "::warning::Role assignment already exists (expected on redeploy) — continuing."
-            else
-              echo "::error::analytics deployment failed."
-              exit 1
-            fi
-          fi
+            --parameters databricksContainerSubnetName="${{ steps.shared.outputs.databricks_container_subnet_name }}"
+
+      - name: Ensure ACA Job Contributor roles for Data Factory
+        if: inputs.stage == 'all' || inputs.stage == 'analytics'
+        run: |
+          outputs=$(az deployment group show \
+            --name analytics \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json)
+          ADF_NAME=$(echo "$outputs" | jq -r '.dataFactoryName.value')
+          ADF_PRINCIPAL=$(az datafactory show \
+            --factory-name "$ADF_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query identity.principalId -o tsv)
+          IFS=',' read -ra JOBS <<< "$(echo "$outputs" | jq -r '.jobNames.value | join(",")')"
+          for JOB in "${JOBS[@]}"; do
+            JOB_ID=$(az containerapp job show --name "$JOB" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
+            az role assignment create \
+              --assignee-object-id "$ADF_PRINCIPAL" \
+              --assignee-principal-type ServicePrincipal \
+              --role Contributor \
+              --scope "$JOB_ID" 2>/dev/null || true
+          done

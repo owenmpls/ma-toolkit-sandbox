@@ -189,9 +189,8 @@ module acaJobs 'modules/container-app-job/main.bicep' = [
       acrPullIdentityId: acrPullIdentity.id
       envVars: commonEnvVars
       tags: tags
-      contributorPrincipalIds: [dataFactory.outputs.principalId]
     }
-    dependsOn: [acrPullRoleAssignment, dataFactory]
+    dependsOn: [acrPullRoleAssignment]
   }
 ]
 
@@ -200,6 +199,7 @@ resource analyticsStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existin
   name: storageAccountName
   dependsOn: [storageAccount]
 }
+
 
 // --- RBAC for ACA Job system-assigned identities ---
 // Unrolled per job to avoid for-loop limitations with runtime values
@@ -313,8 +313,9 @@ resource adfKvSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   }
 }
 
-// Contributor on ACA Jobs for Data Factory (start jobs via ARM) is granted
-// inside the container-app-job module via the contributorPrincipalIds param.
+// Contributor on ACA Jobs for Data Factory (start jobs via ARM) — created
+// via deploy-infra workflow step to avoid ARM RoleAssignmentExists errors
+// on redeploys (nested module role assignments cause irrecoverable failures).
 
 // Contributor on Databricks Workspace for Data Factory (trigger DLT pipelines)
 resource databricksWorkspaceRef 'Microsoft.Databricks/workspaces@2024-05-01' existing = {

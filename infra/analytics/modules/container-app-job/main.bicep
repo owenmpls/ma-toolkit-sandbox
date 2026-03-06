@@ -28,9 +28,6 @@ param envVars array = []
 @description('Tags for resources')
 param tags object = {}
 
-@description('Principal IDs to grant Contributor role on this job (e.g. Data Factory MSI)')
-param contributorPrincipalIds array = []
-
 resource job 'Microsoft.App/jobs@2025-01-01' = {
   name: jobName
   location: location
@@ -69,18 +66,6 @@ resource job 'Microsoft.App/jobs@2025-01-01' = {
     }
   }
 }
-
-resource jobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for (principalId, i) in contributorPrincipalIds: {
-    name: guid(job.id, principalId, 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-    scope: job
-    properties: {
-      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-      principalId: principalId
-      principalType: 'ServicePrincipal'
-    }
-  }
-]
 
 output jobId string = job.id
 output jobName string = job.name
