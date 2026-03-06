@@ -177,8 +177,9 @@ module acaJobs 'modules/container-app-job/main.bicep' = [
       acrPullIdentityId: acrPullIdentity.id
       envVars: commonEnvVars
       tags: tags
+      contributorPrincipalIds: [dataFactory.outputs.principalId]
     }
-    dependsOn: [acrPullRoleAssignment]
+    dependsOn: [acrPullRoleAssignment, dataFactory]
   }
 ]
 
@@ -300,16 +301,8 @@ resource adfKvSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   }
 }
 
-// Contributor on ACA Environment for Data Factory (start ACA Jobs via ARM)
-resource adfAcaContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acaEnvironment.id, 'data-factory', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-  scope: acaEnvironment
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-    principalId: dataFactory.outputs.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
+// Contributor on ACA Jobs for Data Factory (start jobs via ARM) is granted
+// inside the container-app-job module via the contributorPrincipalIds param.
 
 // --- Outputs ---
 output storageAccountName string = storageAccountName
