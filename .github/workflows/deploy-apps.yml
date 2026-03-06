@@ -841,6 +841,65 @@ jobs:
             echo "pipeline_id=${PIPELINE_ID}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Create or update silver DLT pipeline
+        if: steps.analytics-infra.outputs.exists == 'true'
+        id: create-dlt-silver
+        run: |
+          WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
+          TOKEN="${{ steps.dbx-token.outputs.token }}"
+          STORAGE_ACCOUNT="${{ steps.jobs.outputs.storage_account }}"
+          PIPELINE_NAME="matoolkit-analytics-dlt-silver"
+
+          # Check if pipeline already exists
+          LIST_RESPONSE=$(curl -sS "${WORKSPACE_URL}/api/2.0/pipelines?filter=name%20LIKE%20'${PIPELINE_NAME}'" \
+            -H "Authorization: Bearer ${TOKEN}")
+          echo "List response: ${LIST_RESPONSE}"
+          EXISTING=$(echo "$LIST_RESPONSE" | jq -r '.statuses[0].pipeline_id // empty')
+
+          PIPELINE_SPEC=$(cat <<SPEC
+          {
+            "name": "${PIPELINE_NAME}",
+            "catalog": "matoolkit_analytics",
+            "target": "silver",
+            "libraries": [
+              {"notebook": {"path": "/Shared/analytics/dlt/silver"}}
+            ],
+            "configuration": {
+              "analytics.storage_account_name": "${STORAGE_ACCOUNT}"
+            },
+            "development": true,
+            "channel": "CURRENT"
+          }
+          SPEC
+          )
+          echo "Pipeline spec: ${PIPELINE_SPEC}"
+
+          if [ -n "$EXISTING" ]; then
+            echo "Updating existing pipeline: ${EXISTING}"
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X PUT "${WORKSPACE_URL}/api/2.0/pipelines/${EXISTING}" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$PIPELINE_SPEC")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "Response (${HTTP_CODE}): ${BODY}"
+            if [ "$HTTP_CODE" -ge 400 ]; then exit 1; fi
+            echo "pipeline_id=${EXISTING}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Creating new pipeline: ${PIPELINE_NAME}"
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${WORKSPACE_URL}/api/2.0/pipelines" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$PIPELINE_SPEC")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "Response (${HTTP_CODE}): ${BODY}"
+            if [ "$HTTP_CODE" -ge 400 ]; then exit 1; fi
+            PIPELINE_ID=$(echo "$BODY" | jq -r '.pipeline_id')
+            echo "Created pipeline: ${PIPELINE_ID}"
+            echo "pipeline_id=${PIPELINE_ID}" >> "$GITHUB_OUTPUT"
+          fi
+
       # --- ADF: deploy pipelines and triggers ---
 
       - name: Install Data Factory CLI extension
@@ -877,6 +936,7 @@ jobs:
           STORAGE="${{ steps.jobs.outputs.storage_account }}"
           WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
           DLT_PIPELINE_ID="${{ steps.create-dlt.outputs.pipeline_id }}"
+          DLT_SILVER_PIPELINE_ID="${{ steps.create-dlt-silver.outputs.pipeline_id }}"
 
           IFS=',' read -ra JOBS <<< "${{ steps.jobs.outputs.job_names }}"
           GRAPH_JOB="${JOBS[0]}"
@@ -892,6 +952,7 @@ jobs:
             --arg rg "$RESOURCE_GROUP" \
             --arg sub "$AZURE_SUBSCRIPTION_ID" \
             --arg dlt "$DLT_PIPELINE_ID" \
+            --arg dltsilver "$DLT_SILVER_PIPELINE_ID" \
             --arg dbx "$WORKSPACE_URL" \
             '{
               keyVaultName: $kv,
@@ -902,6 +963,7 @@ jobs:
               resourceGroupName: $rg,
               subscriptionId: $sub,
               dltPipelineId: $dlt,
+              dltSilverPipelineId: $dltsilver,
               databricksWorkspaceUrl: $dbx
             }')
 

@@ -8,11 +8,6 @@ $script:Running = $true
 $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
     $script:Running = $false
 }
-trap {
-    $script:Running = $false
-    continue
-}
-
 # --- Load shared modules ---
 $modulesPath = Join-Path $PSScriptRoot 'modules'
 Import-Module (Join-Path $modulesPath 'LogHelper.psm1') -Force
@@ -205,6 +200,11 @@ try {
     }
 
     Write-Log "Ingestion run=$runId completed"
+}
+catch {
+    Write-Log "FATAL: $($_.Exception.Message)" -Level ERROR
+    Write-Log "Stack trace: $($_.ScriptStackTrace)" -Level ERROR
+    exit 1
 }
 finally {
     # Certificate cleanup - secure zero-fill before deletion

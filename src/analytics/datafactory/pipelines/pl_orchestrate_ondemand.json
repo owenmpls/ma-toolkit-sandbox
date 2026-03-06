@@ -112,6 +112,21 @@
           },
           "waitOnCompletion": true
         }
+      },
+      {
+        "name": "Run_DLT_Silver",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Run_DLT", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "pipeline": { "referenceName": "pl_run_dlt", "type": "PipelineReference" },
+          "parameters": {
+            "dltPipelineId": { "value": "@pipeline().parameters.dltSilverPipelineId", "type": "Expression" },
+            "databricksWorkspaceUrl": { "value": "@pipeline().parameters.databricksWorkspaceUrl", "type": "Expression" }
+          },
+          "waitOnCompletion": true
+        }
       }
     ],
     "parameters": {
@@ -127,6 +142,7 @@
       "resourceGroupName": { "type": "string" },
       "subscriptionId": { "type": "string" },
       "dltPipelineId": { "type": "string" },
+      "dltSilverPipelineId": { "type": "string" },
       "databricksWorkspaceUrl": { "type": "string" }
     },
     "variables": {}
