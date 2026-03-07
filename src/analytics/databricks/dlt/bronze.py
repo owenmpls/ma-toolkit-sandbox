@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import col, lit, input_file_name, current_timestamp, regexp_extract
+from pyspark.sql.functions import col, lit, current_timestamp, regexp_extract
 
 STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
 LANDING_CONTAINER = "landing"
@@ -60,9 +60,9 @@ def create_bronze_table(
             .load(landing_path)
             .withColumn(
                 "_tenant_key",
-                regexp_extract(input_file_name(), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1),
+                regexp_extract(col("_metadata.file_path"), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1),
             )
-            .withColumn("_source_file", input_file_name())
+            .withColumn("_source_file", col("_metadata.file_path"))
             .withColumn("_source_system", lit(source_system))
             .withColumn("_schedule_tier", lit(schedule_tier))
             .withColumn("_dlt_ingested_at", current_timestamp())
