@@ -900,52 +900,24 @@ jobs:
             echo "pipeline_id=${PIPELINE_ID}" >> "$GITHUB_OUTPUT"
           fi
 
-      # --- Grant ADF managed identity access to DLT pipelines ---
+      # --- Grant workspace users CAN_MANAGE on DLT pipelines ---
+      # ADF's managed identity is auto-provisioned as a workspace user on first
+      # auth. Granting to the 'users' group avoids needing Graph API permissions
+      # (Directory.Read.All) to look up ADF's appId for SCIM SP registration.
 
-      - name: Grant Data Factory access to DLT pipelines
+      - name: Grant DLT pipeline permissions
         if: steps.analytics-infra.outputs.exists == 'true'
         run: |
           WORKSPACE_URL="${{ steps.jobs.outputs.workspace_url }}"
           TOKEN="${{ steps.dbx-token.outputs.token }}"
 
-          # Get ADF name from analytics deployment, then resolve its managed identity
-          ADF_NAME=$(az deployment group show \
-            --name analytics \
-            --resource-group "$RESOURCE_GROUP" \
-            --query 'properties.outputs.dataFactoryName.value' -o tsv)
-
-          ADF_PRINCIPAL_ID=$(az resource show \
-            --resource-type Microsoft.DataFactory/factories \
-            --name "$ADF_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query identity.principalId -o tsv)
-
-          ADF_APP_ID=$(az ad sp show --id "$ADF_PRINCIPAL_ID" --query appId -o tsv)
-          ADF_DISPLAY_NAME=$(az ad sp show --id "$ADF_PRINCIPAL_ID" --query displayName -o tsv)
-          echo "ADF identity: ${ADF_DISPLAY_NAME} (appId: ${ADF_APP_ID})"
-
-          # Register ADF as a Databricks service principal (idempotent)
-          EXISTING_SP=$(curl -sS "${WORKSPACE_URL}/api/2.0/preview/scim/v2/ServicePrincipals?filter=applicationId+eq+${ADF_APP_ID}" \
-            -H "Authorization: Bearer ${TOKEN}" | jq -r '.Resources[0].id // empty')
-
-          if [ -z "$EXISTING_SP" ]; then
-            echo "Registering ADF service principal in Databricks workspace"
-            curl -sSf -X POST "${WORKSPACE_URL}/api/2.0/preview/scim/v2/ServicePrincipals" \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "{\"applicationId\": \"${ADF_APP_ID}\", \"displayName\": \"${ADF_DISPLAY_NAME}\", \"entitlements\": [{\"value\": \"workspace-access\"}]}"
-          else
-            echo "ADF service principal already registered (id: ${EXISTING_SP})"
-          fi
-
-          # Grant CAN_MANAGE on both DLT pipelines
           for PIPELINE_ID in "${{ steps.create-dlt.outputs.pipeline_id }}" "${{ steps.create-dlt-silver.outputs.pipeline_id }}"; do
-            echo "Granting CAN_MANAGE on pipeline ${PIPELINE_ID}"
+            echo "Granting CAN_MANAGE on pipeline ${PIPELINE_ID} to workspace users"
             RESPONSE=$(curl -sS -w "\n%{http_code}" -X PATCH \
               "${WORKSPACE_URL}/api/2.0/permissions/pipelines/${PIPELINE_ID}" \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "{\"access_control_list\": [{\"service_principal_name\": \"${ADF_APP_ID}\", \"permission_level\": \"CAN_MANAGE\"}]}")
+              -d '{"access_control_list": [{"group_name": "users", "permission_level": "CAN_MANAGE"}]}')
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
             BODY=$(echo "$RESPONSE" | sed '$d')
             echo "Response (${HTTP_CODE}): ${BODY}"
