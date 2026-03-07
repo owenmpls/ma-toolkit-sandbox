@@ -30,7 +30,10 @@ resource workspace 'Microsoft.Databricks/workspaces@2024-05-01' = {
           customVirtualNetworkId: { value: vnetId }
           customPublicSubnetName: { value: publicSubnetName }
           customPrivateSubnetName: { value: privateSubnetName }
-          enableNoPublicIp: { value: true }
+          // SCC (enableNoPublicIp) requires NAT Gateway or Azure Firewall for
+          // outbound control plane access. Disabled for dev; nodes get public IPs
+          // for control plane connectivity but still reach storage via VNet PEs.
+          enableNoPublicIp: { value: false }
         }
       : {}
   }
