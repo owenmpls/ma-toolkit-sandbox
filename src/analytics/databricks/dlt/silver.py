@@ -9,6 +9,15 @@ from pyspark.sql.functions import (
     when,
 )
 
+# Note: Only define silver tables for entity types that have bronze tables.
+# DLT fails when spark.catalog.tableExists() is used at module level to
+# conditionally define tables — the dynamic evaluation conflicts with DLT's
+# static analysis phase. Add new entity sections here as their corresponding
+# bronze tables are created (e.g., exo_mailboxes, spo_sites).
+#
+# Cross-pipeline reads use spark.readStream.table() (not dlt.read_stream()),
+# since bronze and silver are separate DLT pipelines.
+
 
 # ============================================================================
 # Users
