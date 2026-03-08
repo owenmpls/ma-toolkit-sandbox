@@ -7,17 +7,17 @@ BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net
 
 
 def _read_landing(schedule_tier, entity_type):
-    """Read JSONL files from the landing container using Auto Loader."""
+    """Read JSONL files from the landing container using Auto Loader.
+
+    Note: Do NOT set cloudFiles.schemaLocation or cloudFiles.schemaEvolutionMode
+    here — DLT manages schema inference and checkpoints internally.
+    """
     landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
     return (
         spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", f"{BASE_PATH}/_checkpoints/schemas/{entity_type}")
         .option("cloudFiles.inferColumnTypes", "true")
-        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
-        .option("multiLine", "false")
-        .option("cloudFiles.useIncrementalListing", "auto")
         .load(landing_path)
         .withColumn(
             "_tenant_key",
@@ -35,9 +35,9 @@ def _read_landing(schedule_tier, entity_type):
 @dlt.table(
     name="entra_users",
     comment="Raw entra_users data from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true", "delta.columnMapping.mode": "name"},
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
 )
-@dlt.expect("valid_record", "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_users():
     return _read_landing("core", "entra_users")
 
@@ -45,8 +45,8 @@ def entra_users():
 @dlt.table(
     name="entra_groups",
     comment="Raw entra_groups data from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true", "delta.columnMapping.mode": "name"},
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
 )
-@dlt.expect("valid_record", "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_groups():
     return _read_landing("core", "entra_groups")
