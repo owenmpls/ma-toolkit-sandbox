@@ -13,7 +13,7 @@ def _read_landing(schedule_tier, entity_type):
         spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", f"{BASE_PATH}/_schemas/{entity_type}")
+        .option("cloudFiles.schemaLocation", f"{BASE_PATH}/_checkpoints/schemas/{entity_type}")
         .option("cloudFiles.inferColumnTypes", "true")
         .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
         .option("multiLine", "false")
