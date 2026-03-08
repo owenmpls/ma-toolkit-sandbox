@@ -27,7 +27,7 @@ if _bronze_table_exists("entra_users"):
     @dlt.view(name="v_users")
     def v_users():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.entra_users")
+            spark.readStream.table("matoolkit_analytics.bronze.entra_users")
             .select(
                 concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
                 col("_tenant_key").alias("tenant_key"),
@@ -104,7 +104,7 @@ if _bronze_table_exists("entra_groups"):
     @dlt.view(name="v_groups")
     def v_groups():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.entra_groups")
+            spark.readStream.table("matoolkit_analytics.bronze.entra_groups")
             .select(
                 concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
                 col("_tenant_key").alias("tenant_key"),
@@ -163,7 +163,7 @@ if _bronze_table_exists("entra_group_members"):
     @dlt.view(name="v_group_members")
     def v_group_members():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.entra_group_members")
+            spark.readStream.table("matoolkit_analytics.bronze.entra_group_members")
             .select(
                 concat_ws(
                     "_", col("_tenant_key"), col("groupId"), col("id")
@@ -203,7 +203,7 @@ if _bronze_table_exists("entra_contacts"):
     @dlt.view(name="v_contacts")
     def v_contacts():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.entra_contacts")
+            spark.readStream.table("matoolkit_analytics.bronze.entra_contacts")
             .select(
                 concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
                 col("_tenant_key").alias("tenant_key"),
@@ -245,7 +245,7 @@ if _bronze_table_exists("exo_mailboxes"):
     @dlt.view(name="v_mailboxes")
     def v_mailboxes():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.exo_mailboxes")
+            spark.readStream.table("matoolkit_analytics.bronze.exo_mailboxes")
             .select(
                 concat_ws("_", col("_tenant_key"), col("ExchangeGuid")).alias(
                     "_scd_key"
@@ -408,7 +408,7 @@ if _bronze_table_exists("exo_contacts"):
     @dlt.view(name="v_exo_contacts")
     def v_exo_contacts():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.exo_contacts")
+            spark.readStream.table("matoolkit_analytics.bronze.exo_contacts")
             .select(
                 concat_ws(
                     "_", col("_tenant_key"), col("ExternalDirectoryObjectId")
@@ -457,7 +457,7 @@ if _bronze_table_exists("exo_distribution_groups"):
     @dlt.view(name="v_distribution_groups")
     def v_distribution_groups():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.exo_distribution_groups")
+            spark.readStream.table("matoolkit_analytics.bronze.exo_distribution_groups")
             .select(
                 concat_ws(
                     "_", col("_tenant_key"), col("ExternalDirectoryObjectId")
@@ -510,7 +510,7 @@ if _bronze_table_exists("exo_unified_groups"):
     @dlt.view(name="v_unified_groups")
     def v_unified_groups():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.exo_unified_groups")
+            spark.readStream.table("matoolkit_analytics.bronze.exo_unified_groups")
             .select(
                 concat_ws(
                     "_", col("_tenant_key"), col("ExternalDirectoryObjectId")
@@ -563,7 +563,7 @@ if _bronze_table_exists("exo_group_members"):
     @dlt.view(name="v_exo_group_members")
     def v_exo_group_members():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.exo_group_members")
+            spark.readStream.table("matoolkit_analytics.bronze.exo_group_members")
             .select(
                 concat_ws(
                     "_",
@@ -605,7 +605,7 @@ if _bronze_table_exists("exo_mailbox_statistics"):
     @dlt.view(name="v_mailbox_statistics")
     def v_mailbox_statistics():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.exo_mailbox_statistics")
+            spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_statistics")
             .select(
                 concat_ws("_", col("_tenant_key"), col("MailboxGuid")).alias(
                     "_scd_key"
@@ -655,7 +655,7 @@ if _bronze_table_exists("spo_sites"):
     @dlt.view(name="v_sites")
     def v_sites():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.spo_sites")
+            spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
             .select(
                 concat_ws("_", col("_tenant_key"), col("Url")).alias("_scd_key"),
                 col("_tenant_key").alias("tenant_key"),
@@ -704,7 +704,7 @@ if _bronze_table_exists("onedrive_usage"):
     @dlt.view(name="v_onedrive_usage")
     def v_onedrive_usage():
         return (
-            dlt.read_stream("matoolkit_analytics.bronze.onedrive_usage")
+            spark.readStream.table("matoolkit_analytics.bronze.onedrive_usage")
             .select(
                 concat_ws("_", col("_tenant_key"), col("SiteUrl")).alias(
                     "_scd_key"
