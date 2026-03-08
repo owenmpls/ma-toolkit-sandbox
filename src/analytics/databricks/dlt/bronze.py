@@ -31,8 +31,15 @@ def _read_landing(schedule_tier, entity_type):
 
 
 # ============================================================================
-# Core tier entities
+# Active entities — these have landing data and are processed by DLT.
+# Uncomment additional entities below as their ingestion is configured.
+#
+# DLT fails the entire pipeline if Auto Loader can't find the landing
+# directory for any defined table, so only define entities with data.
 # ============================================================================
+
+
+# --- Core tier ---
 
 @dlt.table(
     name="entra_users",
@@ -54,109 +61,113 @@ def entra_groups():
     return _read_landing("core", "entra_groups")
 
 
-@dlt.table(
-    name="entra_contacts",
-    comment="Raw entra_contacts (organizational contacts) from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "id IS NOT NULL")
-def entra_contacts():
-    return _read_landing("core", "entra_contacts")
-
-
-@dlt.table(
-    name="exo_mailboxes",
-    comment="Raw Exchange Online mailboxes from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "ExchangeGuid IS NOT NULL")
-def exo_mailboxes():
-    return _read_landing("core", "exo_mailboxes")
-
-
-@dlt.table(
-    name="exo_contacts",
-    comment="Raw Exchange Online mail contacts from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
-def exo_contacts():
-    return _read_landing("core", "exo_contacts")
-
-
-@dlt.table(
-    name="exo_distribution_groups",
-    comment="Raw Exchange Online distribution groups from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
-def exo_distribution_groups():
-    return _read_landing("core", "exo_distribution_groups")
-
-
-@dlt.table(
-    name="exo_unified_groups",
-    comment="Raw Exchange Online unified (M365) groups from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
-def exo_unified_groups():
-    return _read_landing("core", "exo_unified_groups")
-
-
-@dlt.table(
-    name="spo_sites",
-    comment="Raw SharePoint Online sites from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "Url IS NOT NULL")
-def spo_sites():
-    return _read_landing("core", "spo_sites")
-
-
 # ============================================================================
-# Core enrichment tier entities
+# Pending entities — uncomment as their ingestion is configured.
+# Each entity needs landing data at {BASE_PATH}/{tier}/{entity}/*/ before
+# Auto Loader can create the bronze table.
 # ============================================================================
 
-@dlt.table(
-    name="entra_group_members",
-    comment="Raw entra_group_members from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "id IS NOT NULL")
-def entra_group_members():
-    return _read_landing("core_enrichment", "entra_group_members")
-
-
-@dlt.table(
-    name="exo_group_members",
-    comment="Raw Exchange Online group memberships from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "groupIdentity IS NOT NULL")
-def exo_group_members():
-    return _read_landing("core_enrichment", "exo_group_members")
-
-
-# ============================================================================
-# Enrichment tier entities
-# ============================================================================
-
-@dlt.table(
-    name="exo_mailbox_statistics",
-    comment="Raw Exchange Online mailbox statistics from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
-def exo_mailbox_statistics():
-    return _read_landing("enrichment", "exo_mailbox_statistics")
-
-
-@dlt.table(
-    name="onedrive_usage",
-    comment="Raw OneDrive usage statistics from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "SiteUrl IS NOT NULL")
-def onedrive_usage():
-    return _read_landing("enrichment", "onedrive_usage")
+# # --- Core tier ---
+#
+# @dlt.table(
+#     name="entra_contacts",
+#     comment="Raw entra_contacts (organizational contacts) from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "id IS NOT NULL")
+# def entra_contacts():
+#     return _read_landing("core", "entra_contacts")
+#
+#
+# @dlt.table(
+#     name="exo_mailboxes",
+#     comment="Raw Exchange Online mailboxes from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "ExchangeGuid IS NOT NULL")
+# def exo_mailboxes():
+#     return _read_landing("core", "exo_mailboxes")
+#
+#
+# @dlt.table(
+#     name="exo_contacts",
+#     comment="Raw Exchange Online mail contacts from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+# def exo_contacts():
+#     return _read_landing("core", "exo_contacts")
+#
+#
+# @dlt.table(
+#     name="exo_distribution_groups",
+#     comment="Raw Exchange Online distribution groups from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+# def exo_distribution_groups():
+#     return _read_landing("core", "exo_distribution_groups")
+#
+#
+# @dlt.table(
+#     name="exo_unified_groups",
+#     comment="Raw Exchange Online unified (M365) groups from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+# def exo_unified_groups():
+#     return _read_landing("core", "exo_unified_groups")
+#
+#
+# @dlt.table(
+#     name="spo_sites",
+#     comment="Raw SharePoint Online sites from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "Url IS NOT NULL")
+# def spo_sites():
+#     return _read_landing("core", "spo_sites")
+#
+#
+# # --- Core enrichment tier ---
+#
+# @dlt.table(
+#     name="entra_group_members",
+#     comment="Raw entra_group_members from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "id IS NOT NULL")
+# def entra_group_members():
+#     return _read_landing("core_enrichment", "entra_group_members")
+#
+#
+# @dlt.table(
+#     name="exo_group_members",
+#     comment="Raw Exchange Online group memberships from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "groupIdentity IS NOT NULL")
+# def exo_group_members():
+#     return _read_landing("core_enrichment", "exo_group_members")
+#
+#
+# # --- Enrichment tier ---
+#
+# @dlt.table(
+#     name="exo_mailbox_statistics",
+#     comment="Raw Exchange Online mailbox statistics from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
+# def exo_mailbox_statistics():
+#     return _read_landing("enrichment", "exo_mailbox_statistics")
+#
+#
+# @dlt.table(
+#     name="onedrive_usage",
+#     comment="Raw OneDrive usage statistics from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "SiteUrl IS NOT NULL")
+# def onedrive_usage():
+#     return _read_landing("enrichment", "onedrive_usage")
