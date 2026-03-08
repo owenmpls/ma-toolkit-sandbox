@@ -6,85 +6,47 @@ LANDING_CONTAINER = "landing"
 BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net"
 
 
-def _path_has_data(schedule_tier, entity_type):
-    """Check if the landing path has any tenant data folders."""
-    path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/"
-    try:
-        entries = dbutils.fs.ls(path)
-        # Filter out internal dirs like _schemas
-        return any(not e.name.startswith("_") for e in entries)
-    except Exception:
-        return False
-
-
-def create_bronze_table(
-    entity_type: str,
-    schedule_tier: str,
-    source_system: str,
-    expect_expr: str = "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL",
-):
-    """Factory function to create a bronze streaming table for any entity type.
-
-    Reads JSONL files from the landing container using Auto Loader,
-    adds metadata columns, and stores as a Delta streaming table.
-
-    Skips registration if no data exists yet for this entity. The table will
-    be created on the next pipeline run after data arrives.
-    """
-    if not _path_has_data(schedule_tier, entity_type):
-        return None
-
-    @dlt.table(
-        name=entity_type,
-        comment=f"Raw {entity_type} data from all tenants",
-        table_properties={
-            "quality": "bronze",
-            "pipelines.autoOptimize.managed": "true",
-            "delta.columnMapping.mode": "name",
-        },
-    )
-    @dlt.expect("valid_record", expect_expr)
-    def bronze_table():
-        # Wildcard * reads across all tenant_key folders
-        landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
-
-        return (
-            spark.readStream
-            .format("cloudFiles")
-            .option("cloudFiles.format", "json")
-            .option("cloudFiles.schemaLocation", f"{BASE_PATH}/_schemas/{entity_type}")
-            .option("cloudFiles.inferColumnTypes", "true")
-            .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
-            .option("multiLine", "false")  # JSONL: one object per line
-            .option("cloudFiles.useIncrementalListing", "auto")
-            .load(landing_path)
-            .withColumn(
-                "_tenant_key",
-                regexp_extract(col("_metadata.file_path"), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1),
-            )
-            .withColumn("_source_file", col("_metadata.file_path"))
-            .withColumn("_source_system", lit(source_system))
-            .withColumn("_schedule_tier", lit(schedule_tier))
-            .withColumn("_dlt_ingested_at", current_timestamp())
+def _read_landing(schedule_tier, entity_type):
+    """Read JSONL files from the landing container using Auto Loader."""
+    landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
+    return (
+        spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.schemaLocation", f"{BASE_PATH}/_schemas/{entity_type}")
+        .option("cloudFiles.inferColumnTypes", "true")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("multiLine", "false")
+        .option("cloudFiles.useIncrementalListing", "auto")
+        .load(landing_path)
+        .withColumn(
+            "_tenant_key",
+            regexp_extract(col("_metadata.file_path"), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1),
         )
-
-    return bronze_table
+        .withColumn("_source_file", col("_metadata.file_path"))
+        .withColumn("_source_system", lit("graph_api"))
+        .withColumn("_schedule_tier", lit(schedule_tier))
+        .withColumn("_dlt_ingested_at", current_timestamp())
+    )
 
 
 # --- Core tier entities ---
-create_bronze_table("entra_users", "core", "graph_api")
-create_bronze_table("entra_groups", "core", "graph_api")
-create_bronze_table("entra_contacts", "core", "graph_api")
-create_bronze_table("exo_mailboxes", "core", "exchange_online")
-create_bronze_table("exo_contacts", "core", "exchange_online")
-create_bronze_table("exo_distribution_groups", "core", "exchange_online")
-create_bronze_table("exo_unified_groups", "core", "exchange_online")
-create_bronze_table("spo_sites", "core", "sharepoint_online")
 
-# --- Core enrichment tier entities ---
-create_bronze_table("entra_group_members", "core_enrichment", "graph_api")
-create_bronze_table("exo_group_members", "core_enrichment", "exchange_online")
+@dlt.table(
+    name="entra_users",
+    comment="Raw entra_users data from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true", "delta.columnMapping.mode": "name"},
+)
+@dlt.expect("valid_record", "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL")
+def entra_users():
+    return _read_landing("core", "entra_users")
 
-# --- Enrichment tier entities ---
-create_bronze_table("exo_mailbox_statistics", "enrichment", "exchange_online", expect_expr="MailboxGuid IS NOT NULL")
-create_bronze_table("onedrive_usage", "enrichment", "graph_api", expect_expr="SiteUrl IS NOT NULL")
+
+@dlt.table(
+    name="entra_groups",
+    comment="Raw entra_groups data from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true", "delta.columnMapping.mode": "name"},
+)
+@dlt.expect("valid_record", "id IS NOT NULL OR ExternalDirectoryObjectId IS NOT NULL")
+def entra_groups():
+    return _read_landing("core", "entra_groups")
