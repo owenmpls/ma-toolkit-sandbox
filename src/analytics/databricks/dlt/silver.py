@@ -473,97 +473,10 @@ dlt.apply_changes(
 # exo_group_members — disabled: no landing data (cmdlet not found error)
 
 
-# --- Mailbox Statistics ---
-
-@dlt.view(name="v_mailbox_statistics")
-def v_mailbox_statistics():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_statistics")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("MailboxGuid")).alias(
-                "_scd_key"
-            ),
-            col("_tenant_key").alias("tenant_key"),
-            col("MailboxGuid").alias("mailbox_guid"),
-            col("DisplayName").alias("display_name"),
-            col("ItemCount").alias("item_count"),
-            col("TotalItemSize").alias("total_item_size"),
-            col("DeletedItemCount").alias("deleted_item_count"),
-            col("TotalDeletedItemSize").alias("total_deleted_item_size"),
-            col("AssociatedItemCount").alias("associated_item_count"),
-            col("LastLogonTime").alias("last_logon_time"),
-            col("LastLogoffTime").alias("last_logoff_time"),
-            col("IsArchiveMailbox").alias("is_archive_mailbox"),
-            col("MailboxType").alias("mailbox_type"),
-            col("MailboxTypeDetail").alias("mailbox_type_detail"),
-            col("StorageLimitStatus").alias("storage_limit_status"),
-            col("SystemMessageCount").alias("system_message_count"),
-            col("SystemMessageSize").alias("system_message_size"),
-            col("DatabaseName").alias("database_name"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
-
-
-dlt.create_streaming_table(
-    name="mailbox_statistics",
-    comment="Exchange Online mailbox statistics across all tenants",
-    table_properties={"quality": "silver"},
-)
-
-dlt.apply_changes(
-    target="mailbox_statistics",
-    source="v_mailbox_statistics",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
+# exo_mailbox_statistics — disabled: no landing data (never ingested)
 
 
 # spo_sites — disabled: no landing data (PnP auth error)
 
 
-# --- OneDrive Usage ---
-
-@dlt.view(name="v_onedrive_usage")
-def v_onedrive_usage():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.onedrive_usage")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("SiteUrl")).alias(
-                "_scd_key"
-            ),
-            col("_tenant_key").alias("tenant_key"),
-            col("SiteUrl").alias("site_url"),
-            col("OwnerDisplayName").alias("owner_display_name"),
-            lower(trim(col("OwnerPrincipalName"))).alias(
-                "owner_principal_name"
-            ),
-            col("IsDeleted").alias("is_deleted"),
-            col("LastActivityDate").alias("last_activity_date"),
-            col("FileCount").alias("file_count"),
-            col("ActiveFileCount").alias("active_file_count"),
-            col("StorageUsedBytes").alias("storage_used_bytes"),
-            col("StorageAllocatedBytes").alias("storage_allocated_bytes"),
-            col("ReportRefreshDate").alias("report_refresh_date"),
-            col("ReportPeriod").alias("report_period"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
-
-
-dlt.create_streaming_table(
-    name="onedrive_usage",
-    comment="OneDrive usage statistics per user across all tenants",
-    table_properties={"quality": "silver"},
-)
-
-dlt.apply_changes(
-    target="onedrive_usage",
-    source="v_onedrive_usage",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
+# onedrive_usage — disabled: no landing data (never ingested)

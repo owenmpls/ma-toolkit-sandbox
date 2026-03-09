@@ -148,22 +148,5 @@ def exo_unified_groups():
 
 
 # --- Enrichment tier ---
-
-@dlt.table(
-    name="exo_mailbox_statistics",
-    comment="Raw Exchange Online mailbox statistics from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
-def exo_mailbox_statistics():
-    return _read_landing("enrichment", "exo_mailbox_statistics")
-
-
-@dlt.table(
-    name="onedrive_usage",
-    comment="Raw OneDrive usage statistics from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "SiteUrl IS NOT NULL")
-def onedrive_usage():
-    return _read_landing("enrichment", "onedrive_usage")
+# exo_mailbox_statistics — disabled: never ingested (on-demand routing gap)
+# onedrive_usage — disabled: never ingested (on-demand routing gap)
