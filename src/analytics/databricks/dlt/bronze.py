@@ -61,14 +61,15 @@ def entra_groups():
     return _read_landing("core", "entra_groups")
 
 
-@dlt.table(
-    name="entra_contacts",
-    comment="Raw entra_contacts (organizational contacts) from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "id IS NOT NULL")
-def entra_contacts():
-    return _read_landing("core", "entra_contacts")
+# entra_contacts — disabled: Graph API permission error during ingestion
+# @dlt.table(
+#     name="entra_contacts",
+#     comment="Raw entra_contacts (organizational contacts) from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "id IS NOT NULL")
+# def entra_contacts():
+#     return _read_landing("core", "entra_contacts")
 
 
 @dlt.table(
@@ -111,36 +112,39 @@ def exo_unified_groups():
     return _read_landing("core", "exo_unified_groups")
 
 
-@dlt.table(
-    name="spo_sites",
-    comment="Raw SharePoint Online sites from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "Url IS NOT NULL")
-def spo_sites():
-    return _read_landing("core", "spo_sites")
+# spo_sites — disabled: PnP auth error during ingestion
+# @dlt.table(
+#     name="spo_sites",
+#     comment="Raw SharePoint Online sites from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "Url IS NOT NULL")
+# def spo_sites():
+#     return _read_landing("core", "spo_sites")
 
 
 # --- Core enrichment tier ---
 
-@dlt.table(
-    name="entra_group_members",
-    comment="Raw entra_group_members from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "id IS NOT NULL")
-def entra_group_members():
-    return _read_landing("core_enrichment", "entra_group_members")
+# entra_group_members — disabled: Phase 2 function error during ingestion
+# @dlt.table(
+#     name="entra_group_members",
+#     comment="Raw entra_group_members from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "id IS NOT NULL")
+# def entra_group_members():
+#     return _read_landing("core_enrichment", "entra_group_members")
 
 
-@dlt.table(
-    name="exo_group_members",
-    comment="Raw Exchange Online group memberships from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-)
-@dlt.expect("valid_record", "groupIdentity IS NOT NULL")
-def exo_group_members():
-    return _read_landing("core_enrichment", "exo_group_members")
+# exo_group_members — disabled: cmdlet not found error during ingestion
+# @dlt.table(
+#     name="exo_group_members",
+#     comment="Raw Exchange Online group memberships from all tenants",
+#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+# )
+# @dlt.expect("valid_record", "groupIdentity IS NOT NULL")
+# def exo_group_members():
+#     return _read_landing("core_enrichment", "exo_group_members")
 
 
 # --- Enrichment tier ---

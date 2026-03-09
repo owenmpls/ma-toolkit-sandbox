@@ -156,82 +156,8 @@ dlt.apply_changes(
 )
 
 
-# --- Group Members (Entra) ---
-
-@dlt.view(name="v_group_members")
-def v_group_members():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.entra_group_members")
-        .select(
-            concat_ws(
-                "_", col("_tenant_key"), col("groupId"), col("id")
-            ).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("groupId").alias("group_id"),
-            col("id").alias("member_id"),
-            col("displayName").alias("display_name"),
-            col("userPrincipalName").alias("user_principal_name"),
-            lower(trim(col("mail"))).alias("mail"),
-            col("@odata.type").alias("member_type"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
-
-
-dlt.create_streaming_table(
-    name="group_members",
-    comment="Entra group memberships across all tenants",
-    table_properties={"quality": "silver"},
-)
-
-dlt.apply_changes(
-    target="group_members",
-    source="v_group_members",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
-
-
-# --- Contacts (Entra organizational contacts) ---
-
-@dlt.view(name="v_contacts")
-def v_contacts():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.entra_contacts")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("id"),
-            col("displayName").alias("display_name"),
-            col("givenName").alias("given_name"),
-            col("surname"),
-            lower(trim(col("mail"))).alias("mail"),
-            col("companyName").alias("company_name"),
-            col("department"),
-            col("jobTitle").alias("job_title"),
-            col("proxyAddresses").alias("proxy_addresses"),
-            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
-
-
-dlt.create_streaming_table(
-    name="contacts",
-    comment="Cleaned Entra organizational contacts across all tenants",
-    table_properties={"quality": "silver"},
-)
-
-dlt.apply_changes(
-    target="contacts",
-    source="v_contacts",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
+# entra_group_members — disabled: no landing data (Phase 2 function error)
+# entra_contacts — disabled: no landing data (Graph API permission error)
 
 
 # --- Mailboxes ---
@@ -544,44 +470,7 @@ dlt.apply_changes(
 )
 
 
-# --- EXO Group Members ---
-
-@dlt.view(name="v_exo_group_members")
-def v_exo_group_members():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.exo_group_members")
-        .select(
-            concat_ws(
-                "_",
-                col("_tenant_key"),
-                col("groupIdentity"),
-                col("memberName"),
-            ).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("groupIdentity").alias("group_identity"),
-            col("groupType").alias("group_type"),
-            col("memberName").alias("member_name"),
-            col("memberType").alias("member_type"),
-            lower(trim(col("primarySmtp"))).alias("primary_smtp_address"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
-
-
-dlt.create_streaming_table(
-    name="exo_group_members",
-    comment="Exchange Online group memberships across all tenants",
-    table_properties={"quality": "silver"},
-)
-
-dlt.apply_changes(
-    target="exo_group_members",
-    source="v_exo_group_members",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
+# exo_group_members — disabled: no landing data (cmdlet not found error)
 
 
 # --- Mailbox Statistics ---
@@ -632,51 +521,7 @@ dlt.apply_changes(
 )
 
 
-# --- Sites (SharePoint Online) ---
-
-@dlt.view(name="v_sites")
-def v_sites():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("Url")).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("Url").alias("url"),
-            col("Title").alias("title"),
-            col("Template").alias("template"),
-            col("Owner").alias("owner"),
-            lower(trim(col("OwnerEmail"))).alias("owner_email"),
-            col("StorageQuota").alias("storage_quota_mb"),
-            col("StorageUsageCurrent").alias("storage_usage_mb"),
-            col("Status").alias("status"),
-            col("LockState").alias("lock_state"),
-            col("SharingCapability").alias("sharing_capability"),
-            col("ConditionalAccessPolicy").alias(
-                "conditional_access_policy"
-            ),
-            col("HubSiteId").alias("hub_site_id"),
-            col("IsHubSite").alias("is_hub_site"),
-            col("GroupId").alias("group_id"),
-            col("LastContentModifiedDate").alias("last_content_modified"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
-
-
-dlt.create_streaming_table(
-    name="sites",
-    comment="Cleaned SharePoint Online sites across all tenants",
-    table_properties={"quality": "silver"},
-)
-
-dlt.apply_changes(
-    target="sites",
-    source="v_sites",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
+# spo_sites — disabled: no landing data (PnP auth error)
 
 
 # --- OneDrive Usage ---
