@@ -517,11 +517,54 @@ dlt.apply_changes(
 )
 
 
+# --- SharePoint Sites ---
+
+
+@dlt.view(name="v_spo_sites")
+def v_spo_sites():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("name"),
+            col("displayName").alias("display_name"),
+            col("webUrl").alias("web_url"),
+            col("description"),
+            col("createdDateTime").alias("created_at"),
+            col("lastModifiedDateTime").alias("last_modified_at"),
+            col("hostname"),
+            col("isPersonalSite").alias("is_personal_site"),
+            col("storageUsed").alias("storage_used"),
+            col("storagePercentUsed").alias("storage_percent_used"),
+            col("totalItemCount").alias("total_item_count"),
+            col("listCount").alias("list_count"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="spo_sites",
+    comment="Cleaned SharePoint sites with storage and item counts across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="spo_sites",
+    source="v_spo_sites",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
 # ============================================================================
 # Disabled entities — no landing data available
 # ============================================================================
 # entra_group_members (Phase 2 function error)
-# spo_sites (PnP auth error)
 # exo_group_members (cmdlet not found)
 # exo_mailbox_statistics (never ingested)
 # onedrive_usage (never ingested)

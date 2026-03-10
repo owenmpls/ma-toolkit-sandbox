@@ -117,6 +117,17 @@ module databricksAccessConnector 'modules/databricks-access-connector/main.bicep
   }
 }
 
+// --- Network Security Perimeter (serverless SQL warehouse → storage) ---
+module networkSecurityPerimeter 'modules/network-security-perimeter/main.bicep' = {
+  name: 'analytics-nsp'
+  params: {
+    nspName: '${baseName}-analytics-nsp'
+    location: location
+    storageAccountId: storageAccount.outputs.storageAccountId
+    tags: tags
+  }
+}
+
 // --- Data Factory ---
 module dataFactory 'modules/data-factory/main.bicep' = {
   name: 'analytics-data-factory'

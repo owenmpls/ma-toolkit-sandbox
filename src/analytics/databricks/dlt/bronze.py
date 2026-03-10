@@ -18,6 +18,7 @@ def _read_landing(schedule_tier, entity_type):
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
+        .option("pathGlobFilter", "*.jsonl")
         .load(landing_path)
         .withColumn(
             "_tenant_key",
@@ -111,15 +112,14 @@ def exo_unified_groups():
     return _read_landing("core", "exo_unified_groups")
 
 
-# spo_sites — disabled: PnP auth error during ingestion
-# @dlt.table(
-#     name="spo_sites",
-#     comment="Raw SharePoint Online sites from all tenants",
-#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-# )
-# @dlt.expect("valid_record", "Url IS NOT NULL")
-# def spo_sites():
-#     return _read_landing("core", "spo_sites")
+@dlt.table(
+    name="spo_sites",
+    comment="Raw SharePoint Online sites from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def spo_sites():
+    return _read_landing("core", "spo_sites")
 
 
 # --- Core enrichment tier ---
