@@ -473,10 +473,53 @@ dlt.apply_changes(
 )
 
 
+# --- Entra Contacts (Organizational Contacts) ---
+
+
+@dlt.view(name="v_entra_contacts")
+def v_entra_contacts():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_contacts")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("givenName").alias("given_name"),
+            col("surname"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("jobTitle").alias("job_title"),
+            col("department"),
+            col("companyName").alias("company_name"),
+            col("phones"),
+            col("addresses"),
+            col("proxyAddresses").alias("proxy_addresses"),
+            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
+            col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="entra_contacts",
+    comment="Cleaned organizational contacts across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="entra_contacts",
+    source="v_entra_contacts",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
 # ============================================================================
 # Disabled entities — no landing data available
 # ============================================================================
-# entra_contacts (Graph API permission error)
 # entra_group_members (Phase 2 function error)
 # spo_sites (PnP auth error)
 # exo_group_members (cmdlet not found)

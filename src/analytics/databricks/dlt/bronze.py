@@ -61,15 +61,14 @@ def entra_groups():
     return _read_landing("core", "entra_groups")
 
 
-# entra_contacts — disabled: Graph API permission error during ingestion
-# @dlt.table(
-#     name="entra_contacts",
-#     comment="Raw entra_contacts (organizational contacts) from all tenants",
-#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-# )
-# @dlt.expect("valid_record", "id IS NOT NULL")
-# def entra_contacts():
-#     return _read_landing("core", "entra_contacts")
+@dlt.table(
+    name="entra_contacts",
+    comment="Raw entra_contacts (organizational contacts) from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def entra_contacts():
+    return _read_landing("core", "entra_contacts")
 
 
 @dlt.table(

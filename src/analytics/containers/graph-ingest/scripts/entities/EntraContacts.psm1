@@ -18,7 +18,7 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    $uri = '/v1.0/orgContacts?$top=999'
+    $uri = '/v1.0/contacts?$top=999'
 
     do {
         $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
