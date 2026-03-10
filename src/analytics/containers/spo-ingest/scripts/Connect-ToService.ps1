@@ -27,11 +27,13 @@ Connect-PnPOnline -Url $TenantConfig.admin_url `
 
 Write-Log "Connected to SharePoint Online for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
 
-# Store auth config for RunspacePool reconnection (PnP needs per-site connections)
-$script:AuthConfig = @{
+# Store auth config for entity module reconnection (PnP needs per-site connections).
+# Uses $global: because entity modules have their own module scope and cannot
+# access $script: variables from the dot-sourced caller.
+$global:AuthConfig = @{
     ClientId          = $TenantConfig.client_id
     TenantDomain      = $TenantConfig.organization
     CertificateBase64 = $certBase64
     AdminUrl          = $TenantConfig.admin_url
 }
-$script:CertBytes = $certBytes
+$global:CertBytes = $certBytes
