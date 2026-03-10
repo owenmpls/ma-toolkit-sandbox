@@ -522,27 +522,31 @@ dlt.apply_changes(
 
 @dlt.view(name="v_spo_sites")
 def v_spo_sites():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("id"),
-            col("name"),
-            col("displayName").alias("display_name"),
-            col("webUrl").alias("web_url"),
-            col("description"),
-            col("createdDateTime").alias("created_at"),
-            col("lastModifiedDateTime").alias("last_modified_at"),
-            col("hostname"),
-            col("isPersonalSite").alias("is_personal_site"),
-            col("storageUsed").alias("storage_used"),
-            col("storagePercentUsed").alias("storage_percent_used"),
-            col("totalItemCount").alias("total_item_count"),
-            col("listCount").alias("list_count"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
+    df = spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
+
+    # ownerEmail only appears once OneDrive personal sites are ingested
+    if "ownerEmail" not in df.columns:
+        df = df.withColumn("ownerEmail", lit(None).cast("string"))
+
+    return df.select(
+        concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("id"),
+        col("name"),
+        col("displayName").alias("display_name"),
+        col("webUrl").alias("web_url"),
+        col("description"),
+        col("createdDateTime").alias("created_at"),
+        col("lastModifiedDateTime").alias("last_modified_at"),
+        col("hostname"),
+        col("isPersonalSite").alias("is_personal_site"),
+        col("ownerEmail").alias("owner_email"),
+        col("storageUsed").alias("storage_used"),
+        col("storagePercentUsed").alias("storage_percent_used"),
+        col("totalItemCount").alias("total_item_count"),
+        col("listCount").alias("list_count"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
     )
 
 

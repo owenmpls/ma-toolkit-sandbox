@@ -26,20 +26,68 @@ function Invoke-Phase1 {
         throw "Failed to obtain Graph access token from PnP connection"
     }
 
-    # --- Step 2: Enumerate all sites via Microsoft Graph ---
     $headers = @{ Authorization = "Bearer $graphToken" }
+
+    # --- Step 2: Enumerate team/communication sites via Microsoft Graph ---
     $allSites = @()
+    $siteIds = @{}
     $uri = 'https://graph.microsoft.com/v1.0/sites?search=*&$top=999&$select=id,name,displayName,webUrl,createdDateTime,lastModifiedDateTime,description,siteCollection'
 
     do {
         $response = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get -ErrorAction Stop
         if ($response.value) {
-            $allSites += $response.value
+            foreach ($s in $response.value) {
+                if ($s.id) { $siteIds[$s.id] = $true }
+                $allSites += $s
+            }
         }
         $uri = $response.'@odata.nextLink'
     } while ($uri)
 
-    # --- Step 3: Enrich each site via PnP per-site connection ---
+    # --- Step 3: Enumerate OneDrive personal sites via user drives ---
+    try {
+        $users = @()
+        $userUri = 'https://graph.microsoft.com/v1.0/users?$select=id,userPrincipalName&$top=999'
+        do {
+            $response = Invoke-RestMethod -Uri $userUri -Headers $headers -Method Get -ErrorAction Stop
+            if ($response.value) { $users += $response.value }
+            $userUri = $response.'@odata.nextLink'
+        } while ($userUri)
+
+        foreach ($user in $users) {
+            try {
+                # Get user's OneDrive to discover the personal site URL
+                $driveUri = "https://graph.microsoft.com/v1.0/users/$($user.id)/drive?`$select=webUrl"
+                $drive = Invoke-RestMethod -Uri $driveUri -Headers $headers -Method Get -ErrorAction Stop
+
+                if (-not $drive.webUrl) { continue }
+
+                # Derive site URL from drive webUrl (strip trailing /Documents path)
+                $personalSiteUrl = $drive.webUrl -replace '/[^/]+$', ''
+                $parsedUri = [System.Uri]$personalSiteUrl
+                $siteHostname = $parsedUri.Host
+                $sitePath = $parsedUri.AbsolutePath.TrimEnd('/')
+
+                # Get site object from Graph (same schema as team sites)
+                $siteUri = "https://graph.microsoft.com/v1.0/sites/${siteHostname}:${sitePath}?`$select=id,name,displayName,webUrl,createdDateTime,lastModifiedDateTime,description,siteCollection"
+                $site = Invoke-RestMethod -Uri $siteUri -Headers $headers -Method Get -ErrorAction Stop
+
+                if ($site.id -and -not $siteIds.ContainsKey($site.id)) {
+                    $site | Add-Member -NotePropertyName '_ownerEmail' -NotePropertyValue $user.userPrincipalName -Force
+                    $allSites += $site
+                    $siteIds[$site.id] = $true
+                }
+            }
+            catch {
+                # User doesn't have OneDrive provisioned (404) or inaccessible — skip
+            }
+        }
+    }
+    catch {
+        Write-Host "WARNING: OneDrive enumeration failed (may lack User.Read.All): $($_.Exception.Message)"
+    }
+
+    # --- Step 4: Enrich each site via PnP per-site connection ---
     foreach ($site in $allSites) {
         $siteUrl = $site.webUrl
         if (-not $siteUrl) { continue }
@@ -58,6 +106,7 @@ function Invoke-Phase1 {
             lastModifiedDateTime = $site.lastModifiedDateTime
             hostname             = $hostname
             isPersonalSite       = $isPersonal
+            ownerEmail           = $site._ownerEmail
         }
 
         try {
