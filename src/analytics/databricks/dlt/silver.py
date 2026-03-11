@@ -565,10 +565,85 @@ dlt.apply_changes(
 )
 
 
+# --- Entra Group Members ---
+
+
+@dlt.view(name="v_entra_group_members")
+def v_entra_group_members():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_group_members")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("groupId"), col("id")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("groupId").alias("group_id"),
+            col("id").alias("member_id"),
+            col("displayName").alias("display_name"),
+            col("userPrincipalName").alias("user_principal_name"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("`@odata.type`").alias("member_type"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="entra_group_members",
+    comment="Cleaned Entra group memberships across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="entra_group_members",
+    source="v_entra_group_members",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- EXO Group Members ---
+
+
+@dlt.view(name="v_exo_group_members")
+def v_exo_group_members():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.exo_group_members")
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("groupIdentity"), col("memberName")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("groupIdentity").alias("group_identity"),
+            col("groupType").alias("group_type"),
+            col("memberName").alias("member_name"),
+            col("memberType").alias("member_type"),
+            lower(trim(col("primarySmtp"))).alias("primary_smtp_address"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="exo_group_members",
+    comment="Cleaned Exchange Online group memberships across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="exo_group_members",
+    source="v_exo_group_members",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
 # ============================================================================
 # Disabled entities — no landing data available
 # ============================================================================
-# entra_group_members (Phase 2 function error)
-# exo_group_members (cmdlet not found)
 # exo_mailbox_statistics (never ingested)
 # onedrive_usage (never ingested)

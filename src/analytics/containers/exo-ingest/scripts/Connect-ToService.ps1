@@ -12,7 +12,7 @@ $script:UploadFunction = ${function:Write-ToAdlsRest}
 $certBytes = [System.IO.File]::ReadAllBytes($CertificatePath)
 $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
     $certBytes, [string]::Empty,
-    [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet
+    [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
 )
 
 $exoParams = @{

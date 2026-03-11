@@ -96,6 +96,7 @@ try {
         $recordCount = 0
         $phase2Count = 0
         $phase2Chunks = 0
+        $phase2Skipped = 0
         $errors = @()
         $status = 'success'
 
@@ -138,16 +139,27 @@ try {
                 $phase2Dir = Join-Path ([System.IO.Path]::GetTempPath()) "phase2_${entityName}_${runId}"
                 New-Item -ItemType Directory -Path $phase2Dir -Force | Out-Null
 
-                $phase2Result = & "$($entity.Module.Name)\Invoke-Phase2" `
-                    -EntityIds $entityIds.ToArray() `
-                    -OutputDirectory $phase2Dir `
-                    -RunId $runId `
-                    -PoolSize $maxParallelism
+                $phase2Params = @{
+                    EntityIds       = $entityIds.ToArray()
+                    OutputDirectory = $phase2Dir
+                    RunId           = $runId
+                    PoolSize        = $maxParallelism
+                }
+                if ($script:AuthConfig) { $phase2Params['AuthConfig'] = $script:AuthConfig }
+                if ($script:CertBytes)  { $phase2Params['CertBytes']  = $script:CertBytes }
+
+                $phase2Result = & "$($entity.Module.Name)\Invoke-Phase2" @phase2Params
 
                 $phase2Count = $phase2Result.RecordCount
                 $phase2Chunks = $phase2Result.ChunkCount
+                $phase2Skipped = if ($phase2Result.SkippedCount) { $phase2Result.SkippedCount } else { 0 }
 
-                Write-Log "Phase 2 complete: $phase2Count records in $phase2Chunks chunks" -Entity $entityName
+                Write-Log "Phase 2 complete: $phase2Count records in $phase2Chunks chunks ($phase2Skipped skipped)" -Entity $entityName
+
+                if ($phase2Result.Errors -and $phase2Result.Errors.Count -gt 0) {
+                    $errors += $phase2Result.Errors
+                    Write-Log "Phase 2 had $($phase2Result.Errors.Count) error(s)" -Level WARN -Entity $entityName
+                }
 
                 # Upload Phase 2 chunks
                 Get-ChildItem $phase2Dir -Filter '*.jsonl' | ForEach-Object {
@@ -176,8 +188,9 @@ try {
             entity_type         = $config.Name
             schedule_tier       = $scheduleTier
             phase1_record_count = $recordCount
-            phase2_record_count = $phase2Count
-            phase2_chunk_count  = $phase2Chunks
+            phase2_record_count  = $phase2Count
+            phase2_chunk_count   = $phase2Chunks
+            phase2_skipped_count = $phase2Skipped
             started_at          = $entityStartTime
             completed_at        = (Get-Date -Format 'o')
             status              = $status

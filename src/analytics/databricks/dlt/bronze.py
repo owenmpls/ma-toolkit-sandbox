@@ -6,13 +6,20 @@ LANDING_CONTAINER = "landing"
 BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net"
 
 
-def _read_landing(schedule_tier, entity_type):
+def _read_landing(schedule_tier, entity_type, detail_type=None):
     """Read JSONL files from the landing container using Auto Loader.
 
     Note: Do NOT set cloudFiles.schemaLocation or cloudFiles.schemaEvolutionMode
     here — DLT manages schema inference and checkpoints internally.
+
+    Args:
+        detail_type: If set, read only from the Phase 2 sub-directory (e.g. "members")
+                     to avoid mixing Phase 1 group listings with Phase 2 member records.
     """
-    landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
+    if detail_type:
+        landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/*/{detail_type}/"
+    else:
+        landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
     return (
         spark.readStream
         .format("cloudFiles")
@@ -124,26 +131,25 @@ def spo_sites():
 
 # --- Core enrichment tier ---
 
-# entra_group_members — disabled: Phase 2 function error during ingestion
-# @dlt.table(
-#     name="entra_group_members",
-#     comment="Raw entra_group_members from all tenants",
-#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-# )
-# @dlt.expect("valid_record", "id IS NOT NULL")
-# def entra_group_members():
-#     return _read_landing("core_enrichment", "entra_group_members")
+
+@dlt.table(
+    name="entra_group_members",
+    comment="Raw entra_group_members from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "groupId IS NOT NULL")
+def entra_group_members():
+    return _read_landing("core_enrichment", "entra_group_members", detail_type="members")
 
 
-# exo_group_members — disabled: cmdlet not found error during ingestion
-# @dlt.table(
-#     name="exo_group_members",
-#     comment="Raw Exchange Online group memberships from all tenants",
-#     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
-# )
-# @dlt.expect("valid_record", "groupIdentity IS NOT NULL")
-# def exo_group_members():
-#     return _read_landing("core_enrichment", "exo_group_members")
+@dlt.table(
+    name="exo_group_members",
+    comment="Raw Exchange Online group memberships from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "groupIdentity IS NOT NULL")
+def exo_group_members():
+    return _read_landing("core_enrichment", "exo_group_members", detail_type="members")
 
 
 # --- Enrichment tier ---
