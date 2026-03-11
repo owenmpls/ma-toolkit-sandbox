@@ -13,6 +13,7 @@ $modulesPath = Join-Path $PSScriptRoot 'modules'
 Import-Module (Join-Path $modulesPath 'LogHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'RetryHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'KeyVaultHelper.psm1') -Force
+Import-Module (Join-Path $modulesPath 'WorkerPool.psm1') -Force
 # StorageHelper or StorageHelperRest is loaded by Connect-ToService.ps1
 
 # --- Read environment ---
