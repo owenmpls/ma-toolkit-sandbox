@@ -646,4 +646,3 @@ dlt.apply_changes(
 # Disabled entities — no landing data available
 # ============================================================================
 # exo_mailbox_statistics (never ingested)
-# onedrive_usage (never ingested)

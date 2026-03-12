@@ -23,8 +23,7 @@
         "exo_group_members"
       ],
       "enrichment_entities": [
-        "exo_mailbox_statistics",
-        "onedrive_usage"
+        "exo_mailbox_statistics"
       ],
       "schedules": {
         "core": "daily",
@@ -56,8 +55,7 @@
         "exo_group_members"
       ],
       "enrichment_entities": [
-        "exo_mailbox_statistics",
-        "onedrive_usage"
+        "exo_mailbox_statistics"
       ],
       "schedules": {
         "core": "daily",

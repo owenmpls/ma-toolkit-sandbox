@@ -154,4 +154,3 @@ def exo_group_members():
 
 # --- Enrichment tier ---
 # exo_mailbox_statistics — disabled: never ingested (on-demand routing gap)
-# onedrive_usage — disabled: never ingested (on-demand routing gap)
