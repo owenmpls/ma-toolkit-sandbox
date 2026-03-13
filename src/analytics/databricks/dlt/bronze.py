@@ -6,7 +6,7 @@ LANDING_CONTAINER = "landing"
 BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net"
 
 
-def _read_landing(schedule_tier, entity_type, detail_type=None):
+def _read_landing(schedule_tier, entity_type, detail_type=None, file_pattern="*.jsonl"):
     """Read JSONL files from the landing container using Auto Loader.
 
     Note: Do NOT set cloudFiles.schemaLocation or cloudFiles.schemaEvolutionMode
@@ -15,6 +15,9 @@ def _read_landing(schedule_tier, entity_type, detail_type=None):
     Args:
         detail_type: If set, read only from the Phase 2 sub-directory (e.g. "members")
                      to avoid mixing Phase 1 group listings with Phase 2 member records.
+        file_pattern: Glob pattern for file names (default "*.jsonl"). Use a specific
+                      pattern like "spo_sites_*.jsonl" when Phase 2 chunks exist in
+                      subdirectories and Auto Loader's recursive listing would mix schemas.
     """
     if detail_type:
         landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/*/{detail_type}/"
@@ -25,7 +28,7 @@ def _read_landing(schedule_tier, entity_type, detail_type=None):
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
-        .option("pathGlobFilter", "*.jsonl")
+        .option("pathGlobFilter", file_pattern)
         .load(landing_path)
         .withColumn(
             "_tenant_key",
@@ -126,7 +129,17 @@ def exo_unified_groups():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def spo_sites():
-    return _read_landing("core", "spo_sites")
+    return _read_landing("core", "spo_sites", file_pattern="spo_sites_*.jsonl")
+
+
+@dlt.table(
+    name="spo_site_usage",
+    comment="Raw SharePoint site usage (storage, item counts) from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "siteUrl IS NOT NULL")
+def spo_site_usage():
+    return _read_landing("core", "spo_sites", detail_type="usage")
 
 
 # --- Core enrichment tier ---

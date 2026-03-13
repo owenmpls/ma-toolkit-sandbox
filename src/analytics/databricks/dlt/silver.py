@@ -524,10 +524,6 @@ dlt.apply_changes(
 def v_spo_sites():
     df = spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
 
-    # ownerEmail only appears once OneDrive personal sites are ingested
-    if "ownerEmail" not in df.columns:
-        df = df.withColumn("ownerEmail", lit(None).cast("string"))
-
     return df.select(
         concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
         col("_tenant_key").alias("tenant_key"),
@@ -540,7 +536,37 @@ def v_spo_sites():
         col("lastModifiedDateTime").alias("last_modified_at"),
         col("hostname"),
         col("isPersonalSite").alias("is_personal_site"),
-        col("ownerEmail").alias("owner_email"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
+    )
+
+
+dlt.create_streaming_table(
+    name="spo_sites",
+    comment="Cleaned SharePoint sites (metadata only) across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="spo_sites",
+    source="v_spo_sites",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SharePoint Site Usage ---
+
+
+@dlt.view(name="v_spo_site_usage")
+def v_spo_site_usage():
+    df = spark.readStream.table("matoolkit_analytics.bronze.spo_site_usage")
+
+    return df.select(
+        concat_ws("_", col("_tenant_key"), col("siteUrl")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("siteUrl").alias("site_url"),
         col("storageUsed").alias("storage_used"),
         col("storagePercentUsed").alias("storage_percent_used"),
         col("totalItemCount").alias("total_item_count"),
@@ -551,14 +577,14 @@ def v_spo_sites():
 
 
 dlt.create_streaming_table(
-    name="spo_sites",
-    comment="Cleaned SharePoint sites with storage and item counts across all tenants",
+    name="spo_site_usage",
+    comment="SharePoint site storage and item counts across all tenants",
     table_properties={"quality": "silver"},
 )
 
 dlt.apply_changes(
-    target="spo_sites",
-    source="v_spo_sites",
+    target="spo_site_usage",
+    source="v_spo_site_usage",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,

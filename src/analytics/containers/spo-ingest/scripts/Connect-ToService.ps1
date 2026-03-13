@@ -12,7 +12,7 @@ $script:UploadFunction = ${function:Write-ToAdls}
 $certBytes = [System.IO.File]::ReadAllBytes($CertificatePath)
 $x509 = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
     $certBytes, [string]::Empty,
-    [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet
+    [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
 )
 $pfxBytes = $x509.Export(
     [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx
@@ -27,13 +27,12 @@ Connect-PnPOnline -Url $TenantConfig.admin_url `
 
 Write-Log "Connected to SharePoint Online for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
 
-# Store auth config for entity module reconnection (PnP needs per-site connections).
-# Uses $global: because entity modules have their own module scope and cannot
-# access $script: variables from the dot-sourced caller.
-$global:AuthConfig = @{
+# Store auth config for RunspacePool reconnection in Phase 2.
+# Uses $script: scope so Invoke-Ingestion.ps1 can pass it to entity Invoke-Phase2.
+$script:AuthConfig = @{
     ClientId          = $TenantConfig.client_id
     TenantDomain      = $TenantConfig.organization
     CertificateBase64 = $certBase64
     AdminUrl          = $TenantConfig.admin_url
 }
-$global:CertBytes = $certBytes
+$script:CertBytes = $certBytes
