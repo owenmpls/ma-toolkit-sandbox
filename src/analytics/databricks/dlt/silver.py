@@ -635,21 +635,33 @@ dlt.apply_changes(
 
 @dlt.view(name="v_exo_group_members")
 def v_exo_group_members():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.exo_group_members")
-        .select(
-            concat_ws(
-                "_", col("_tenant_key"), col("groupIdentity"), col("memberName")
-            ).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("groupIdentity").alias("group_identity"),
-            col("groupType").alias("group_type"),
-            col("memberName").alias("member_name"),
-            col("memberType").alias("member_type"),
-            lower(trim(col("primarySmtp"))).alias("primary_smtp_address"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
+    df = spark.readStream.table("matoolkit_analytics.bronze.exo_group_members")
+
+    # groupObjectId/memberObjectId added after initial ingestion — handle missing columns
+    for col_name in ("groupObjectId", "memberObjectId"):
+        if col_name not in df.columns:
+            df = df.withColumn(col_name, lit(None).cast("string"))
+
+    return df.select(
+        # Use object IDs for SCD key when available, fall back to name-based key
+        when(
+            col("groupObjectId").isNotNull() & col("memberObjectId").isNotNull(),
+            concat_ws("_", col("_tenant_key"), col("groupObjectId"), col("memberObjectId")),
         )
+        .otherwise(
+            concat_ws("_", col("_tenant_key"), col("groupIdentity"), col("memberName"))
+        )
+        .alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("groupIdentity").alias("group_identity"),
+        col("groupObjectId").alias("group_object_id"),
+        col("groupType").alias("group_type"),
+        col("memberName").alias("member_name"),
+        col("memberObjectId").alias("member_object_id"),
+        col("memberType").alias("member_type"),
+        lower(trim(col("primarySmtp"))).alias("primary_smtp_address"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
     )
 
 
@@ -668,7 +680,40 @@ dlt.apply_changes(
 )
 
 
-# ============================================================================
-# Disabled entities — no landing data available
-# ============================================================================
-# exo_mailbox_statistics (never ingested)
+# --- EXO Mailbox Statistics ---
+
+
+@dlt.view(name="v_exo_mailbox_statistics")
+def v_exo_mailbox_statistics():
+    df = spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_statistics")
+
+    return df.select(
+        concat_ws("_", col("_tenant_key"), col("MailboxGuid")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("MailboxGuid").alias("mailbox_guid"),
+        col("DisplayName").alias("display_name"),
+        col("ItemCount").alias("item_count"),
+        col("TotalItemSize").alias("total_item_size"),
+        col("DeletedItemCount").alias("deleted_item_count"),
+        col("TotalDeletedItemSize").alias("total_deleted_item_size"),
+        col("LastLogonTime").alias("last_logon_time"),
+        col("LastLoggedOnUserAccount").alias("last_logon_user"),
+        col("IsArchiveMailbox").alias("is_archive_mailbox"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
+    )
+
+
+dlt.create_streaming_table(
+    name="exo_mailbox_statistics",
+    comment="Exchange Online mailbox statistics (size, item counts) across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="exo_mailbox_statistics",
+    source="v_exo_mailbox_statistics",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)

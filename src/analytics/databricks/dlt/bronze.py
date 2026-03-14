@@ -166,4 +166,13 @@ def exo_group_members():
 
 
 # --- Enrichment tier ---
-# exo_mailbox_statistics — disabled: never ingested (on-demand routing gap)
+
+
+@dlt.table(
+    name="exo_mailbox_statistics",
+    comment="Raw Exchange Online mailbox statistics from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
+def exo_mailbox_statistics():
+    return _read_landing("enrichment", "exo_mailbox_statistics", detail_type="statistics")

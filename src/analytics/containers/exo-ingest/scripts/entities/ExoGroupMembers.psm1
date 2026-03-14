@@ -29,7 +29,7 @@ function Invoke-Phase1 {
             GroupType                  = 'DistributionGroup'
         }
         $Writer.WriteLine(($record | ConvertTo-Json -Compress -Depth 5))
-        $EntityIds.Add("DG:$($_.Identity)")
+        $EntityIds.Add("DG:$($_.ExternalDirectoryObjectId):$($_.Identity)")
         $count++
         if ($count % 1000 -eq 0) { $Writer.Flush() }
     }
@@ -44,7 +44,7 @@ function Invoke-Phase1 {
             GroupType                  = 'UnifiedGroup'
         }
         $Writer.WriteLine(($record | ConvertTo-Json -Compress -Depth 5))
-        $EntityIds.Add("UG:$($_.Identity)")
+        $EntityIds.Add("UG:$($_.ExternalDirectoryObjectId):$($_.Identity)")
         $count++
         if ($count % 1000 -eq 0) { $Writer.Flush() }
     }
@@ -169,9 +169,10 @@ function Invoke-Phase2 {
 
                 try {
                     foreach ($entry in $GroupEntries) {
-                        $parts = $entry -split ':', 2
+                        $parts = $entry -split ':', 3
                         $groupType = $parts[0]
-                        $groupIdentity = $parts[1]
+                        $groupObjectId = $parts[1]
+                        $groupIdentity = $parts[2]
 
                         $attempt = 0
                         $groupDone = $false
@@ -189,8 +190,10 @@ function Invoke-Phase2 {
                                 foreach ($member in $members) {
                                     $record = @{
                                         groupIdentity = $groupIdentity
+                                        groupObjectId = $groupObjectId
                                         groupType     = $groupType
                                         memberName    = $member.Name
+                                        memberObjectId = $member.ExternalDirectoryObjectId
                                         memberType    = $member.RecipientType
                                         primarySmtp   = $member.PrimarySmtpAddress
                                     }
