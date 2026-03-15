@@ -75,7 +75,7 @@
               "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('exo_mailboxes','exo_contacts','exo_distribution_groups','exo_unified_groups'))), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('exo_mailboxes','exo_contacts','exo_mail_users','exo_distribution_groups','exo_unified_groups'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [

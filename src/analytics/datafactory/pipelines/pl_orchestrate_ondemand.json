@@ -40,7 +40,7 @@
         "dependsOn": [],
         "typeProperties": {
           "expression": {
-            "value": "@or(or(or(or(contains(pipeline().parameters.entityNames, 'exo_mailboxes'), contains(pipeline().parameters.entityNames, 'exo_contacts')), contains(pipeline().parameters.entityNames, 'exo_distribution_groups')), contains(pipeline().parameters.entityNames, 'exo_unified_groups')), contains(pipeline().parameters.entityNames, 'exo_group_members'))",
+            "value": "@or(or(or(or(or(or(contains(pipeline().parameters.entityNames, 'exo_mailboxes'), contains(pipeline().parameters.entityNames, 'exo_contacts')), contains(pipeline().parameters.entityNames, 'exo_mail_users')), contains(pipeline().parameters.entityNames, 'exo_distribution_groups')), contains(pipeline().parameters.entityNames, 'exo_unified_groups')), contains(pipeline().parameters.entityNames, 'exo_group_members')), contains(pipeline().parameters.entityNames, 'exo_mailbox_statistics'))",
             "type": "Expression"
           },
           "ifTrueActivities": [
