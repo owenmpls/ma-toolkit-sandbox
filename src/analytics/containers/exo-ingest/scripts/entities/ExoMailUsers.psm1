@@ -1,11 +1,11 @@
 function Get-EntityConfig {
     return @{
-        Name         = 'exo_contacts'
+        Name         = 'exo_mail_users'
         ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'exo'
-        OutputFile   = 'exo_contacts'
+        OutputFile   = 'exo_mail_users'
         DetailType   = $null
     }
 }
@@ -26,7 +26,7 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    Get-EXORecipient -RecipientTypeDetails MailContact -ResultSize Unlimited `
+    Get-EXORecipient -RecipientTypeDetails MailUser,GuestMailUser -ResultSize Unlimited `
         -PropertySets Archive,Custom,MailboxMove,Policy `
         -Properties $extraProps | ForEach-Object {
         $Writer.WriteLine(($_ | ConvertTo-Json -Compress -Depth 5))

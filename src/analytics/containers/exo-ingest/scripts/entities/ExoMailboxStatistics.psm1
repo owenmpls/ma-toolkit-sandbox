@@ -149,6 +149,9 @@ function Invoke-Phase2 {
 
                             try {
                                 $stats = Get-EXOMailboxStatistics -Identity $guid -PropertySets All -ErrorAction Stop
+                                # Dump entire object — ByteQuantifiedSize fields (TotalItemSize,
+                                # TotalDeletedItemSize) serialize as structs, but TablesTotalSize
+                                # is a plain bigint that the silver layer uses instead.
                                 $writer.WriteLine(($stats | ConvertTo-Json -Compress -Depth 5))
                                 $processed++
                                 $mbxDone = $true

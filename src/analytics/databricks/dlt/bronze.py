@@ -103,6 +103,16 @@ def exo_contacts():
 
 
 @dlt.table(
+    name="exo_mail_users",
+    comment="Raw Exchange Online mail users from all tenants",
+    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+)
+@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+def exo_mail_users():
+    return _read_landing("core", "exo_mail_users")
+
+
+@dlt.table(
     name="exo_distribution_groups",
     comment="Raw Exchange Online distribution groups from all tenants",
     table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},

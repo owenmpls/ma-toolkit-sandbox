@@ -338,13 +338,56 @@ def v_exo_contacts():
                 "primary_smtp_address"
             ),
             col("RecipientType").alias("recipient_type"),
+            col("RecipientTypeDetails").alias("recipient_type_details"),
             col("Alias").alias("alias"),
             col("ExternalEmailAddress").alias("external_email_address"),
             col("EmailAddresses").alias("email_addresses"),
             col("HiddenFromAddressListsEnabled").alias(
                 "hidden_from_address_lists"
             ),
+            col("FirstName").alias("first_name"),
+            col("LastName").alias("last_name"),
+            col("Company").alias("company"),
+            col("Department").alias("department"),
+            col("Title").alias("title"),
+            col("Office").alias("office"),
+            col("City").alias("city"),
+            col("Manager").alias("manager"),
+            col("WindowsEmailAddress").alias("windows_email_address"),
             col("WhenCreated").alias("when_created"),
+            col("WhenChanged").alias("when_changed"),
+            # --- Custom attributes ---
+            col("CustomAttribute1").alias("custom_attribute_1"),
+            col("CustomAttribute2").alias("custom_attribute_2"),
+            col("CustomAttribute3").alias("custom_attribute_3"),
+            col("CustomAttribute4").alias("custom_attribute_4"),
+            col("CustomAttribute5").alias("custom_attribute_5"),
+            col("CustomAttribute6").alias("custom_attribute_6"),
+            col("CustomAttribute7").alias("custom_attribute_7"),
+            col("CustomAttribute8").alias("custom_attribute_8"),
+            col("CustomAttribute9").alias("custom_attribute_9"),
+            col("CustomAttribute10").alias("custom_attribute_10"),
+            col("CustomAttribute11").alias("custom_attribute_11"),
+            col("CustomAttribute12").alias("custom_attribute_12"),
+            col("CustomAttribute13").alias("custom_attribute_13"),
+            col("CustomAttribute14").alias("custom_attribute_14"),
+            col("CustomAttribute15").alias("custom_attribute_15"),
+            col("ExtensionCustomAttribute1").alias(
+                "extension_custom_attribute_1"
+            ),
+            col("ExtensionCustomAttribute2").alias(
+                "extension_custom_attribute_2"
+            ),
+            col("ExtensionCustomAttribute3").alias(
+                "extension_custom_attribute_3"
+            ),
+            col("ExtensionCustomAttribute4").alias(
+                "extension_custom_attribute_4"
+            ),
+            col("ExtensionCustomAttribute5").alias(
+                "extension_custom_attribute_5"
+            ),
+            # --- Metadata ---
             col("_source_file"),
             col("_dlt_ingested_at"),
         )
@@ -360,6 +403,97 @@ dlt.create_streaming_table(
 dlt.apply_changes(
     target="exo_contacts",
     source="v_exo_contacts",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- EXO Mail Users ---
+
+
+@dlt.view(name="v_exo_mail_users")
+def v_exo_mail_users():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.exo_mail_users")
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("ExternalDirectoryObjectId")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("ExternalDirectoryObjectId").alias(
+                "external_directory_object_id"
+            ),
+            col("DisplayName").alias("display_name"),
+            lower(trim(col("PrimarySmtpAddress"))).alias(
+                "primary_smtp_address"
+            ),
+            col("RecipientType").alias("recipient_type"),
+            col("RecipientTypeDetails").alias("recipient_type_details"),
+            col("Alias").alias("alias"),
+            col("ExternalEmailAddress").alias("external_email_address"),
+            col("EmailAddresses").alias("email_addresses"),
+            col("HiddenFromAddressListsEnabled").alias(
+                "hidden_from_address_lists"
+            ),
+            col("FirstName").alias("first_name"),
+            col("LastName").alias("last_name"),
+            col("Company").alias("company"),
+            col("Department").alias("department"),
+            col("Title").alias("title"),
+            col("Office").alias("office"),
+            col("City").alias("city"),
+            col("Manager").alias("manager"),
+            col("WindowsEmailAddress").alias("windows_email_address"),
+            col("WhenCreated").alias("when_created"),
+            col("WhenChanged").alias("when_changed"),
+            # --- Custom attributes ---
+            col("CustomAttribute1").alias("custom_attribute_1"),
+            col("CustomAttribute2").alias("custom_attribute_2"),
+            col("CustomAttribute3").alias("custom_attribute_3"),
+            col("CustomAttribute4").alias("custom_attribute_4"),
+            col("CustomAttribute5").alias("custom_attribute_5"),
+            col("CustomAttribute6").alias("custom_attribute_6"),
+            col("CustomAttribute7").alias("custom_attribute_7"),
+            col("CustomAttribute8").alias("custom_attribute_8"),
+            col("CustomAttribute9").alias("custom_attribute_9"),
+            col("CustomAttribute10").alias("custom_attribute_10"),
+            col("CustomAttribute11").alias("custom_attribute_11"),
+            col("CustomAttribute12").alias("custom_attribute_12"),
+            col("CustomAttribute13").alias("custom_attribute_13"),
+            col("CustomAttribute14").alias("custom_attribute_14"),
+            col("CustomAttribute15").alias("custom_attribute_15"),
+            col("ExtensionCustomAttribute1").alias(
+                "extension_custom_attribute_1"
+            ),
+            col("ExtensionCustomAttribute2").alias(
+                "extension_custom_attribute_2"
+            ),
+            col("ExtensionCustomAttribute3").alias(
+                "extension_custom_attribute_3"
+            ),
+            col("ExtensionCustomAttribute4").alias(
+                "extension_custom_attribute_4"
+            ),
+            col("ExtensionCustomAttribute5").alias(
+                "extension_custom_attribute_5"
+            ),
+            # --- Metadata ---
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="exo_mail_users",
+    comment="Cleaned Exchange Online mail users across all tenants",
+    table_properties={"quality": "silver"},
+)
+
+dlt.apply_changes(
+    target="exo_mail_users",
+    source="v_exo_mail_users",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
@@ -687,15 +821,20 @@ dlt.apply_changes(
 def v_exo_mailbox_statistics():
     df = spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_statistics")
 
+    # TotalItemSize / TotalDeletedItemSize land as struct<IsUnlimited:boolean>
+    # when PowerShell serialises ByteQuantifiedSize incorrectly (Value is an
+    # empty object).  Use TablesTotalSize (bigint, always populated) as the
+    # best available total-size proxy until the enrichment container ships
+    # numeric byte counts.
     return df.select(
         concat_ws("_", col("_tenant_key"), col("MailboxGuid")).alias("_scd_key"),
         col("_tenant_key").alias("tenant_key"),
         col("MailboxGuid").alias("mailbox_guid"),
         col("DisplayName").alias("display_name"),
-        col("ItemCount").alias("item_count"),
-        col("TotalItemSize").alias("total_item_size"),
-        col("DeletedItemCount").alias("deleted_item_count"),
-        col("TotalDeletedItemSize").alias("total_deleted_item_size"),
+        col("ItemCount").cast("long").alias("item_count"),
+        col("TablesTotalSize").cast("long").alias("total_item_size_bytes"),
+        col("DeletedItemCount").cast("long").alias("deleted_item_count"),
+        lit(None).cast("long").alias("total_deleted_item_size_bytes"),
         col("LastLogonTime").alias("last_logon_time"),
         col("LastLoggedOnUserAccount").alias("last_logon_user"),
         col("IsArchiveMailbox").alias("is_archive_mailbox"),

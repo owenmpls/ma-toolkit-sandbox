@@ -14,6 +14,7 @@
         "entra_contacts",
         "exo_mailboxes",
         "exo_contacts",
+        "exo_mail_users",
         "exo_distribution_groups",
         "exo_unified_groups",
         "spo_sites"
@@ -46,6 +47,7 @@
         "entra_contacts",
         "exo_mailboxes",
         "exo_contacts",
+        "exo_mail_users",
         "exo_distribution_groups",
         "exo_unified_groups",
         "spo_sites"
