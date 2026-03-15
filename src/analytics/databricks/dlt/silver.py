@@ -181,8 +181,6 @@ def v_mailboxes():
             col("Alias").alias("alias"),
             col("EmailAddresses").alias("email_addresses"),
             # --- Type & status ---
-            col("RecipientType").alias("recipient_type"),
-            col("RecipientTypeDetails").alias("recipient_type_details"),
             col("Database").alias("database"),
             col("WhenCreated").alias("when_created"),
             col("WhenMailboxCreated").alias("when_mailbox_created"),
@@ -337,8 +335,6 @@ def v_exo_contacts():
             lower(trim(col("PrimarySmtpAddress"))).alias(
                 "primary_smtp_address"
             ),
-            col("RecipientType").alias("recipient_type"),
-            col("RecipientTypeDetails").alias("recipient_type_details"),
             col("Alias").alias("alias"),
             col("ExternalEmailAddress").alias("external_email_address"),
             col("EmailAddresses").alias("email_addresses"),
@@ -427,8 +423,6 @@ def v_exo_mail_users():
             lower(trim(col("PrimarySmtpAddress"))).alias(
                 "primary_smtp_address"
             ),
-            col("RecipientType").alias("recipient_type"),
-            col("RecipientTypeDetails").alias("recipient_type_details"),
             col("Alias").alias("alias"),
             col("ExternalEmailAddress").alias("external_email_address"),
             col("EmailAddresses").alias("email_addresses"),
