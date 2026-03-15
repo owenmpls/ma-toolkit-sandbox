@@ -22,7 +22,7 @@ function Invoke-Phase1 {
         'ExternalEmailAddress', 'HiddenFromAddressListsEnabled',
         'WhenCreated', 'WhenChanged', 'FirstName', 'LastName',
         'City', 'Company', 'Department', 'Manager', 'Office', 'Title',
-        'Notes', 'WindowsEmailAddress', 'Identity', 'DistinguishedName'
+        'Notes', 'Identity', 'DistinguishedName'
     )
 
     $count = 0

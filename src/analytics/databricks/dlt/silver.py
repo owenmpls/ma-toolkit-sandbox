@@ -353,7 +353,6 @@ def v_exo_contacts():
             col("Office").alias("office"),
             col("City").alias("city"),
             col("Manager").alias("manager"),
-            col("WindowsEmailAddress").alias("windows_email_address"),
             col("WhenCreated").alias("when_created"),
             col("WhenChanged").alias("when_changed"),
             # --- Custom attributes ---
@@ -444,7 +443,6 @@ def v_exo_mail_users():
             col("Office").alias("office"),
             col("City").alias("city"),
             col("Manager").alias("manager"),
-            col("WindowsEmailAddress").alias("windows_email_address"),
             col("WhenCreated").alias("when_created"),
             col("WhenChanged").alias("when_changed"),
             # --- Custom attributes ---
