@@ -18,7 +18,8 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    $uri = '/v1.0/contacts?$top=999'
+    $select = 'id,displayName,givenName,surname,mail,jobTitle,department,companyName,phones,addresses,proxyAddresses,onPremisesSyncEnabled,onPremisesLastSyncDateTime,onPremisesProvisioningErrors,serviceProvisioningErrors'
+    $uri = "/v1.0/contacts?`$select=$select&`$top=999"
 
     do {
         $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop

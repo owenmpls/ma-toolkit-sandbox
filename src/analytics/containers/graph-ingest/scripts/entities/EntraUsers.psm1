@@ -18,7 +18,7 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    $select = 'id,userPrincipalName,mail,displayName,givenName,surname,jobTitle,department,officeLocation,city,state,country,companyName,accountEnabled,onPremisesSyncEnabled,onPremisesLastSyncDateTime,createdDateTime,assignedLicenses,proxyAddresses,userType'
+    $select = 'id,userPrincipalName,mail,displayName,givenName,surname,jobTitle,department,officeLocation,city,state,country,companyName,accountEnabled,onPremisesSyncEnabled,onPremisesLastSyncDateTime,onPremisesDomainName,onPremisesDistinguishedName,onPremisesExtensionAttributes,onPremisesImmutableId,onPremisesProvisioningErrors,onPremisesSamAccountName,onPremisesSecurityIdentifier,onPremisesUserPrincipalName,serviceProvisioningErrors,createdDateTime,assignedLicenses,proxyAddresses,userType'
     $uri = "/v1.0/users?`$select=$select&`$top=999"
 
     do {

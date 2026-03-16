@@ -51,6 +51,32 @@ def v_users():
             col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
             col("proxyAddresses").alias("proxy_addresses"),
             col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+            # --- On-premises attributes ---
+            col("onPremisesDomainName").alias("on_premises_domain_name"),
+            col("onPremisesDistinguishedName").alias("on_premises_distinguished_name"),
+            col("onPremisesImmutableId").alias("on_premises_immutable_id"),
+            col("onPremisesSamAccountName").alias("on_premises_sam_account_name"),
+            col("onPremisesSecurityIdentifier").alias("on_premises_security_identifier"),
+            col("onPremisesUserPrincipalName").alias("on_premises_user_principal_name"),
+            # --- Extension attributes (from onPremisesExtensionAttributes) ---
+            col("onPremisesExtensionAttributes.extensionAttribute1").alias("extension_attribute_1"),
+            col("onPremisesExtensionAttributes.extensionAttribute2").alias("extension_attribute_2"),
+            col("onPremisesExtensionAttributes.extensionAttribute3").alias("extension_attribute_3"),
+            col("onPremisesExtensionAttributes.extensionAttribute4").alias("extension_attribute_4"),
+            col("onPremisesExtensionAttributes.extensionAttribute5").alias("extension_attribute_5"),
+            col("onPremisesExtensionAttributes.extensionAttribute6").alias("extension_attribute_6"),
+            col("onPremisesExtensionAttributes.extensionAttribute7").alias("extension_attribute_7"),
+            col("onPremisesExtensionAttributes.extensionAttribute8").alias("extension_attribute_8"),
+            col("onPremisesExtensionAttributes.extensionAttribute9").alias("extension_attribute_9"),
+            col("onPremisesExtensionAttributes.extensionAttribute10").alias("extension_attribute_10"),
+            col("onPremisesExtensionAttributes.extensionAttribute11").alias("extension_attribute_11"),
+            col("onPremisesExtensionAttributes.extensionAttribute12").alias("extension_attribute_12"),
+            col("onPremisesExtensionAttributes.extensionAttribute13").alias("extension_attribute_13"),
+            col("onPremisesExtensionAttributes.extensionAttribute14").alias("extension_attribute_14"),
+            col("onPremisesExtensionAttributes.extensionAttribute15").alias("extension_attribute_15"),
+            # --- Provisioning errors ---
+            col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
+            col("serviceProvisioningErrors").alias("service_provisioning_errors"),
             col("createdDateTime").alias("created_at"),
             when(
                 expr(
@@ -134,6 +160,14 @@ def v_groups():
             col("proxyAddresses").alias("proxy_addresses"),
             col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
             col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+            # --- On-premises attributes ---
+            col("onPremisesDomainName").alias("on_premises_domain_name"),
+            col("onPremisesNetBiosName").alias("on_premises_netbios_name"),
+            col("onPremisesSamAccountName").alias("on_premises_sam_account_name"),
+            col("onPremisesSecurityIdentifier").alias("on_premises_security_identifier"),
+            # --- Provisioning errors ---
+            col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
+            col("serviceProvisioningErrors").alias("service_provisioning_errors"),
             col("createdDateTime").alias("created_at"),
             col("_source_file"),
             col("_dlt_ingested_at"),
@@ -622,6 +656,9 @@ def v_entra_contacts():
             col("proxyAddresses").alias("proxy_addresses"),
             col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
             col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+            # --- Provisioning errors ---
+            col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
+            col("serviceProvisioningErrors").alias("service_provisioning_errors"),
             col("_source_file"),
             col("_dlt_ingested_at"),
         )
