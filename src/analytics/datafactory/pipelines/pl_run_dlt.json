@@ -4,114 +4,65 @@
     "description": "Trigger a Databricks DLT pipeline update and poll until completion. Waits for any active update to finish before starting a new one.",
     "activities": [
       {
-        "name": "Check_Pipeline_State",
-        "type": "WebActivity",
+        "name": "Wait_Until_Idle",
+        "type": "Until",
         "dependsOn": [],
-        "policy": {
-          "timeout": "0.00:02:00",
-          "retry": 2,
-          "retryIntervalInSeconds": 10
-        },
-        "typeProperties": {
-          "url": {
-            "value": "@concat(pipeline().parameters.databricksWorkspaceUrl, '/api/2.0/pipelines/', pipeline().parameters.dltPipelineId)",
-            "type": "Expression"
-          },
-          "method": "GET",
-          "authentication": {
-            "type": "MSI",
-            "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
-          }
-        }
-      },
-      {
-        "name": "Set_Pipeline_State",
-        "type": "SetVariable",
-        "dependsOn": [
-          {
-            "activity": "Check_Pipeline_State",
-            "dependencyConditions": ["Succeeded"]
-          }
-        ],
-        "typeProperties": {
-          "variableName": "pipelineState",
-          "value": {
-            "value": "@activity('Check_Pipeline_State').output.state",
-            "type": "Expression"
-          }
-        }
-      },
-      {
-        "name": "Wait_If_Busy",
-        "type": "IfCondition",
-        "dependsOn": [
-          {
-            "activity": "Set_Pipeline_State",
-            "dependencyConditions": ["Succeeded"]
-          }
-        ],
         "typeProperties": {
           "expression": {
-            "value": "@not(equals(variables('pipelineState'), 'IDLE'))",
+            "value": "@equals(variables('pipelineState'), 'IDLE')",
             "type": "Expression"
           },
-          "ifTrueActivities": [
+          "timeout": "0.01:00:00",
+          "activities": [
             {
-              "name": "Wait_Until_Idle",
-              "type": "Until",
+              "name": "Check_Pipeline_State",
+              "type": "WebActivity",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:02:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 10
+              },
               "typeProperties": {
-                "expression": {
-                  "value": "@equals(variables('pipelineState'), 'IDLE')",
+                "url": {
+                  "value": "@concat(pipeline().parameters.databricksWorkspaceUrl, '/api/2.0/pipelines/', pipeline().parameters.dltPipelineId)",
                   "type": "Expression"
                 },
-                "timeout": "0.01:00:00",
-                "activities": [
-                  {
-                    "name": "Wait_60s_For_Idle",
-                    "type": "Wait",
-                    "typeProperties": {
-                      "waitTimeInSeconds": 60
-                    }
-                  },
-                  {
-                    "name": "Check_Pipeline_State_Loop",
-                    "type": "WebActivity",
-                    "dependsOn": [
-                      {
-                        "activity": "Wait_60s_For_Idle",
-                        "dependencyConditions": ["Succeeded"]
-                      }
-                    ],
-                    "typeProperties": {
-                      "url": {
-                        "value": "@concat(pipeline().parameters.databricksWorkspaceUrl, '/api/2.0/pipelines/', pipeline().parameters.dltPipelineId)",
-                        "type": "Expression"
-                      },
-                      "method": "GET",
-                      "authentication": {
-                        "type": "MSI",
-                        "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
-                      }
-                    }
-                  },
-                  {
-                    "name": "Set_Pipeline_State_Loop",
-                    "type": "SetVariable",
-                    "dependsOn": [
-                      {
-                        "activity": "Check_Pipeline_State_Loop",
-                        "dependencyConditions": ["Succeeded"]
-                      }
-                    ],
-                    "typeProperties": {
-                      "variableName": "pipelineState",
-                      "value": {
-                        "value": "@activity('Check_Pipeline_State_Loop').output.state",
-                        "type": "Expression"
-                      }
-                    }
-                  }
-                ]
+                "method": "GET",
+                "authentication": {
+                  "type": "MSI",
+                  "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+                }
+              }
+            },
+            {
+              "name": "Set_Pipeline_State",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Check_Pipeline_State",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "variableName": "pipelineState",
+                "value": {
+                  "value": "@activity('Check_Pipeline_State').output.state",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Wait_30s",
+              "type": "Wait",
+              "dependsOn": [
+                {
+                  "activity": "Set_Pipeline_State",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "waitTimeInSeconds": 30
               }
             }
           ]
@@ -122,7 +73,7 @@
         "type": "WebActivity",
         "dependsOn": [
           {
-            "activity": "Wait_If_Busy",
+            "activity": "Wait_Until_Idle",
             "dependencyConditions": ["Succeeded"]
           }
         ],
