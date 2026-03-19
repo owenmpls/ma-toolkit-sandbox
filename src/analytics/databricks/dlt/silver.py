@@ -935,13 +935,14 @@ _ROLE_ASSIGNMENT_SCHEMA = StructType(
 _SHARING_LINK_SCHEMA = StructType(
     [
         StructField("library", StringType()),
+        StructField("itemPath", StringType()),
+        StructField("itemType", StringType()),
         StructField("linkId", StringType()),
         StructField("linkUrl", StringType()),
         StructField("scope", StringType()),
         StructField("type", StringType()),
         StructField("hasPassword", BooleanType()),
         StructField("expirationDateTime", StringType()),
-        StructField("grantedToIdentities", ArrayType(StringType())),
     ]
 )
 
@@ -1129,6 +1130,8 @@ def v_spo_sharing_links():
             col("_tenant_key").alias("tenant_key"),
             col("siteUrl").alias("site_url"),
             col("link.library").alias("library"),
+            col("link.itemPath").alias("item_path"),
+            col("link.itemType").alias("item_type"),
             col("link.linkId").alias("link_id"),
             col("link.linkUrl").alias("link_url"),
             col("link.scope").alias("scope"),

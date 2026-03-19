@@ -251,59 +251,101 @@ function Invoke-Phase2 {
 
                                 # 5. Document libraries (BaseTemplate: 101=DocLib, 700=OneDriveLib, 119=WikiPages)
                                 $docLibs = @()
+                                $listObjects = @()
                                 try {
-                                    $lists = Get-PnPList -Includes HasUniqueRoleAssignments -ErrorAction Stop | Where-Object {
+                                    $listObjects = @(Get-PnPList -Includes HasUniqueRoleAssignments, RootFolder -ErrorAction Stop | Where-Object {
                                         $_.BaseTemplate -in @(101, 700, 119)
-                                    }
-                                    $docLibs = @($lists | ForEach-Object {
+                                    })
+                                    $docLibs = @($listObjects | ForEach-Object {
                                         [ordered]@{
                                             title                = $_.Title
                                             id                   = $_.Id.ToString()
                                             itemCount            = $_.ItemCount
                                             hasUniquePermissions = [bool]$_.HasUniqueRoleAssignments
+                                            rootFolderUrl        = $_.RootFolder.ServerRelativeUrl
                                         }
                                     })
-                                    $record.documentLibraries = $docLibs
+                                    $record.documentLibraries = @($docLibs | ForEach-Object {
+                                        [ordered]@{
+                                            title                = $_.title
+                                            id                   = $_.id
+                                            itemCount            = $_.itemCount
+                                            hasUniquePermissions = $_.hasUniquePermissions
+                                        }
+                                    })
                                 }
                                 catch {
                                     $record.documentLibraries = @()
                                     $record.documentLibrariesError = $_.Exception.Message
                                 }
 
-                                # 6. Sharing links per document library
+                                # 6. Sharing links — enumerate per item across doc libraries.
+                                # Collects links from the root folder of each library, plus
+                                # all files/folders with unique permissions (where sharing
+                                # links are most likely to exist).
                                 $hasOrgWideLinks = $false
                                 $hasAnonymousLinks = $false
                                 try {
                                     $sharingLinks = @()
                                     foreach ($lib in $docLibs) {
+                                        # 6a. Root folder sharing links
                                         try {
-                                            $links = Get-PnPFolderSharingLink -Folder $lib.title -ErrorAction Stop
+                                            $links = Get-PnPFolderSharingLink -Folder $lib.rootFolderUrl -ErrorAction Stop
                                             foreach ($link in $links) {
                                                 $scope = if ($link.Link.Scope) { $link.Link.Scope.ToString() } else { $null }
                                                 $type = if ($link.Link.Type) { $link.Link.Type.ToString() } else { $null }
                                                 if ($scope -eq 'organization') { $hasOrgWideLinks = $true }
                                                 if ($scope -eq 'anonymous') { $hasAnonymousLinks = $true }
-                                                $identities = @()
-                                                if ($link.GrantedToIdentitiesV2) {
-                                                    $identities = @($link.GrantedToIdentitiesV2 | ForEach-Object {
-                                                        if ($_.SiteUser) {
-                                                            [ordered]@{
-                                                                loginName   = $_.SiteUser.LoginName
-                                                                displayName = $_.SiteUser.DisplayName
-                                                                email       = $_.SiteUser.Email
-                                                            }
-                                                        }
-                                                    })
-                                                }
                                                 $sharingLinks += [ordered]@{
-                                                    library              = $lib.title
-                                                    linkId               = $link.Id
-                                                    linkUrl              = if ($link.Link.WebUrl) { $link.Link.WebUrl } else { $null }
-                                                    scope                = $scope
-                                                    type                 = $type
-                                                    hasPassword          = [bool]$link.HasPassword
-                                                    expirationDateTime   = if ($link.ExpirationDateTime) { $link.ExpirationDateTime.ToString('o') } else { $null }
-                                                    grantedToIdentities  = $identities
+                                                    library            = $lib.title
+                                                    itemPath           = $lib.rootFolderUrl
+                                                    itemType           = 'folder'
+                                                    linkId             = $link.Id
+                                                    linkUrl            = if ($link.Link.WebUrl) { $link.Link.WebUrl } else { $null }
+                                                    scope              = $scope
+                                                    type               = $type
+                                                    hasPassword        = [bool]$link.HasPassword
+                                                    expirationDateTime = if ($link.ExpirationDateTime) { $link.ExpirationDateTime.ToString('o') } else { $null }
+                                                }
+                                            }
+                                        }
+                                        catch { }
+
+                                        # 6b. Per-item sharing links — enumerate items
+                                        # and check each for sharing links. Cap at 200
+                                        # items per library to avoid timeout on large libs.
+                                        try {
+                                            $items = Get-PnPListItem -List $lib.title -PageSize 200 -ErrorAction Stop | Select-Object -First 200
+                                            foreach ($item in $items) {
+                                                $fileRef = $item["FileRef"]
+                                                $itemLinks = @()
+                                                try {
+                                                    $objType = $item.FileSystemObjectType.ToString()
+                                                    if ($objType -eq 'File') {
+                                                        $itemLinks = @(Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop)
+                                                    }
+                                                    elseif ($objType -eq 'Folder') {
+                                                        $itemLinks = @(Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop)
+                                                    }
+                                                }
+                                                catch { }
+
+                                                foreach ($link in $itemLinks) {
+                                                    $scope = if ($link.Link.Scope) { $link.Link.Scope.ToString() } else { $null }
+                                                    $type = if ($link.Link.Type) { $link.Link.Type.ToString() } else { $null }
+                                                    if ($scope -eq 'organization') { $hasOrgWideLinks = $true }
+                                                    if ($scope -eq 'anonymous') { $hasAnonymousLinks = $true }
+                                                    $sharingLinks += [ordered]@{
+                                                        library            = $lib.title
+                                                        itemPath           = $fileRef
+                                                        itemType           = $item.FileSystemObjectType.ToString().ToLower()
+                                                        linkId             = $link.Id
+                                                        linkUrl            = if ($link.Link.WebUrl) { $link.Link.WebUrl } else { $null }
+                                                        scope              = $scope
+                                                        type               = $type
+                                                        hasPassword        = [bool]$link.HasPassword
+                                                        expirationDateTime = if ($link.ExpirationDateTime) { $link.ExpirationDateTime.ToString('o') } else { $null }
+                                                    }
                                                 }
                                             }
                                         }
