@@ -246,7 +246,8 @@ function Invoke-Phase2 {
 
                                 # 5. Role assignments
                                 # Load HasUniqueRoleAssignments and RoleAssignments via
-                                # Get-PnPProperty to properly initialize the CSOM collections.
+                                # Get-PnPProperty, then snapshot to array before batch-loading
+                                # sub-properties (avoids concurrent collection modification).
                                 $hasUniqueRoleAssignments = $false
                                 try {
                                     $web = Get-PnPWeb -ErrorAction Stop
@@ -254,14 +255,16 @@ function Invoke-Phase2 {
                                     $hasUniqueRoleAssignments = [bool]$web.HasUniqueRoleAssignments
                                     $record.hasUniqueRoleAssignments = $hasUniqueRoleAssignments
 
+                                    # Snapshot to array to avoid concurrent modification during Load
+                                    $raList = @($web.RoleAssignments)
                                     $ctx = Get-PnPContext
-                                    foreach ($ra in $web.RoleAssignments) {
+                                    foreach ($ra in $raList) {
                                         $ctx.Load($ra.Member)
                                         $ctx.Load($ra.RoleDefinitionBindings)
                                     }
                                     $ctx.ExecuteQuery()
 
-                                    $record.roleAssignments = @($web.RoleAssignments | ForEach-Object {
+                                    $record.roleAssignments = @($raList | ForEach-Object {
                                         $ra = $_
                                         $roleDefs = @($ra.RoleDefinitionBindings | ForEach-Object { $_.Name })
                                         [ordered]@{
