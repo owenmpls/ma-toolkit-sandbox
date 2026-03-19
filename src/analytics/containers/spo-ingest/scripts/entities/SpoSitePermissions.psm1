@@ -144,8 +144,12 @@ function Invoke-Phase2 {
                                 }
 
                                 # 1. Site sharing capability
+                                # SharingCapability can't be loaded via Get-PnPSite -Includes
+                                # (PnP parameter validation rejects it). Use Get-PnPProperty
+                                # to load it via CSOM directly — requires Sites.FullControl.All.
                                 try {
-                                    $pnpSite = Get-PnPSite -Includes Usage, SharingCapability -ErrorAction Stop
+                                    $pnpSite = Get-PnPSite -ErrorAction Stop
+                                    Get-PnPProperty -ClientObject $pnpSite -Property Usage, SharingCapability -ErrorAction Stop
                                     $record.sharingCapability = $pnpSite.SharingCapability.ToString()
                                 }
                                 catch {
@@ -156,7 +160,7 @@ function Invoke-Phase2 {
                                 # 2. Sensitivity label
                                 try {
                                     $label = Get-PnPSiteSensitivityLabel -ErrorAction Stop
-                                    $record.sensitivityLabel = $label
+                                    $record.sensitivityLabel = if ($label) { $label.DisplayName } else { $null }
                                 }
                                 catch {
                                     $record.sensitivityLabel = $null
@@ -222,20 +226,34 @@ function Invoke-Phase2 {
                                 }
 
                                 # 5. Role assignments
+                                # Get-PnPWeb -Includes RoleAssignments doesn't initialize
+                                # the sub-collection (Member, RoleDefinitionBindings). Use
+                                # CSOM context to batch-load the collection and sub-properties.
                                 $hasUniqueRoleAssignments = $false
                                 try {
-                                    $web = Get-PnPWeb -Includes RoleAssignments, HasUniqueRoleAssignments -ErrorAction Stop
+                                    $web = Get-PnPWeb -Includes HasUniqueRoleAssignments -ErrorAction Stop
                                     $hasUniqueRoleAssignments = [bool]$web.HasUniqueRoleAssignments
                                     $record.hasUniqueRoleAssignments = $hasUniqueRoleAssignments
-                                    $record.roleAssignments = @($web.RoleAssignments | ForEach-Object {
+
+                                    $ctx = Get-PnPContext
+                                    $ras = $web.RoleAssignments
+                                    $ctx.Load($ras)
+                                    $ctx.ExecuteQuery()
+
+                                    foreach ($ra in $ras) {
+                                        $ctx.Load($ra.Member)
+                                        $ctx.Load($ra.RoleDefinitionBindings)
+                                    }
+                                    $ctx.ExecuteQuery()
+
+                                    $record.roleAssignments = @($ras | ForEach-Object {
                                         $ra = $_
-                                        $member = $ra.Member
                                         $roleDefs = @($ra.RoleDefinitionBindings | ForEach-Object { $_.Name })
                                         [ordered]@{
-                                            principalType = $member.PrincipalType.ToString()
-                                            principalId   = $member.Id
-                                            principalName = $member.Title
-                                            loginName     = $member.LoginName
+                                            principalType   = $ra.Member.PrincipalType.ToString()
+                                            principalId     = $ra.Member.Id
+                                            principalName   = $ra.Member.Title
+                                            loginName       = $ra.Member.LoginName
                                             roleDefinitions = $roleDefs
                                         }
                                     })

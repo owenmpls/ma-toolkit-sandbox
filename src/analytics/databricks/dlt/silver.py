@@ -904,26 +904,33 @@ dlt.apply_changes(
 
 @dlt.view(name="v_spo_site_permissions_summary")
 def v_spo_site_permissions_summary():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("siteUrl")).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("siteUrl").alias("site_url"),
-            col("sharingCapability").alias("sharing_capability"),
-            col("sensitivityLabel").alias("sensitivity_label"),
-            col("hasUniqueRoleAssignments").alias("has_unique_role_assignments"),
-            col("hasEEEU").alias("has_eeeu"),
-            col("hasGuests").alias("has_guests"),
-            col("hasOrgWideLinks").alias("has_org_wide_links"),
-            col("hasAnonymousLinks").alias("has_anonymous_links"),
-            size(col("admins")).alias("admin_count"),
-            size(col("groups")).alias("group_count"),
-            size(col("sharingLinks")).alias("sharing_link_count"),
-            size(col("documentLibraries")).alias("library_count"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
+    df = spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
+
+    # sensitivityLabel may land as struct (PnP object) or string depending on
+    # entity version. Handle both: extract DisplayName from struct, pass string through.
+    label_col = df.schema["sensitivityLabel"].dataType
+    if hasattr(label_col, "fieldNames") and "DisplayName" in label_col.fieldNames():
+        sensitivity_expr = col("sensitivityLabel.DisplayName")
+    else:
+        sensitivity_expr = col("sensitivityLabel")
+
+    return df.select(
+        concat_ws("_", col("_tenant_key"), col("siteUrl")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("siteUrl").alias("site_url"),
+        col("sharingCapability").alias("sharing_capability"),
+        sensitivity_expr.alias("sensitivity_label"),
+        col("hasUniqueRoleAssignments").alias("has_unique_role_assignments"),
+        col("hasEEEU").alias("has_eeeu"),
+        col("hasGuests").alias("has_guests"),
+        col("hasOrgWideLinks").alias("has_org_wide_links"),
+        col("hasAnonymousLinks").alias("has_anonymous_links"),
+        size(col("admins")).alias("admin_count"),
+        size(col("groups")).alias("group_count"),
+        size(col("sharingLinks")).alias("sharing_link_count"),
+        size(col("documentLibraries")).alias("library_count"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
     )
 
 
