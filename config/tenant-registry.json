@@ -24,7 +24,8 @@
         "exo_group_members"
       ],
       "enrichment_entities": [
-        "exo_mailbox_statistics"
+        "exo_mailbox_statistics",
+        "spo_site_permissions"
       ],
       "schedules": {
         "core": "daily",
@@ -57,7 +58,8 @@
         "exo_group_members"
       ],
       "enrichment_entities": [
-        "exo_mailbox_statistics"
+        "exo_mailbox_statistics",
+        "spo_site_permissions"
       ],
       "schedules": {
         "core": "daily",
