@@ -133,11 +133,11 @@ function Invoke-Phase2 {
                             $attempt++
 
                             try {
-                                Connect-PnPOnline -Url $siteUrl `
+                                $siteConn = Connect-PnPOnline -Url $siteUrl `
                                     -ClientId $cfg.ClientId `
                                     -Tenant $cfg.TenantDomain `
                                     -CertificateBase64Encoded $cfg.CertificateBase64 `
-                                    -ErrorAction Stop
+                                    -ReturnConnection -ErrorAction Stop
 
                                 $record = [ordered]@{
                                     siteUrl = $siteUrl
@@ -145,7 +145,7 @@ function Invoke-Phase2 {
 
                                 # 1. Sensitivity label (site URL connection)
                                 try {
-                                    $label = Get-PnPSiteSensitivityLabel -ErrorAction Stop
+                                    $label = Get-PnPSiteSensitivityLabel -Connection $siteConn -ErrorAction Stop
                                     $record.sensitivityLabel = if ($label) { $label.DisplayName } else { $null }
                                 }
                                 catch {
@@ -156,7 +156,7 @@ function Invoke-Phase2 {
                                 $hasEEEU = $false
                                 $hasGuests = $false
                                 try {
-                                    $admins = Get-PnPSiteCollectionAdmin -ErrorAction Stop
+                                    $admins = Get-PnPSiteCollectionAdmin -Connection $siteConn -ErrorAction Stop
                                     $record.admins = @($admins | ForEach-Object {
                                         $isEEEU = [bool]($_.LoginName -match 'spo-grid-all-users')
                                         $isGuest = [bool]($_.LoginName -match '#ext#|urn:spo:guest')
@@ -178,12 +178,12 @@ function Invoke-Phase2 {
 
                                 # 3. SharePoint groups + members
                                 try {
-                                    $groups = Get-PnPGroup -ErrorAction Stop
+                                    $groups = Get-PnPGroup -Connection $siteConn -ErrorAction Stop
                                     $record.groups = @($groups | ForEach-Object {
                                         $group = $_
                                         $members = @()
                                         try {
-                                            $members = @(Get-PnPGroupMember -Group $group.Title -ErrorAction Stop | ForEach-Object {
+                                            $members = @(Get-PnPGroupMember -Group $group.Title -Connection $siteConn -ErrorAction Stop | ForEach-Object {
                                                 $isEEEU = [bool]($_.LoginName -match 'spo-grid-all-users')
                                                 $isGuest = [bool]($_.LoginName -match '#ext#|urn:spo:guest')
                                                 if ($isEEEU) { $hasEEEU = $true }
@@ -217,14 +217,14 @@ function Invoke-Phase2 {
                                 # sub-properties (avoids concurrent collection modification).
                                 $hasUniqueRoleAssignments = $false
                                 try {
-                                    $web = Get-PnPWeb -ErrorAction Stop
-                                    Get-PnPProperty -ClientObject $web -Property HasUniqueRoleAssignments, RoleAssignments -ErrorAction Stop
+                                    $web = Get-PnPWeb -Connection $siteConn -ErrorAction Stop
+                                    Get-PnPProperty -ClientObject $web -Property HasUniqueRoleAssignments, RoleAssignments -Connection $siteConn -ErrorAction Stop
                                     $hasUniqueRoleAssignments = [bool]$web.HasUniqueRoleAssignments
                                     $record.hasUniqueRoleAssignments = $hasUniqueRoleAssignments
 
                                     # Snapshot to array to avoid concurrent modification during Load
                                     $raList = @($web.RoleAssignments)
-                                    $ctx = Get-PnPContext
+                                    $ctx = Get-PnPContext -Connection $siteConn
                                     foreach ($ra in $raList) {
                                         $ctx.Load($ra.Member)
                                         $ctx.Load($ra.RoleDefinitionBindings)
@@ -253,7 +253,7 @@ function Invoke-Phase2 {
                                 $docLibs = @()
                                 $listObjects = @()
                                 try {
-                                    $listObjects = @(Get-PnPList -Includes HasUniqueRoleAssignments, RootFolder -ErrorAction Stop | Where-Object {
+                                    $listObjects = @(Get-PnPList -Includes HasUniqueRoleAssignments, RootFolder -Connection $siteConn -ErrorAction Stop | Where-Object {
                                         $_.BaseTemplate -in @(101, 700, 119)
                                     })
                                     $docLibs = @($listObjects | ForEach-Object {
@@ -287,7 +287,7 @@ function Invoke-Phase2 {
                                 $hasAnonymousLinks = $false
                                 try {
                                     $sharingLinks = @()
-                                    $linkItems = Get-PnPListItem -List 'Sharing Links' -PageSize 2000 -ErrorAction Stop
+                                    $linkItems = Get-PnPListItem -List 'Sharing Links' -PageSize 2000 -Connection $siteConn -ErrorAction Stop
                                     foreach ($li in $linkItems) {
                                         $linkScope = $li.FieldValues['LinkScope']
                                         $linkKind = $li.FieldValues['LinkKind']
