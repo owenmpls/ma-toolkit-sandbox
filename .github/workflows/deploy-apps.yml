@@ -1034,6 +1034,7 @@ jobs:
           PIPELINE_ORDER=(
             pl_run_container_job
             pl_run_dlt
+            pl_run_dlt_all
             pl_orchestrate_core
             pl_orchestrate_core_enrichment
             pl_orchestrate_enrichment

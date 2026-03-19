@@ -1,0 +1,63 @@
+{
+  "name": "pl_run_dlt_all",
+  "properties": {
+    "description": "Run bronze and silver DLT pipelines sequentially. Triggered on a schedule or manually on-demand.",
+    "activities": [
+      {
+        "name": "Run_DLT_Bronze",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "pl_run_dlt",
+            "type": "PipelineReference"
+          },
+          "parameters": {
+            "dltPipelineId": {
+              "value": "@pipeline().parameters.dltPipelineId",
+              "type": "Expression"
+            },
+            "databricksWorkspaceUrl": {
+              "value": "@pipeline().parameters.databricksWorkspaceUrl",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Run_DLT_Silver",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "Run_DLT_Bronze",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "pl_run_dlt",
+            "type": "PipelineReference"
+          },
+          "parameters": {
+            "dltPipelineId": {
+              "value": "@pipeline().parameters.dltSilverPipelineId",
+              "type": "Expression"
+            },
+            "databricksWorkspaceUrl": {
+              "value": "@pipeline().parameters.databricksWorkspaceUrl",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true
+        }
+      }
+    ],
+    "parameters": {
+      "dltPipelineId": { "type": "string" },
+      "dltSilverPipelineId": { "type": "string" },
+      "databricksWorkspaceUrl": { "type": "string" }
+    },
+    "variables": {}
+  }
+}

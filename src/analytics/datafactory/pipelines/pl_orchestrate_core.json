@@ -139,42 +139,6 @@
             }
           ]
         }
-      },
-      {
-        "name": "Run_DLT",
-        "type": "ExecutePipeline",
-        "dependsOn": [
-          {
-            "activity": "ForEach_Tenant",
-            "dependencyConditions": ["Succeeded"]
-          }
-        ],
-        "typeProperties": {
-          "pipeline": {
-            "referenceName": "pl_run_dlt",
-            "type": "PipelineReference"
-          },
-          "parameters": {
-            "dltPipelineId": { "value": "@pipeline().parameters.dltPipelineId", "type": "Expression" },
-            "databricksWorkspaceUrl": { "value": "@pipeline().parameters.databricksWorkspaceUrl", "type": "Expression" }
-          },
-          "waitOnCompletion": true
-        }
-      },
-      {
-        "name": "Run_DLT_Silver",
-        "type": "ExecutePipeline",
-        "dependsOn": [
-          { "activity": "Run_DLT", "dependencyConditions": ["Succeeded"] }
-        ],
-        "typeProperties": {
-          "pipeline": { "referenceName": "pl_run_dlt", "type": "PipelineReference" },
-          "parameters": {
-            "dltPipelineId": { "value": "@pipeline().parameters.dltSilverPipelineId", "type": "Expression" },
-            "databricksWorkspaceUrl": { "value": "@pipeline().parameters.databricksWorkspaceUrl", "type": "Expression" }
-          },
-          "waitOnCompletion": true
-        }
       }
     ],
     "parameters": {
@@ -184,10 +148,7 @@
       "exoJobName": { "type": "string" },
       "spoJobName": { "type": "string" },
       "resourceGroupName": { "type": "string" },
-      "subscriptionId": { "type": "string" },
-      "dltPipelineId": { "type": "string" },
-      "dltSilverPipelineId": { "type": "string" },
-      "databricksWorkspaceUrl": { "type": "string" }
+      "subscriptionId": { "type": "string" }
     },
     "variables": {}
   }
