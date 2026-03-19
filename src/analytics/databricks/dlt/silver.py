@@ -5,11 +5,20 @@ from pyspark.sql.functions import (
     concat_ws,
     explode,
     expr,
+    from_json,
     lit,
     lower,
     size,
     trim,
+    transform,
     when,
+)
+from pyspark.sql.types import (
+    ArrayType,
+    BooleanType,
+    StringType,
+    StructField,
+    StructType,
 )
 
 # Delta retention — silver uses SCD Type 1 (update-in-place), so deleted file
@@ -899,6 +908,52 @@ dlt.apply_changes(
 )
 
 
+# --- SPO Site Permissions ---
+# Auto Loader may infer arrays as array<string> when early records had empty arrays.
+# These schemas let us parse JSON strings back to structs in the silver layer.
+
+_PRINCIPAL_SCHEMA = StructType(
+    [
+        StructField("loginName", StringType()),
+        StructField("title", StringType()),
+        StructField("email", StringType()),
+        StructField("isEEEU", BooleanType()),
+        StructField("isGuest", BooleanType()),
+    ]
+)
+
+_ROLE_ASSIGNMENT_SCHEMA = StructType(
+    [
+        StructField("principalType", StringType()),
+        StructField("principalId", StringType()),
+        StructField("principalName", StringType()),
+        StructField("loginName", StringType()),
+        StructField("roleDefinitions", ArrayType(StringType())),
+    ]
+)
+
+_SHARING_LINK_SCHEMA = StructType(
+    [
+        StructField("library", StringType()),
+        StructField("linkId", StringType()),
+        StructField("linkUrl", StringType()),
+        StructField("scope", StringType()),
+        StructField("type", StringType()),
+        StructField("hasPassword", BooleanType()),
+        StructField("expirationDateTime", StringType()),
+        StructField("grantedToIdentities", ArrayType(StringType())),
+    ]
+)
+
+
+def _parse_json_array(df, column_name, struct_schema):
+    """If a column is array<string> (JSON strings), parse each element to struct."""
+    element_type = df.schema[column_name].dataType.elementType
+    if isinstance(element_type, StringType):
+        return transform(col(column_name), lambda x: from_json(x, struct_schema))
+    return col(column_name)
+
+
 # --- SPO Site Permissions Summary ---
 
 
@@ -956,12 +1011,16 @@ dlt.apply_changes(
 def v_spo_site_permission_principals():
     df = spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
 
+    # Parse admins from JSON strings if Auto Loader inferred array<string>
+    admins_col = _parse_json_array(df, "admins", _PRINCIPAL_SCHEMA)
+
     # Admins: explode admins array, role = "admin"
     admins_df = (
-        df.select(
+        df.withColumn("_admins_parsed", admins_col)
+        .select(
             col("_tenant_key"),
             col("siteUrl"),
-            explode(col("admins")).alias("principal"),
+            explode(col("_admins_parsed")).alias("principal"),
             col("_source_file"),
             col("_dlt_ingested_at"),
         )
@@ -1049,12 +1108,17 @@ dlt.apply_changes(
 
 @dlt.view(name="v_spo_sharing_links")
 def v_spo_sharing_links():
+    df = spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
+
+    # Parse sharing links from JSON strings if Auto Loader inferred array<string>
+    links_col = _parse_json_array(df, "sharingLinks", _SHARING_LINK_SCHEMA)
+
     return (
-        spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
+        df.withColumn("_links_parsed", links_col)
         .select(
             col("_tenant_key"),
             col("siteUrl"),
-            explode(col("sharingLinks")).alias("link"),
+            explode(col("_links_parsed")).alias("link"),
             col("_source_file"),
             col("_dlt_ingested_at"),
         )
