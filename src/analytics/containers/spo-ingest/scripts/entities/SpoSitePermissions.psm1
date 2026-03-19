@@ -279,89 +279,62 @@ function Invoke-Phase2 {
                                     $record.documentLibrariesError = $_.Exception.Message
                                 }
 
-                                # 6. Sharing links — enumerate per item across doc libraries.
-                                # Collects links from the root folder of each library, plus
-                                # all files/folders with unique permissions (where sharing
-                                # links are most likely to exist).
+                                # 6. Sharing links — query the hidden "Sharing Links" list.
+                                # Every SPO site has this hidden list containing all sharing
+                                # link metadata. One paginated query returns everything,
+                                # much faster than per-item Get-PnPFileSharingLink calls.
                                 $hasOrgWideLinks = $false
                                 $hasAnonymousLinks = $false
                                 try {
                                     $sharingLinks = @()
-                                    $linkErrors = [System.Collections.Generic.List[string]]::new()
-                                    foreach ($lib in $docLibs) {
-                                        # 6a. Root folder sharing links
-                                        try {
-                                            $links = Get-PnPFolderSharingLink -Folder $lib.rootFolderUrl -ErrorAction Stop
-                                            foreach ($link in $links) {
-                                                $scope = if ($link.Link.Scope) { $link.Link.Scope.ToString() } else { $null }
-                                                $type = if ($link.Link.Type) { $link.Link.Type.ToString() } else { $null }
-                                                if ($scope -eq 'organization') { $hasOrgWideLinks = $true }
-                                                if ($scope -eq 'anonymous') { $hasAnonymousLinks = $true }
-                                                $sharingLinks += [ordered]@{
-                                                    library            = $lib.title
-                                                    itemPath           = $lib.rootFolderUrl
-                                                    itemType           = 'folder'
-                                                    linkId             = $link.Id
-                                                    linkUrl            = if ($link.Link.WebUrl) { $link.Link.WebUrl } else { $null }
-                                                    scope              = $scope
-                                                    type               = $type
-                                                    hasPassword        = [bool]$link.HasPassword
-                                                    expirationDateTime = if ($link.ExpirationDateTime) { $link.ExpirationDateTime.ToString('o') } else { $null }
-                                                }
-                                            }
-                                        }
-                                        catch {
-                                            $linkErrors.Add("root=$($lib.title): $($_.Exception.Message)")
+                                    $linkItems = Get-PnPListItem -List 'Sharing Links' -PageSize 2000 -ErrorAction Stop
+                                    foreach ($li in $linkItems) {
+                                        $linkScope = $li.FieldValues['LinkScope']
+                                        $linkKind = $li.FieldValues['LinkKind']
+                                        $linkUrl = $li.FieldValues['ShareLink']
+                                        $itemUrl = $li.FieldValues['ItemUrl']
+                                        $expiration = $li.FieldValues['Expiration']
+                                        $hasPassword = [bool]$li.FieldValues['HasPassword']
+
+                                        # Map LinkKind int to type string
+                                        $typeStr = switch ([int]$linkKind) {
+                                            0 { 'direct' }
+                                            1 { 'organizationView' }
+                                            2 { 'organizationEdit' }
+                                            3 { 'anonymousView' }
+                                            4 { 'anonymousEdit' }
+                                            5 { 'flexibleView' }
+                                            6 { 'flexibleEdit' }
+                                            default { "kind_$linkKind" }
                                         }
 
-                                        # 6b. Per-item sharing links — enumerate items
-                                        # and check each for sharing links. Cap at 200
-                                        # items per library to avoid timeout on large libs.
-                                        try {
-                                            $items = Get-PnPListItem -List $lib.title -PageSize 200 -ErrorAction Stop | Select-Object -First 200
-                                            foreach ($item in $items) {
-                                                $fileRef = $item["FileRef"]
-                                                $itemLinks = @()
-                                                try {
-                                                    $objType = $item.FileSystemObjectType.ToString()
-                                                    if ($objType -eq 'File') {
-                                                        $itemLinks = @(Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop)
-                                                    }
-                                                    elseif ($objType -eq 'Folder') {
-                                                        $itemLinks = @(Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop)
-                                                    }
-                                                }
-                                                catch {
-                                                    $linkErrors.Add("item=$($fileRef): $($_.Exception.Message)")
-                                                }
-
-                                                foreach ($link in $itemLinks) {
-                                                    $scope = if ($link.Link.Scope) { $link.Link.Scope.ToString() } else { $null }
-                                                    $type = if ($link.Link.Type) { $link.Link.Type.ToString() } else { $null }
-                                                    if ($scope -eq 'organization') { $hasOrgWideLinks = $true }
-                                                    if ($scope -eq 'anonymous') { $hasAnonymousLinks = $true }
-                                                    $sharingLinks += [ordered]@{
-                                                        library            = $lib.title
-                                                        itemPath           = $fileRef
-                                                        itemType           = $item.FileSystemObjectType.ToString().ToLower()
-                                                        linkId             = $link.Id
-                                                        linkUrl            = if ($link.Link.WebUrl) { $link.Link.WebUrl } else { $null }
-                                                        scope              = $scope
-                                                        type               = $type
-                                                        hasPassword        = [bool]$link.HasPassword
-                                                        expirationDateTime = if ($link.ExpirationDateTime) { $link.ExpirationDateTime.ToString('o') } else { $null }
-                                                    }
-                                                }
+                                        # Map scope
+                                        $scopeStr = $null
+                                        if ($linkScope) { $scopeStr = $linkScope.ToString() }
+                                        if (-not $scopeStr) {
+                                            $scopeStr = switch ([int]$linkKind) {
+                                                { $_ -in 1,2 } { 'organization' }
+                                                { $_ -in 3,4 } { 'anonymous' }
+                                                default { $null }
                                             }
                                         }
-                                        catch {
-                                            $linkErrors.Add("list=$($lib.title): $($_.Exception.Message)")
+
+                                        if ($scopeStr -eq 'organization') { $hasOrgWideLinks = $true }
+                                        if ($scopeStr -eq 'anonymous') { $hasAnonymousLinks = $true }
+
+                                        $sharingLinks += [ordered]@{
+                                            linkId             = $li.Id.ToString()
+                                            linkUrl            = $linkUrl
+                                            itemPath           = $itemUrl
+                                            itemType           = $null
+                                            scope              = $scopeStr
+                                            type               = $typeStr
+                                            hasPassword        = $hasPassword
+                                            expirationDateTime = if ($expiration) { $expiration.ToString('o') } else { $null }
+                                            library            = $null
                                         }
                                     }
                                     $record.sharingLinks = $sharingLinks
-                                    if ($linkErrors.Count -gt 0) {
-                                        $record.sharingLinksErrors = $linkErrors.ToArray()
-                                    }
                                 }
                                 catch {
                                     $record.sharingLinks = @()
