@@ -199,3 +199,13 @@ def exo_group_members():
 @dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
 def exo_mailbox_statistics():
     return _read_landing("enrichment", "exo_mailbox_statistics", detail_type="statistics")
+
+
+@dlt.table(
+    name="spo_site_permissions",
+    comment="Raw SPO site permissions, groups, sharing links from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "siteUrl IS NOT NULL")
+def spo_site_permissions():
+    return _read_landing("enrichment", "spo_site_permissions", detail_type="permissions")

@@ -103,7 +103,7 @@
               "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('spo_site_details'))), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('spo_site_permissions'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [

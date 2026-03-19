@@ -1,10 +1,13 @@
 import dlt
 from pyspark.sql.functions import (
+    array_contains,
     col,
     concat_ws,
+    explode,
     expr,
     lit,
     lower,
+    size,
     trim,
     when,
 )
@@ -890,6 +893,192 @@ dlt.create_streaming_table(
 dlt.apply_changes(
     target="exo_mailbox_statistics",
     source="v_exo_mailbox_statistics",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SPO Site Permissions Summary ---
+
+
+@dlt.view(name="v_spo_site_permissions_summary")
+def v_spo_site_permissions_summary():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("siteUrl")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("siteUrl").alias("site_url"),
+            col("sharingCapability").alias("sharing_capability"),
+            col("sensitivityLabel").alias("sensitivity_label"),
+            col("hasUniqueRoleAssignments").alias("has_unique_role_assignments"),
+            col("hasEEEU").alias("has_eeeu"),
+            col("hasGuests").alias("has_guests"),
+            col("hasOrgWideLinks").alias("has_org_wide_links"),
+            col("hasAnonymousLinks").alias("has_anonymous_links"),
+            size(col("admins")).alias("admin_count"),
+            size(col("groups")).alias("group_count"),
+            size(col("sharingLinks")).alias("sharing_link_count"),
+            size(col("documentLibraries")).alias("library_count"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="spo_site_permissions_summary",
+    comment="Per-site permissions summary flags (EEEU, guests, sharing) across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="spo_site_permissions_summary",
+    source="v_spo_site_permissions_summary",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SPO Site Permission Principals ---
+
+
+@dlt.view(name="v_spo_site_permission_principals")
+def v_spo_site_permission_principals():
+    df = spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
+
+    # Admins: explode admins array, role = "admin"
+    admins_df = (
+        df.select(
+            col("_tenant_key"),
+            col("siteUrl"),
+            explode(col("admins")).alias("principal"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("siteUrl"),
+                lit("admin"),
+                col("principal.loginName"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("siteUrl").alias("site_url"),
+            lit("admin").alias("role"),
+            lit(None).cast("string").alias("group_title"),
+            col("principal.loginName").alias("login_name"),
+            col("principal.title").alias("title"),
+            col("principal.email").alias("email"),
+            col("principal.isEEEU").alias("is_eeeu"),
+            col("principal.isGuest").alias("is_guest"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+    # Group members: explode groups, then explode members
+    members_df = (
+        df.select(
+            col("_tenant_key"),
+            col("siteUrl"),
+            explode(col("groups")).alias("grp"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            col("_tenant_key"),
+            col("siteUrl"),
+            col("grp.title").alias("group_title"),
+            explode(col("grp.members")).alias("member"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("siteUrl"),
+                lit("member"),
+                col("member.loginName"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("siteUrl").alias("site_url"),
+            lit("member").alias("role"),
+            col("group_title"),
+            col("member.loginName").alias("login_name"),
+            col("member.title").alias("title"),
+            col("member.email").alias("email"),
+            col("member.isEEEU").alias("is_eeeu"),
+            col("member.isGuest").alias("is_guest"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+    return admins_df.unionByName(members_df)
+
+
+dlt.create_streaming_table(
+    name="spo_site_permission_principals",
+    comment="Per-principal permissions (admins + group members) across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="spo_site_permission_principals",
+    source="v_spo_site_permission_principals",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SPO Sharing Links ---
+
+
+@dlt.view(name="v_spo_sharing_links")
+def v_spo_sharing_links():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.spo_site_permissions")
+        .select(
+            col("_tenant_key"),
+            col("siteUrl"),
+            explode(col("sharingLinks")).alias("link"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("siteUrl"), col("link.linkId")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("siteUrl").alias("site_url"),
+            col("link.library").alias("library"),
+            col("link.linkId").alias("link_id"),
+            col("link.linkUrl").alias("link_url"),
+            col("link.scope").alias("scope"),
+            col("link.type").alias("type"),
+            col("link.hasPassword").alias("has_password"),
+            col("link.expirationDateTime").alias("expiration_date_time"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="spo_sharing_links",
+    comment="Sharing link inventory per site/library across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="spo_sharing_links",
+    source="v_spo_sharing_links",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,

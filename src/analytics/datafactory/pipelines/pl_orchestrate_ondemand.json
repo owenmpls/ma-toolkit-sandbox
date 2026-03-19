@@ -71,7 +71,7 @@
         "dependsOn": [],
         "typeProperties": {
           "expression": {
-            "value": "@contains(pipeline().parameters.entityNames, 'spo_sites')",
+            "value": "@or(contains(pipeline().parameters.entityNames, 'spo_sites'), contains(pipeline().parameters.entityNames, 'spo_site_permissions'))",
             "type": "Expression"
           },
           "ifTrueActivities": [
