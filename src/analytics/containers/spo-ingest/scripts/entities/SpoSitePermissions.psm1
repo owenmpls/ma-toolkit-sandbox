@@ -341,24 +341,20 @@ function Invoke-Phase2 {
                                     $record.sharingLinksError = $_.Exception.Message
                                 }
 
-                                # 8. Site sharing capability (last — requires admin URL
-                                # connection which invalidates the per-site CSOM context)
+                                # 7. Site sharing capability — use a separate connection
+                                # to admin URL so it doesn't pollute the site context.
                                 try {
-                                    Connect-PnPOnline -Url $cfg.AdminUrl `
+                                    $adminConn = Connect-PnPOnline -Url $cfg.AdminUrl `
                                         -ClientId $cfg.ClientId `
                                         -Tenant $cfg.TenantDomain `
                                         -CertificateBase64Encoded $cfg.CertificateBase64 `
-                                        -ErrorAction Stop
-                                    $tenantSite = Get-PnPTenantSite -Identity $siteUrl -ErrorAction Stop
+                                        -ReturnConnection -ErrorAction Stop
+                                    $tenantSite = Get-PnPTenantSite -Identity $siteUrl -Connection $adminConn -ErrorAction Stop
                                     $record.sharingCapability = $tenantSite.SharingCapability.ToString()
                                 }
                                 catch {
                                     $record.sharingCapability = $null
                                     $record.sharingCapabilityError = $_.Exception.Message
-                                }
-                                finally {
-                                    # Disconnect admin URL to prevent context pollution for the next site
-                                    try { Disconnect-PnPOnline -ErrorAction SilentlyContinue } catch { }
                                 }
 
                                 # Summary flags
