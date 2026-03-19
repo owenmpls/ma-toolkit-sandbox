@@ -144,17 +144,36 @@ function Invoke-Phase2 {
                                 }
 
                                 # 1. Site sharing capability
-                                # SharingCapability can't be loaded via Get-PnPSite -Includes
-                                # (PnP parameter validation rejects it). Use Get-PnPProperty
-                                # to load it via CSOM directly — requires Sites.FullControl.All.
+                                # SharingCapability lives on the Tenant object, not Site.
+                                # Get-PnPTenantSite retrieves it but requires an admin URL
+                                # connection. Connect briefly to admin, fetch, then reconnect
+                                # to the site for the remaining cmdlets.
                                 try {
-                                    $pnpSite = Get-PnPSite -ErrorAction Stop
-                                    Get-PnPProperty -ClientObject $pnpSite -Property Usage, SharingCapability -ErrorAction Stop
-                                    $record.sharingCapability = $pnpSite.SharingCapability.ToString()
+                                    Connect-PnPOnline -Url $cfg.AdminUrl `
+                                        -ClientId $cfg.ClientId `
+                                        -Tenant $cfg.TenantDomain `
+                                        -CertificateBase64Encoded $cfg.CertificateBase64 `
+                                        -ErrorAction Stop
+                                    $tenantSite = Get-PnPTenantSite -Identity $siteUrl -ErrorAction Stop
+                                    $record.sharingCapability = $tenantSite.SharingCapability.ToString()
+                                    # Reconnect to the site for remaining per-site cmdlets
+                                    Connect-PnPOnline -Url $siteUrl `
+                                        -ClientId $cfg.ClientId `
+                                        -Tenant $cfg.TenantDomain `
+                                        -CertificateBase64Encoded $cfg.CertificateBase64 `
+                                        -ErrorAction Stop
                                 }
                                 catch {
                                     $record.sharingCapability = $null
                                     $record.sharingCapabilityError = $_.Exception.Message
+                                    # Ensure we're connected to the site even if admin call failed
+                                    try {
+                                        Connect-PnPOnline -Url $siteUrl `
+                                            -ClientId $cfg.ClientId `
+                                            -Tenant $cfg.TenantDomain `
+                                            -CertificateBase64Encoded $cfg.CertificateBase64 `
+                                            -ErrorAction Stop
+                                    } catch { }
                                 }
 
                                 # 2. Sensitivity label
@@ -226,27 +245,23 @@ function Invoke-Phase2 {
                                 }
 
                                 # 5. Role assignments
-                                # Get-PnPWeb -Includes RoleAssignments doesn't initialize
-                                # the sub-collection (Member, RoleDefinitionBindings). Use
-                                # CSOM context to batch-load the collection and sub-properties.
+                                # Load HasUniqueRoleAssignments and RoleAssignments via
+                                # Get-PnPProperty to properly initialize the CSOM collections.
                                 $hasUniqueRoleAssignments = $false
                                 try {
-                                    $web = Get-PnPWeb -Includes HasUniqueRoleAssignments -ErrorAction Stop
+                                    $web = Get-PnPWeb -ErrorAction Stop
+                                    Get-PnPProperty -ClientObject $web -Property HasUniqueRoleAssignments, RoleAssignments -ErrorAction Stop
                                     $hasUniqueRoleAssignments = [bool]$web.HasUniqueRoleAssignments
                                     $record.hasUniqueRoleAssignments = $hasUniqueRoleAssignments
 
                                     $ctx = Get-PnPContext
-                                    $ras = $web.RoleAssignments
-                                    $ctx.Load($ras)
-                                    $ctx.ExecuteQuery()
-
-                                    foreach ($ra in $ras) {
+                                    foreach ($ra in $web.RoleAssignments) {
                                         $ctx.Load($ra.Member)
                                         $ctx.Load($ra.RoleDefinitionBindings)
                                     }
                                     $ctx.ExecuteQuery()
 
-                                    $record.roleAssignments = @($ras | ForEach-Object {
+                                    $record.roleAssignments = @($web.RoleAssignments | ForEach-Object {
                                         $ra = $_
                                         $roleDefs = @($ra.RoleDefinitionBindings | ForEach-Object { $_.Name })
                                         [ordered]@{
