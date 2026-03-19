@@ -287,6 +287,7 @@ function Invoke-Phase2 {
                                 $hasAnonymousLinks = $false
                                 try {
                                     $sharingLinks = @()
+                                    $linkErrors = [System.Collections.Generic.List[string]]::new()
                                     foreach ($lib in $docLibs) {
                                         # 6a. Root folder sharing links
                                         try {
@@ -309,7 +310,9 @@ function Invoke-Phase2 {
                                                 }
                                             }
                                         }
-                                        catch { }
+                                        catch {
+                                            $linkErrors.Add("root=$($lib.title): $($_.Exception.Message)")
+                                        }
 
                                         # 6b. Per-item sharing links — enumerate items
                                         # and check each for sharing links. Cap at 200
@@ -328,7 +331,9 @@ function Invoke-Phase2 {
                                                         $itemLinks = @(Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop)
                                                     }
                                                 }
-                                                catch { }
+                                                catch {
+                                                    $linkErrors.Add("item=$($fileRef): $($_.Exception.Message)")
+                                                }
 
                                                 foreach ($link in $itemLinks) {
                                                     $scope = if ($link.Link.Scope) { $link.Link.Scope.ToString() } else { $null }
@@ -349,9 +354,14 @@ function Invoke-Phase2 {
                                                 }
                                             }
                                         }
-                                        catch { }
+                                        catch {
+                                            $linkErrors.Add("list=$($lib.title): $($_.Exception.Message)")
+                                        }
                                     }
                                     $record.sharingLinks = $sharingLinks
+                                    if ($linkErrors.Count -gt 0) {
+                                        $record.sharingLinksErrors = $linkErrors.ToArray()
+                                    }
                                 }
                                 catch {
                                     $record.sharingLinks = @()
