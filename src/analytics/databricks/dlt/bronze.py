@@ -5,6 +5,19 @@ STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
 LANDING_CONTAINER = "landing"
 BASE_PATH = f"abfss://{LANDING_CONTAINER}@{STORAGE_ACCOUNT}.dfs.core.windows.net"
 
+# Delta retention — controls how far back time travel queries work.
+# Both settings must cover the same window: the log tracks which files
+# belong to each version, and the files themselves must still exist.
+DELTA_LOG_RETENTION = "interval 90 days"
+DELTA_DELETED_FILE_RETENTION = "interval 90 days"
+
+BRONZE_TABLE_PROPERTIES = {
+    "quality": "bronze",
+    "pipelines.autoOptimize.managed": "true",
+    "delta.logRetentionDuration": DELTA_LOG_RETENTION,
+    "delta.deletedFileRetentionDuration": DELTA_DELETED_FILE_RETENTION,
+}
+
 
 def _read_landing(schedule_tier, entity_type, detail_type=None, file_pattern="*.jsonl"):
     """Read JSONL files from the landing container using Auto Loader.
@@ -55,7 +68,7 @@ def _read_landing(schedule_tier, entity_type, detail_type=None, file_pattern="*.
 @dlt.table(
     name="entra_users",
     comment="Raw entra_users data from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_users():
@@ -65,7 +78,7 @@ def entra_users():
 @dlt.table(
     name="entra_groups",
     comment="Raw entra_groups data from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_groups():
@@ -75,7 +88,7 @@ def entra_groups():
 @dlt.table(
     name="entra_contacts",
     comment="Raw entra_contacts (organizational contacts) from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_contacts():
@@ -85,7 +98,7 @@ def entra_contacts():
 @dlt.table(
     name="exo_mailboxes",
     comment="Raw Exchange Online mailboxes from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "ExchangeGuid IS NOT NULL")
 def exo_mailboxes():
@@ -95,7 +108,7 @@ def exo_mailboxes():
 @dlt.table(
     name="exo_contacts",
     comment="Raw Exchange Online mail contacts from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_contacts():
@@ -105,7 +118,7 @@ def exo_contacts():
 @dlt.table(
     name="exo_mail_users",
     comment="Raw Exchange Online mail users from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_mail_users():
@@ -115,7 +128,7 @@ def exo_mail_users():
 @dlt.table(
     name="exo_distribution_groups",
     comment="Raw Exchange Online distribution groups from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_distribution_groups():
@@ -125,7 +138,7 @@ def exo_distribution_groups():
 @dlt.table(
     name="exo_unified_groups",
     comment="Raw Exchange Online unified (M365) groups from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_unified_groups():
@@ -135,7 +148,7 @@ def exo_unified_groups():
 @dlt.table(
     name="spo_sites",
     comment="Raw SharePoint Online sites from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def spo_sites():
@@ -145,7 +158,7 @@ def spo_sites():
 @dlt.table(
     name="spo_site_usage",
     comment="Raw SharePoint site usage (storage, item counts) from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "siteUrl IS NOT NULL")
 def spo_site_usage():
@@ -158,7 +171,7 @@ def spo_site_usage():
 @dlt.table(
     name="entra_group_members",
     comment="Raw entra_group_members from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "groupId IS NOT NULL")
 def entra_group_members():
@@ -168,7 +181,7 @@ def entra_group_members():
 @dlt.table(
     name="exo_group_members",
     comment="Raw Exchange Online group memberships from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "groupIdentity IS NOT NULL")
 def exo_group_members():
@@ -181,7 +194,7 @@ def exo_group_members():
 @dlt.table(
     name="exo_mailbox_statistics",
     comment="Raw Exchange Online mailbox statistics from all tenants",
-    table_properties={"quality": "bronze", "pipelines.autoOptimize.managed": "true"},
+    table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
 def exo_mailbox_statistics():

@@ -9,6 +9,15 @@ from pyspark.sql.functions import (
     when,
 )
 
+# Delta retention — silver uses SCD Type 1 (update-in-place), so deleted file
+# retention controls how far back TIMESTAMP AS OF works after VACUUM.
+DELTA_DELETED_FILE_RETENTION = "interval 7 days"
+
+SILVER_TABLE_PROPERTIES = {
+    "quality": "silver",
+    "delta.deletedFileRetentionDuration": DELTA_DELETED_FILE_RETENTION,
+}
+
 # Cross-pipeline reads use spark.readStream.table() (not dlt.read_stream()),
 # since bronze and silver are separate DLT pipelines.
 #
@@ -113,7 +122,7 @@ def v_users():
 dlt.create_streaming_table(
     name="users",
     comment="Cleaned and deduplicated Entra users across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -178,7 +187,7 @@ def v_groups():
 dlt.create_streaming_table(
     name="groups",
     comment="Cleaned and deduplicated Entra groups across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -338,7 +347,7 @@ def v_mailboxes():
 dlt.create_streaming_table(
     name="mailboxes",
     comment="Cleaned Exchange Online mailboxes across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -426,7 +435,7 @@ def v_exo_contacts():
 dlt.create_streaming_table(
     name="exo_contacts",
     comment="Cleaned Exchange Online mail contacts across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -514,7 +523,7 @@ def v_exo_mail_users():
 dlt.create_streaming_table(
     name="exo_mail_users",
     comment="Cleaned Exchange Online mail users across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -567,7 +576,7 @@ def v_distribution_groups():
 dlt.create_streaming_table(
     name="distribution_groups",
     comment="Cleaned Exchange Online distribution groups across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -621,7 +630,7 @@ def v_unified_groups():
 dlt.create_streaming_table(
     name="unified_groups",
     comment="Cleaned Exchange Online unified (M365) groups across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -668,7 +677,7 @@ def v_entra_contacts():
 dlt.create_streaming_table(
     name="entra_contacts",
     comment="Cleaned organizational contacts across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -707,7 +716,7 @@ def v_spo_sites():
 dlt.create_streaming_table(
     name="spo_sites",
     comment="Cleaned SharePoint sites (metadata only) across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -742,7 +751,7 @@ def v_spo_site_usage():
 dlt.create_streaming_table(
     name="spo_site_usage",
     comment="SharePoint site storage and item counts across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -781,7 +790,7 @@ def v_entra_group_members():
 dlt.create_streaming_table(
     name="entra_group_members",
     comment="Cleaned Entra group memberships across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -831,7 +840,7 @@ def v_exo_group_members():
 dlt.create_streaming_table(
     name="exo_group_members",
     comment="Cleaned Exchange Online group memberships across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
@@ -875,7 +884,7 @@ def v_exo_mailbox_statistics():
 dlt.create_streaming_table(
     name="exo_mailbox_statistics",
     comment="Exchange Online mailbox statistics (size, item counts) across all tenants",
-    table_properties={"quality": "silver"},
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
