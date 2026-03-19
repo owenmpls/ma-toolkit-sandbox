@@ -356,6 +356,10 @@ function Invoke-Phase2 {
                                     $record.sharingCapability = $null
                                     $record.sharingCapabilityError = $_.Exception.Message
                                 }
+                                finally {
+                                    # Disconnect admin URL to prevent context pollution for the next site
+                                    try { Disconnect-PnPOnline -ErrorAction SilentlyContinue } catch { }
+                                }
 
                                 # Summary flags
                                 $record.hasEEEU = $hasEEEU
