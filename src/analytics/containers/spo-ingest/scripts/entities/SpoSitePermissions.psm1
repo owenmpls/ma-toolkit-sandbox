@@ -143,40 +143,7 @@ function Invoke-Phase2 {
                                     siteUrl = $siteUrl
                                 }
 
-                                # 1. Site sharing capability
-                                # SharingCapability lives on the Tenant object, not Site.
-                                # Get-PnPTenantSite retrieves it but requires an admin URL
-                                # connection. Connect briefly to admin, fetch, then reconnect
-                                # to the site for the remaining cmdlets.
-                                try {
-                                    Connect-PnPOnline -Url $cfg.AdminUrl `
-                                        -ClientId $cfg.ClientId `
-                                        -Tenant $cfg.TenantDomain `
-                                        -CertificateBase64Encoded $cfg.CertificateBase64 `
-                                        -ErrorAction Stop
-                                    $tenantSite = Get-PnPTenantSite -Identity $siteUrl -ErrorAction Stop
-                                    $record.sharingCapability = $tenantSite.SharingCapability.ToString()
-                                    # Reconnect to the site for remaining per-site cmdlets
-                                    Connect-PnPOnline -Url $siteUrl `
-                                        -ClientId $cfg.ClientId `
-                                        -Tenant $cfg.TenantDomain `
-                                        -CertificateBase64Encoded $cfg.CertificateBase64 `
-                                        -ErrorAction Stop
-                                }
-                                catch {
-                                    $record.sharingCapability = $null
-                                    $record.sharingCapabilityError = $_.Exception.Message
-                                    # Ensure we're connected to the site even if admin call failed
-                                    try {
-                                        Connect-PnPOnline -Url $siteUrl `
-                                            -ClientId $cfg.ClientId `
-                                            -Tenant $cfg.TenantDomain `
-                                            -CertificateBase64Encoded $cfg.CertificateBase64 `
-                                            -ErrorAction Stop
-                                    } catch { }
-                                }
-
-                                # 2. Sensitivity label
+                                # 1. Sensitivity label (site URL connection)
                                 try {
                                     $label = Get-PnPSiteSensitivityLabel -ErrorAction Stop
                                     $record.sensitivityLabel = if ($label) { $label.DisplayName } else { $null }
@@ -185,7 +152,7 @@ function Invoke-Phase2 {
                                     $record.sensitivityLabel = $null
                                 }
 
-                                # 3. Site collection admins
+                                # 2. Site collection admins
                                 $hasEEEU = $false
                                 $hasGuests = $false
                                 try {
@@ -209,7 +176,7 @@ function Invoke-Phase2 {
                                     $record.adminsError = $_.Exception.Message
                                 }
 
-                                # 4. SharePoint groups + members
+                                # 3. SharePoint groups + members
                                 try {
                                     $groups = Get-PnPGroup -ErrorAction Stop
                                     $record.groups = @($groups | ForEach-Object {
@@ -244,7 +211,7 @@ function Invoke-Phase2 {
                                     $record.groupsError = $_.Exception.Message
                                 }
 
-                                # 5. Role assignments
+                                # 4. Role assignments
                                 # Load HasUniqueRoleAssignments and RoleAssignments via
                                 # Get-PnPProperty, then snapshot to array before batch-loading
                                 # sub-properties (avoids concurrent collection modification).
@@ -282,7 +249,7 @@ function Invoke-Phase2 {
                                     $record.roleAssignmentsError = $_.Exception.Message
                                 }
 
-                                # 6. Document libraries (BaseTemplate: 101=DocLib, 700=OneDriveLib, 119=WikiPages)
+                                # 5. Document libraries (BaseTemplate: 101=DocLib, 700=OneDriveLib, 119=WikiPages)
                                 $docLibs = @()
                                 try {
                                     $lists = Get-PnPList -Includes HasUniqueRoleAssignments -ErrorAction Stop | Where-Object {
@@ -303,7 +270,7 @@ function Invoke-Phase2 {
                                     $record.documentLibrariesError = $_.Exception.Message
                                 }
 
-                                # 7. Sharing links per document library
+                                # 6. Sharing links per document library
                                 $hasOrgWideLinks = $false
                                 $hasAnonymousLinks = $false
                                 try {
@@ -347,6 +314,22 @@ function Invoke-Phase2 {
                                 catch {
                                     $record.sharingLinks = @()
                                     $record.sharingLinksError = $_.Exception.Message
+                                }
+
+                                # 8. Site sharing capability (last — requires admin URL
+                                # connection which invalidates the per-site CSOM context)
+                                try {
+                                    Connect-PnPOnline -Url $cfg.AdminUrl `
+                                        -ClientId $cfg.ClientId `
+                                        -Tenant $cfg.TenantDomain `
+                                        -CertificateBase64Encoded $cfg.CertificateBase64 `
+                                        -ErrorAction Stop
+                                    $tenantSite = Get-PnPTenantSite -Identity $siteUrl -ErrorAction Stop
+                                    $record.sharingCapability = $tenantSite.SharingCapability.ToString()
+                                }
+                                catch {
+                                    $record.sharingCapability = $null
+                                    $record.sharingCapabilityError = $_.Exception.Message
                                 }
 
                                 # Summary flags
