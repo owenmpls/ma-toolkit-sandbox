@@ -313,6 +313,8 @@ function Invoke-Phase2 {
                                     $drives = @($drivesResp.value)
 
                                     $totalItemsAcrossDrives = 0
+                                    $totalPermsChecked = 0
+                                    $permTypesSeen = @{}
                                     foreach ($drive in $drives) {
                                         $driveId = $drive.id
                                         $driveName = $drive.name
@@ -356,6 +358,12 @@ function Invoke-Phase2 {
                                                 $itemIdx = [int]$batchItem.id
                                                 $itemInfo = $allItems[$itemIdx]
                                                 foreach ($perm in $batchItem.body.value) {
+                                                    $totalPermsChecked++
+                                                    # Track all permission types seen
+                                                    foreach ($roleKey in @('link','invitation','inherited','owner')) {
+                                                        if ($perm.$roleKey) { $permTypesSeen[$roleKey] = ($permTypesSeen[$roleKey] ?? 0) + 1 }
+                                                    }
+                                                    if ($perm.roles) { $permTypesSeen["roles:$($perm.roles -join ',')"] = ($permTypesSeen["roles:$($perm.roles -join ',')"] ?? 0) + 1 }
                                                     if (-not $perm.link) { continue }
                                                     $link = $perm.link
                                                     $scope = $link.scope   # 'anonymous', 'organization', 'users'
@@ -381,8 +389,12 @@ function Invoke-Phase2 {
                                     $record.sharingLinks = $sharingLinks
                                     $record._sharingLinkDiag = [ordered]@{
                                         driveCount = $drives.Count
+                                        driveNames = @($drives | ForEach-Object { $_.name })
                                         totalItems = $totalItemsAcrossDrives
+                                        sampleItems = @($allItems | Select-Object -First 5 | ForEach-Object { "$($_.name) ($($_.itemType))" })
                                         linksFound = $sharingLinks.Count
+                                        totalPermsChecked = $totalPermsChecked
+                                        permTypes = @($permTypesSeen.Keys)
                                     }
                                 }
                                 catch {
