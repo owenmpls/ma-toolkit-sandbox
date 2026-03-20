@@ -441,8 +441,14 @@ function Invoke-Phase2 {
                                 }
                                 $matchText = "$($ex.Message) $($innermost.Message)"
 
-                                # Not found / locked / no access — skip
+                                # Not found / locked / no access — write minimal record and skip
                                 if ($matchText -match '404|403|locked|no access|does not exist|Cannot find site') {
+                                    $skipRecord = [ordered]@{
+                                        siteUrl = $siteUrl
+                                        _skipped = $true
+                                        _skipReason = $errorMessage
+                                    }
+                                    $writer.WriteLine(($skipRecord | ConvertTo-Json -Compress -Depth 5))
                                     $skipped++
                                     $siteDone = $true
                                     continue
