@@ -104,7 +104,7 @@ function Invoke-Phase2 {
 
         for ($chunkIndex = 0; $chunkIndex -lt $slices.Count; $chunkIndex++) {
             $ps = [PowerShell]::Create().AddScript({
-                param($SiteUrls, $OutputDir, $ChunkNum, $RunId)
+                param($SiteUrls, $OutputDir, $ChunkNum, $RunId, $AuthCfg)
 
                 $MaxRetries = 5
                 $BaseDelay = 2
@@ -116,7 +116,7 @@ function Invoke-Phase2 {
                     'Rate limit', 'Server Busy', 'ServerBusyException'
                 )
 
-                $cfg = $global:IngestAuthConfig
+                $cfg = $AuthCfg
 
                 $chunkFile = Join-Path $OutputDir "chunk-$($ChunkNum.ToString('000'))_${RunId}.jsonl"
                 $writer = [System.IO.StreamWriter]::new($chunkFile, $false, [System.Text.Encoding]::UTF8)
@@ -524,7 +524,7 @@ function Invoke-Phase2 {
                     Skipped    = $skipped
                     Errors     = $errors.ToArray()
                 }
-            }).AddArgument($slices[$chunkIndex]).AddArgument($OutputDirectory).AddArgument($chunkIndex).AddArgument($RunId)
+            }).AddArgument($slices[$chunkIndex]).AddArgument($OutputDirectory).AddArgument($chunkIndex).AddArgument($RunId).AddArgument($AuthConfig)
 
             $ps.RunspacePool = $pool
             $handles += @{ PowerShell = $ps; Handle = $ps.BeginInvoke(); ChunkIndex = $chunkIndex }
