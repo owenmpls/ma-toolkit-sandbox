@@ -377,6 +377,11 @@ function Invoke-Phase2 {
                                         }
                                     }
                                     $record.sharingLinks = $sharingLinks
+                                    $record._sharingLinkDiag = [ordered]@{
+                                        driveCount = $drives.Count
+                                        totalItems = $allItems.Count
+                                        linksFound = $sharingLinks.Count
+                                    }
                                 }
                                 catch {
                                     $record.sharingLinks = @()
