@@ -312,12 +312,13 @@ function Invoke-Phase2 {
                                     $drivesResp = Invoke-RestMethod -Uri $drivesUrl -Headers $graphHeaders -Method Get -ErrorAction Stop
                                     $drives = @($drivesResp.value)
 
+                                    $totalItemsAcrossDrives = 0
                                     foreach ($drive in $drives) {
                                         $driveId = $drive.id
                                         $driveName = $drive.name
 
-                                        # Enumerate ALL items via delta (shared facet unreliable in app-only)
-                                        $deltaUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root/delta?`$select=id,name,webUrl,file,folder,parentReference&`$top=200"
+                                        # Enumerate ALL items via delta (no $select — it can filter items)
+                                        $deltaUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root/delta?`$top=200"
                                         $allItems = [System.Collections.Generic.List[object]]::new()
                                         do {
                                             $deltaResp = Invoke-RestMethod -Uri $deltaUrl -Headers $graphHeaders -Method Get -ErrorAction Stop
@@ -375,11 +376,12 @@ function Invoke-Phase2 {
                                                 }
                                             }
                                         }
+                                        $totalItemsAcrossDrives += $allItems.Count
                                     }
                                     $record.sharingLinks = $sharingLinks
                                     $record._sharingLinkDiag = [ordered]@{
                                         driveCount = $drives.Count
-                                        totalItems = $allItems.Count
+                                        totalItems = $totalItemsAcrossDrives
                                         linksFound = $sharingLinks.Count
                                     }
                                 }
