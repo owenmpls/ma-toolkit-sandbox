@@ -279,59 +279,65 @@ function Invoke-Phase2 {
                                     $record.documentLibrariesError = $_.Exception.Message
                                 }
 
-                                # 6. Sharing links — query the hidden "Sharing Links" list.
-                                # Every SPO site has this hidden list containing all sharing
-                                # link metadata. One paginated query returns everything,
-                                # much faster than per-item Get-PnPFileSharingLink calls.
+                                # 6. Sharing links — diagnostic: list all hidden lists to find the sharing links list.
                                 $hasOrgWideLinks = $false
                                 $hasAnonymousLinks = $false
                                 try {
                                     $sharingLinks = @()
-                                    $linkItems = Get-PnPListItem -List 'Sharing Links' -PageSize 2000 -Connection $siteConn -ErrorAction Stop
-                                    foreach ($li in $linkItems) {
-                                        $linkScope = $li.FieldValues['LinkScope']
-                                        $linkKind = $li.FieldValues['LinkKind']
-                                        $linkUrl = $li.FieldValues['ShareLink']
-                                        $itemUrl = $li.FieldValues['ItemUrl']
-                                        $expiration = $li.FieldValues['Expiration']
-                                        $hasPassword = [bool]$li.FieldValues['HasPassword']
+                                    # Enumerate hidden lists to find the correct sharing links list
+                                    $hiddenLists = @(Get-PnPList -Connection $siteConn -ErrorAction Stop | Where-Object { $_.Hidden })
+                                    $sharingList = $hiddenLists | Where-Object { $_.Title -match 'shar' }
+                                    $record._hiddenListNames = @($hiddenLists | ForEach-Object { $_.Title })
+                                    $record._sharingListCandidates = @($sharingList | ForEach-Object { "$($_.Title) (Id=$($_.Id), BaseTemplate=$($_.BaseTemplate), ItemCount=$($_.ItemCount))" })
 
-                                        # Map LinkKind int to type string
-                                        $typeStr = switch ([int]$linkKind) {
-                                            0 { 'direct' }
-                                            1 { 'organizationView' }
-                                            2 { 'organizationEdit' }
-                                            3 { 'anonymousView' }
-                                            4 { 'anonymousEdit' }
-                                            5 { 'flexibleView' }
-                                            6 { 'flexibleEdit' }
-                                            default { "kind_$linkKind" }
-                                        }
+                                    if ($sharingList) {
+                                        $targetList = $sharingList | Select-Object -First 1
+                                        $linkItems = Get-PnPListItem -List $targetList.Id -PageSize 2000 -Connection $siteConn -ErrorAction Stop
+                                        foreach ($li in $linkItems) {
+                                            $linkScope = $li.FieldValues['LinkScope']
+                                            $linkKind = $li.FieldValues['LinkKind']
+                                            $linkUrl = $li.FieldValues['ShareLink']
+                                            $itemUrl = $li.FieldValues['ItemUrl']
+                                            $expiration = $li.FieldValues['Expiration']
+                                            $hasPassword = [bool]$li.FieldValues['HasPassword']
 
-                                        # Map scope
-                                        $scopeStr = $null
-                                        if ($linkScope) { $scopeStr = $linkScope.ToString() }
-                                        if (-not $scopeStr) {
-                                            $scopeStr = switch ([int]$linkKind) {
-                                                { $_ -in 1,2 } { 'organization' }
-                                                { $_ -in 3,4 } { 'anonymous' }
-                                                default { $null }
+                                            # Map LinkKind int to type string
+                                            $typeStr = switch ([int]$linkKind) {
+                                                0 { 'direct' }
+                                                1 { 'organizationView' }
+                                                2 { 'organizationEdit' }
+                                                3 { 'anonymousView' }
+                                                4 { 'anonymousEdit' }
+                                                5 { 'flexibleView' }
+                                                6 { 'flexibleEdit' }
+                                                default { "kind_$linkKind" }
                                             }
-                                        }
 
-                                        if ($scopeStr -eq 'organization') { $hasOrgWideLinks = $true }
-                                        if ($scopeStr -eq 'anonymous') { $hasAnonymousLinks = $true }
+                                            # Map scope
+                                            $scopeStr = $null
+                                            if ($linkScope) { $scopeStr = $linkScope.ToString() }
+                                            if (-not $scopeStr) {
+                                                $scopeStr = switch ([int]$linkKind) {
+                                                    { $_ -in 1,2 } { 'organization' }
+                                                    { $_ -in 3,4 } { 'anonymous' }
+                                                    default { $null }
+                                                }
+                                            }
 
-                                        $sharingLinks += [ordered]@{
-                                            linkId             = $li.Id.ToString()
-                                            linkUrl            = $linkUrl
-                                            itemPath           = $itemUrl
-                                            itemType           = $null
-                                            scope              = $scopeStr
-                                            type               = $typeStr
-                                            hasPassword        = $hasPassword
-                                            expirationDateTime = if ($expiration) { $expiration.ToString('o') } else { $null }
-                                            library            = $null
+                                            if ($scopeStr -eq 'organization') { $hasOrgWideLinks = $true }
+                                            if ($scopeStr -eq 'anonymous') { $hasAnonymousLinks = $true }
+
+                                            $sharingLinks += [ordered]@{
+                                                linkId             = $li.Id.ToString()
+                                                linkUrl            = $linkUrl
+                                                itemPath           = $itemUrl
+                                                itemType           = $null
+                                                scope              = $scopeStr
+                                                type               = $typeStr
+                                                hasPassword        = $hasPassword
+                                                expirationDateTime = if ($expiration) { $expiration.ToString('o') } else { $null }
+                                                library            = $null
+                                            }
                                         }
                                     }
                                     $record.sharingLinks = $sharingLinks
