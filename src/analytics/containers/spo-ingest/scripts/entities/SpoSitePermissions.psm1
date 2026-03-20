@@ -61,12 +61,12 @@ function Invoke-Phase2 {
             $ps.RunspacePool = $pool
             $ps.AddScript({
                 param($Config, $Idx)
+                $global:IngestAuthConfig = $Config
                 Connect-PnPOnline -Url $Config.AdminUrl `
                     -ClientId $Config.ClientId `
                     -Tenant $Config.TenantDomain `
                     -CertificateBase64Encoded $Config.CertificateBase64 `
                     -ErrorAction Stop
-                $global:IngestAuthConfig = $Config
             }).AddArgument($AuthConfig).AddArgument($i) | Out-Null
             $authHandles += @{ PowerShell = $ps; Handle = $ps.BeginInvoke(); Index = $i }
         }
