@@ -11,7 +11,7 @@ function New-WorkerPool {
     $iss.ImportPSModule($ModuleName)
 
     $pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(
-        1, $PoolSize, $iss, (Get-Host)
+        $PoolSize, $PoolSize, $iss, (Get-Host)
     )
     $pool.Open()
 
