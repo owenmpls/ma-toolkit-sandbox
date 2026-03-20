@@ -279,64 +279,98 @@ function Invoke-Phase2 {
                                     $record.documentLibrariesError = $_.Exception.Message
                                 }
 
-                                # 6. Sharing links — diagnostic: list all hidden lists to find the sharing links list.
+                                # 6. Sharing links — use Graph API to enumerate drive items
+                                # with sharing permissions. Steps:
+                                #   a) Get Graph token from PnP connection
+                                #   b) Get site's drives
+                                #   c) For each drive, enumerate items via delta
+                                #   d) Items with 'shared' facet → get permissions → extract links
                                 $hasOrgWideLinks = $false
                                 $hasAnonymousLinks = $false
                                 try {
                                     $sharingLinks = @()
-                                    # Enumerate hidden lists to find the correct sharing links list
-                                    $hiddenLists = @(Get-PnPList -Connection $siteConn -ErrorAction Stop | Where-Object { $_.Hidden })
-                                    $sharingList = $hiddenLists | Where-Object { $_.Title -match 'shar' }
-                                    $record._hiddenListNames = @($hiddenLists | ForEach-Object { $_.Title })
-                                    $record._sharingListCandidates = @($sharingList | ForEach-Object { "$($_.Title) (Id=$($_.Id), BaseTemplate=$($_.BaseTemplate), ItemCount=$($_.ItemCount))" })
+                                    $graphToken = Get-PnPAccessToken -ResourceTypeName Graph -Connection $siteConn -ErrorAction Stop
+                                    $graphHeaders = @{ Authorization = "Bearer $graphToken"; 'Content-Type' = 'application/json' }
 
-                                    if ($sharingList) {
-                                        $targetList = $sharingList | Select-Object -First 1
-                                        $linkItems = Get-PnPListItem -List $targetList.Id -PageSize 2000 -Connection $siteConn -ErrorAction Stop
-                                        foreach ($li in $linkItems) {
-                                            $linkScope = $li.FieldValues['LinkScope']
-                                            $linkKind = $li.FieldValues['LinkKind']
-                                            $linkUrl = $li.FieldValues['ShareLink']
-                                            $itemUrl = $li.FieldValues['ItemUrl']
-                                            $expiration = $li.FieldValues['Expiration']
-                                            $hasPassword = [bool]$li.FieldValues['HasPassword']
+                                    # Parse hostname and site path from siteUrl
+                                    $siteUri = [System.Uri]$siteUrl
+                                    $hostname = $siteUri.Host
+                                    $sitePath = $siteUri.AbsolutePath.TrimEnd('/')
 
-                                            # Map LinkKind int to type string
-                                            $typeStr = switch ([int]$linkKind) {
-                                                0 { 'direct' }
-                                                1 { 'organizationView' }
-                                                2 { 'organizationEdit' }
-                                                3 { 'anonymousView' }
-                                                4 { 'anonymousEdit' }
-                                                5 { 'flexibleView' }
-                                                6 { 'flexibleEdit' }
-                                                default { "kind_$linkKind" }
-                                            }
+                                    # Get site ID via Graph
+                                    $graphSiteUrl = if ($sitePath -and $sitePath -ne '/') {
+                                        "https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}"
+                                    } else {
+                                        "https://graph.microsoft.com/v1.0/sites/${hostname}:/"
+                                    }
+                                    $graphSite = Invoke-RestMethod -Uri $graphSiteUrl -Headers $graphHeaders -Method Get -ErrorAction Stop
+                                    $siteGraphId = $graphSite.id
 
-                                            # Map scope
-                                            $scopeStr = $null
-                                            if ($linkScope) { $scopeStr = $linkScope.ToString() }
-                                            if (-not $scopeStr) {
-                                                $scopeStr = switch ([int]$linkKind) {
-                                                    { $_ -in 1,2 } { 'organization' }
-                                                    { $_ -in 3,4 } { 'anonymous' }
-                                                    default { $null }
+                                    # Get all drives for this site
+                                    $drivesUrl = "https://graph.microsoft.com/v1.0/sites/$siteGraphId/drives?`$select=id,name,driveType"
+                                    $drivesResp = Invoke-RestMethod -Uri $drivesUrl -Headers $graphHeaders -Method Get -ErrorAction Stop
+                                    $drives = @($drivesResp.value)
+
+                                    foreach ($drive in $drives) {
+                                        $driveId = $drive.id
+                                        $driveName = $drive.name
+
+                                        # Enumerate all items via delta — returns shared facet
+                                        $deltaUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root/delta?`$select=id,name,webUrl,shared,file,folder,parentReference&`$top=200"
+                                        $sharedItemIds = @()
+                                        do {
+                                            $deltaResp = Invoke-RestMethod -Uri $deltaUrl -Headers $graphHeaders -Method Get -ErrorAction Stop
+                                            foreach ($item in $deltaResp.value) {
+                                                if ($item.shared) {
+                                                    $sharedItemIds += [ordered]@{
+                                                        id       = $item.id
+                                                        name     = $item.name
+                                                        webUrl   = $item.webUrl
+                                                        itemType = if ($item.folder) { 'folder' } else { 'file' }
+                                                    }
                                                 }
                                             }
+                                            $deltaUrl = $deltaResp.'@odata.nextLink'
+                                        } while ($deltaUrl)
 
-                                            if ($scopeStr -eq 'organization') { $hasOrgWideLinks = $true }
-                                            if ($scopeStr -eq 'anonymous') { $hasAnonymousLinks = $true }
+                                        # Batch-fetch permissions for shared items (20 per batch)
+                                        for ($batchStart = 0; $batchStart -lt $sharedItemIds.Count; $batchStart += 20) {
+                                            $batchEnd = [Math]::Min($batchStart + 20, $sharedItemIds.Count)
+                                            $batchRequests = @()
+                                            for ($bi = $batchStart; $bi -lt $batchEnd; $bi++) {
+                                                $batchRequests += @{
+                                                    id     = "$bi"
+                                                    method = 'GET'
+                                                    url    = "/drives/$driveId/items/$($sharedItemIds[$bi].id)/permissions"
+                                                }
+                                            }
+                                            $batchBody = @{ requests = $batchRequests } | ConvertTo-Json -Depth 5
+                                            $batchResp = Invoke-RestMethod -Uri 'https://graph.microsoft.com/v1.0/$batch' `
+                                                -Headers $graphHeaders -Method Post -Body $batchBody -ErrorAction Stop
 
-                                            $sharingLinks += [ordered]@{
-                                                linkId             = $li.Id.ToString()
-                                                linkUrl            = $linkUrl
-                                                itemPath           = $itemUrl
-                                                itemType           = $null
-                                                scope              = $scopeStr
-                                                type               = $typeStr
-                                                hasPassword        = $hasPassword
-                                                expirationDateTime = if ($expiration) { $expiration.ToString('o') } else { $null }
-                                                library            = $null
+                                            foreach ($resp in $batchResp.responses) {
+                                                if ($resp.status -ne 200) { continue }
+                                                $itemIdx = [int]$resp.id
+                                                $itemInfo = $sharedItemIds[$itemIdx]
+                                                foreach ($perm in $resp.body.value) {
+                                                    if (-not $perm.link) { continue }
+                                                    $link = $perm.link
+                                                    $scope = $link.scope   # 'anonymous', 'organization', 'users'
+                                                    $type = $link.type     # 'view', 'edit', 'embed'
+                                                    if ($scope -eq 'organization') { $hasOrgWideLinks = $true }
+                                                    if ($scope -eq 'anonymous') { $hasAnonymousLinks = $true }
+                                                    $sharingLinks += [ordered]@{
+                                                        linkId             = $perm.id
+                                                        linkUrl            = $link.webUrl
+                                                        itemPath           = $itemInfo.webUrl
+                                                        itemType           = $itemInfo.itemType
+                                                        scope              = $scope
+                                                        type               = $type
+                                                        hasPassword        = [bool]$perm.hasPassword
+                                                        expirationDateTime = $perm.expirationDateTime
+                                                        library            = $driveName
+                                                    }
+                                                }
                                             }
                                         }
                                     }
