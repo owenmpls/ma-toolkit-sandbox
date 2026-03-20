@@ -280,11 +280,12 @@ function Invoke-Phase2 {
                                 }
 
                                 # 6. Sharing links — use Graph API to enumerate drive items
-                                # with sharing permissions. Steps:
+                                # and batch-check permissions for link-type entries.
+                                # Steps:
                                 #   a) Get Graph token from PnP connection
                                 #   b) Get site's drives
-                                #   c) For each drive, enumerate items via delta
-                                #   d) Items with 'shared' facet → get permissions → extract links
+                                #   c) For each drive, enumerate ALL items via delta
+                                #   d) Batch-fetch permissions (20/batch), extract link-type perms
                                 $hasOrgWideLinks = $false
                                 $hasAnonymousLinks = $false
                                 try {
@@ -315,44 +316,45 @@ function Invoke-Phase2 {
                                         $driveId = $drive.id
                                         $driveName = $drive.name
 
-                                        # Enumerate all items via delta — returns shared facet
-                                        $deltaUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root/delta?`$select=id,name,webUrl,shared,file,folder,parentReference&`$top=200"
-                                        $sharedItemIds = @()
+                                        # Enumerate ALL items via delta (shared facet unreliable in app-only)
+                                        $deltaUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root/delta?`$select=id,name,webUrl,file,folder,parentReference&`$top=200"
+                                        $allItems = [System.Collections.Generic.List[object]]::new()
                                         do {
                                             $deltaResp = Invoke-RestMethod -Uri $deltaUrl -Headers $graphHeaders -Method Get -ErrorAction Stop
                                             foreach ($item in $deltaResp.value) {
-                                                if ($item.shared) {
-                                                    $sharedItemIds += [ordered]@{
+                                                # Skip root folder and deleted items
+                                                if ($item.id -and ($item.file -or $item.folder) -and -not $item.deleted) {
+                                                    $allItems.Add([ordered]@{
                                                         id       = $item.id
                                                         name     = $item.name
                                                         webUrl   = $item.webUrl
                                                         itemType = if ($item.folder) { 'folder' } else { 'file' }
-                                                    }
+                                                    })
                                                 }
                                             }
                                             $deltaUrl = $deltaResp.'@odata.nextLink'
                                         } while ($deltaUrl)
 
-                                        # Batch-fetch permissions for shared items (20 per batch)
-                                        for ($batchStart = 0; $batchStart -lt $sharedItemIds.Count; $batchStart += 20) {
-                                            $batchEnd = [Math]::Min($batchStart + 20, $sharedItemIds.Count)
+                                        # Batch-fetch permissions for ALL items (20 per batch)
+                                        for ($batchStart = 0; $batchStart -lt $allItems.Count; $batchStart += 20) {
+                                            $batchEnd = [Math]::Min($batchStart + 20, $allItems.Count)
                                             $batchRequests = @()
                                             for ($bi = $batchStart; $bi -lt $batchEnd; $bi++) {
                                                 $batchRequests += @{
                                                     id     = "$bi"
                                                     method = 'GET'
-                                                    url    = "/drives/$driveId/items/$($sharedItemIds[$bi].id)/permissions"
+                                                    url    = "/drives/$driveId/items/$($allItems[$bi].id)/permissions"
                                                 }
                                             }
                                             $batchBody = @{ requests = $batchRequests } | ConvertTo-Json -Depth 5
                                             $batchResp = Invoke-RestMethod -Uri 'https://graph.microsoft.com/v1.0/$batch' `
                                                 -Headers $graphHeaders -Method Post -Body $batchBody -ErrorAction Stop
 
-                                            foreach ($resp in $batchResp.responses) {
-                                                if ($resp.status -ne 200) { continue }
-                                                $itemIdx = [int]$resp.id
-                                                $itemInfo = $sharedItemIds[$itemIdx]
-                                                foreach ($perm in $resp.body.value) {
+                                            foreach ($batchItem in $batchResp.responses) {
+                                                if ($batchItem.status -ne 200) { continue }
+                                                $itemIdx = [int]$batchItem.id
+                                                $itemInfo = $allItems[$itemIdx]
+                                                foreach ($perm in $batchItem.body.value) {
                                                     if (-not $perm.link) { continue }
                                                     $link = $perm.link
                                                     $scope = $link.scope   # 'anonymous', 'organization', 'users'
