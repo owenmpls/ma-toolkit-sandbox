@@ -160,6 +160,9 @@ try {
                 if ($phase2Result.Errors -and $phase2Result.Errors.Count -gt 0) {
                     $errors += $phase2Result.Errors
                     Write-Log "Phase 2 had $($phase2Result.Errors.Count) error(s)" -Level WARN -Entity $entityName
+                    foreach ($errMsg in $phase2Result.Errors) {
+                        Write-Log "  $errMsg" -Level WARN -Entity $entityName
+                    }
                 }
 
                 # Upload Phase 2 chunks
