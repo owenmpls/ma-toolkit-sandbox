@@ -25,6 +25,7 @@
       ],
       "enrichment_entities": [
         "exo_mailbox_statistics",
+        "exo_mailbox_permissions",
         "spo_site_permissions"
       ],
       "schedules": {
@@ -59,6 +60,7 @@
       ],
       "enrichment_entities": [
         "exo_mailbox_statistics",
+        "exo_mailbox_permissions",
         "spo_site_permissions"
       ],
       "schedules": {

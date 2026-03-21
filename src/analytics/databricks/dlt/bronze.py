@@ -209,3 +209,13 @@ def exo_mailbox_statistics():
 @dlt.expect("valid_record", "siteUrl IS NOT NULL")
 def spo_site_permissions():
     return _read_landing("enrichment", "spo_site_permissions", detail_type="permissions")
+
+
+@dlt.table(
+    name="exo_mailbox_permissions",
+    comment="Raw Exchange Online mailbox permissions from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "exchangeGuid IS NOT NULL")
+def exo_mailbox_permissions():
+    return _read_landing("enrichment", "exo_mailbox_permissions", detail_type="permissions")

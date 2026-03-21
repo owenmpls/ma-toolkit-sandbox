@@ -1157,3 +1157,206 @@ dlt.apply_changes(
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
 )
+
+
+# --- EXO Mailbox Permissions ---
+# Auto Loader may infer arrays as array<string> when early records had empty arrays.
+# These schemas let us parse JSON strings back to structs in the silver layer.
+
+_MAILBOX_PERM_SCHEMA = StructType(
+    [
+        StructField("trustee", StringType()),
+        StructField("accessRights", ArrayType(StringType())),
+        StructField("isInherited", BooleanType()),
+        StructField("deny", BooleanType()),
+    ]
+)
+
+_SEND_AS_PERM_SCHEMA = StructType(
+    [
+        StructField("trustee", StringType()),
+        StructField("accessRights", ArrayType(StringType())),
+        StructField("isInherited", BooleanType()),
+    ]
+)
+
+
+# --- EXO Mailbox Permissions Summary ---
+
+
+@dlt.view(name="v_exo_mailbox_permissions_summary")
+def v_exo_mailbox_permissions_summary():
+    df = spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_permissions")
+
+    return df.select(
+        concat_ws("_", col("_tenant_key"), col("exchangeGuid")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("exchangeGuid").alias("exchange_guid"),
+        col("userPrincipalName").alias("user_principal_name"),
+        col("primarySmtpAddress").alias("primary_smtp_address"),
+        col("displayName").alias("display_name"),
+        col("recipientTypeDetails").alias("recipient_type_details"),
+        col("hasDelegates").alias("has_delegates"),
+        col("hasFullAccess").alias("has_full_access"),
+        col("hasSendAs").alias("has_send_as"),
+        col("hasSendOnBehalf").alias("has_send_on_behalf"),
+        size(col("mailboxPermissions")).alias("mailbox_permission_count"),
+        size(col("sendAsPermissions")).alias("send_as_permission_count"),
+        size(col("sendOnBehalfTo")).alias("send_on_behalf_count"),
+        col("permissionCount").alias("total_permission_count"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
+    )
+
+
+dlt.create_streaming_table(
+    name="exo_mailbox_permissions_summary",
+    comment="Per-mailbox permission summary flags (delegates, FullAccess, SendAs) across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="exo_mailbox_permissions_summary",
+    source="v_exo_mailbox_permissions_summary",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- EXO Mailbox Permission Entries ---
+
+
+@dlt.view(name="v_exo_mailbox_permission_entries")
+def v_exo_mailbox_permission_entries():
+    df = spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_permissions")
+
+    # Parse mailbox permissions from JSON strings if Auto Loader inferred array<string>
+    mbx_perms_col = _parse_json_array(df, "mailboxPermissions", _MAILBOX_PERM_SCHEMA)
+
+    # MailboxPermission entries (FullAccess, ReadPermission, etc.)
+    mbx_perm_df = (
+        df.withColumn("_perms_parsed", mbx_perms_col)
+        .select(
+            col("_tenant_key"),
+            col("exchangeGuid"),
+            col("userPrincipalName"),
+            col("primarySmtpAddress"),
+            col("recipientTypeDetails"),
+            explode(col("_perms_parsed")).alias("perm"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("exchangeGuid"),
+                lit("mailbox"),
+                col("perm.trustee"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("exchangeGuid").alias("exchange_guid"),
+            col("userPrincipalName").alias("user_principal_name"),
+            col("primarySmtpAddress").alias("primary_smtp_address"),
+            col("recipientTypeDetails").alias("recipient_type_details"),
+            col("perm.trustee").alias("trustee"),
+            concat_ws(",", col("perm.accessRights")).alias("access_rights"),
+            lit("MailboxPermission").alias("permission_type"),
+            col("perm.isInherited").alias("is_inherited"),
+            col("perm.deny").alias("deny"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+    # Parse SendAs permissions from JSON strings if Auto Loader inferred array<string>
+    sendas_col = _parse_json_array(df, "sendAsPermissions", _SEND_AS_PERM_SCHEMA)
+
+    # SendAs entries
+    sendas_df = (
+        df.withColumn("_sendas_parsed", sendas_col)
+        .select(
+            col("_tenant_key"),
+            col("exchangeGuid"),
+            col("userPrincipalName"),
+            col("primarySmtpAddress"),
+            col("recipientTypeDetails"),
+            explode(col("_sendas_parsed")).alias("perm"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("exchangeGuid"),
+                lit("sendas"),
+                col("perm.trustee"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("exchangeGuid").alias("exchange_guid"),
+            col("userPrincipalName").alias("user_principal_name"),
+            col("primarySmtpAddress").alias("primary_smtp_address"),
+            col("recipientTypeDetails").alias("recipient_type_details"),
+            col("perm.trustee").alias("trustee"),
+            concat_ws(",", col("perm.accessRights")).alias("access_rights"),
+            lit("SendAs").alias("permission_type"),
+            col("perm.isInherited").alias("is_inherited"),
+            lit(None).cast("boolean").alias("deny"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+    # SendOnBehalf entries (simple string array of DNs)
+    sendonbehalf_df = (
+        df.select(
+            col("_tenant_key"),
+            col("exchangeGuid"),
+            col("userPrincipalName"),
+            col("primarySmtpAddress"),
+            col("recipientTypeDetails"),
+            explode(col("sendOnBehalfTo")).alias("trustee_dn"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("exchangeGuid"),
+                lit("sendonbehalf"),
+                col("trustee_dn"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("exchangeGuid").alias("exchange_guid"),
+            col("userPrincipalName").alias("user_principal_name"),
+            col("primarySmtpAddress").alias("primary_smtp_address"),
+            col("recipientTypeDetails").alias("recipient_type_details"),
+            col("trustee_dn").alias("trustee"),
+            lit("SendOnBehalf").alias("access_rights"),
+            lit("SendOnBehalf").alias("permission_type"),
+            lit(False).alias("is_inherited"),
+            lit(None).cast("boolean").alias("deny"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+    return mbx_perm_df.unionByName(sendas_df).unionByName(sendonbehalf_df)
+
+
+dlt.create_streaming_table(
+    name="exo_mailbox_permission_entries",
+    comment="Per-trustee permission entries (FullAccess, SendAs, SendOnBehalf) across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="exo_mailbox_permission_entries",
+    source="v_exo_mailbox_permission_entries",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
