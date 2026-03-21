@@ -147,7 +147,9 @@ try {
                     PoolSize        = $maxParallelism
                 }
                 if ($script:AuthConfig) { $phase2Params['AuthConfig'] = $script:AuthConfig }
-                if ($script:CertBytes)  { $phase2Params['CertBytes']  = $script:CertBytes }
+                # Clone cert bytes — Phase 2 entities zero their copy as a security measure,
+                # which would corrupt the shared reference for subsequent entities.
+                if ($script:CertBytes)  { $phase2Params['CertBytes']  = [byte[]]$script:CertBytes.Clone() }
 
                 $phase2Result = & "$($entity.Module.Name)\Invoke-Phase2" @phase2Params
 
