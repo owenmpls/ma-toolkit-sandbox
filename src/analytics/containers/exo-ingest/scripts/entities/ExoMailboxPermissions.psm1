@@ -133,6 +133,10 @@ function Invoke-Phase2 {
                     Connect-ExchangeOnline @params
                 }
 
+                # Check if Get-RecipientPermission is available (may not be in all
+                # EXO module versions or app-only auth modes)
+                $hasSendAsCmdlet = $null -ne (Get-Command 'Get-RecipientPermission' -ErrorAction SilentlyContinue)
+
                 $chunkFile = Join-Path $OutputDir "chunk-$($ChunkNum.ToString('000'))_${RunId}.jsonl"
                 $writer = [System.IO.StreamWriter]::new($chunkFile, $false, [System.Text.Encoding]::UTF8)
                 $processed = 0
@@ -156,9 +160,17 @@ function Invoke-Phase2 {
                                 $mbxPerms = Get-MailboxPermission -Identity $guid -ErrorAction Stop |
                                     Where-Object { $_.User -ne 'NT AUTHORITY\SELF' -and $_.User -ne 'SELF' }
 
-                                # 3. Get recipient permissions (SendAs)
-                                $sendAsPerms = Get-RecipientPermission -Identity $guid -ErrorAction Stop |
-                                    Where-Object { $_.Trustee -ne 'NT AUTHORITY\SELF' -and $_.Trustee -ne 'SELF' }
+                                # 3. Get recipient permissions (SendAs) — gracefully degrade if unavailable
+                                $sendAsPerms = @()
+                                if ($hasSendAsCmdlet) {
+                                    try {
+                                        $sendAsPerms = @(Get-RecipientPermission -Identity $guid -ErrorAction Stop |
+                                            Where-Object { $_.Trustee -ne 'NT AUTHORITY\SELF' -and $_.Trustee -ne 'SELF' })
+                                    }
+                                    catch {
+                                        # SendAs lookup failed for this mailbox — continue without it
+                                    }
+                                }
 
                                 # Build mailbox permission entries
                                 $mailboxPermissions = @()
