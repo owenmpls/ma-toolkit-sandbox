@@ -1,5 +1,6 @@
 import dlt
 from pyspark.sql.functions import col, lit, current_timestamp, regexp_extract
+from pyspark.sql.types import ArrayType, StringType, StructField, StructType
 
 STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
 LANDING_CONTAINER = "landing"
@@ -19,7 +20,9 @@ BRONZE_TABLE_PROPERTIES = {
 }
 
 
-def _read_landing(schedule_tier, entity_type, detail_type=None, file_pattern="*.jsonl"):
+def _read_landing(
+    schedule_tier, entity_type, detail_type=None, file_pattern="*.jsonl", schema=None
+):
     """Read JSONL files from the landing container using Auto Loader.
 
     Note: Do NOT set cloudFiles.schemaLocation or cloudFiles.schemaEvolutionMode
@@ -31,17 +34,26 @@ def _read_landing(schedule_tier, entity_type, detail_type=None, file_pattern="*.
         file_pattern: Glob pattern for file names (default "*.jsonl"). Use a specific
                       pattern like "spo_sites_*.jsonl" when Phase 2 chunks exist in
                       subdirectories and Auto Loader's recursive listing would mix schemas.
+        schema: Optional StructType to provide when the landing path may be empty.
+                Bypasses Auto Loader's schema inference (CF_EMPTY_DIR_FOR_SCHEMA_INFERENCE)
+                so tables can be defined before data arrives. When files appear later,
+                Auto Loader picks them up automatically.
     """
     if detail_type:
         landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/*/{detail_type}/"
     else:
         landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
-    return (
+    reader = (
         spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
         .option("pathGlobFilter", file_pattern)
+    )
+    if schema:
+        reader = reader.schema(schema)
+    return (
+        reader
         .load(landing_path)
         .withColumn(
             "_tenant_key",
@@ -220,6 +232,23 @@ def teams_channels():
 
 # --- Enrichment tier ---
 
+# Fallback schemas for entities whose landing paths may be empty (e.g., no
+# private/shared channels in a tenant). Providing a schema to Auto Loader
+# bypasses CF_EMPTY_DIR_FOR_SCHEMA_INFERENCE — when files arrive later,
+# Auto Loader picks them up automatically.
+
+_TEAMS_CHANNEL_MEMBERS_SCHEMA = StructType(
+    [
+        StructField("teamId", StringType()),
+        StructField("channelId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("email", StringType()),
+        StructField("roles", ArrayType(StringType())),
+        StructField("@odata.type", StringType()),
+    ]
+)
+
 
 @dlt.table(
     name="exo_mailbox_statistics",
@@ -258,7 +287,12 @@ def exo_mailbox_permissions():
 )
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_channel_members():
-    return _read_landing("enrichment", "teams_channel_members", detail_type="members")
+    return _read_landing(
+        "enrichment",
+        "teams_channel_members",
+        detail_type="members",
+        schema=_TEAMS_CHANNEL_MEMBERS_SCHEMA,
+    )
 
 
 @dlt.table(
