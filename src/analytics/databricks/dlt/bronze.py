@@ -165,6 +165,26 @@ def spo_site_usage():
     return _read_landing("core", "spo_sites", detail_type="usage")
 
 
+@dlt.table(
+    name="teams_teams",
+    comment="Raw Teams-enabled groups (Phase 1 inventory) from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def teams_teams():
+    return _read_landing("core", "teams_teams", file_pattern="teams_teams_*.jsonl")
+
+
+@dlt.table(
+    name="teams_team_settings",
+    comment="Raw Teams settings (Phase 2 per-team detail) from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def teams_team_settings():
+    return _read_landing("core", "teams_teams", detail_type="settings")
+
+
 # --- Core enrichment tier ---
 
 
@@ -186,6 +206,16 @@ def entra_group_members():
 @dlt.expect("valid_record", "groupIdentity IS NOT NULL")
 def exo_group_members():
     return _read_landing("core_enrichment", "exo_group_members", detail_type="members")
+
+
+@dlt.table(
+    name="teams_channels",
+    comment="Raw Teams channels (all types) from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "teamId IS NOT NULL")
+def teams_channels():
+    return _read_landing("core_enrichment", "teams_channels", detail_type="channels")
 
 
 # --- Enrichment tier ---
@@ -219,3 +249,33 @@ def spo_site_permissions():
 @dlt.expect("valid_record", "exchangeGuid IS NOT NULL")
 def exo_mailbox_permissions():
     return _read_landing("enrichment", "exo_mailbox_permissions", detail_type="permissions")
+
+
+@dlt.table(
+    name="teams_channel_members",
+    comment="Raw Teams private/shared channel members from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "teamId IS NOT NULL")
+def teams_channel_members():
+    return _read_landing("enrichment", "teams_channel_members", detail_type="members")
+
+
+@dlt.table(
+    name="teams_installed_apps",
+    comment="Raw Teams installed apps from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "teamId IS NOT NULL")
+def teams_installed_apps():
+    return _read_landing("enrichment", "teams_installed_apps", detail_type="apps")
+
+
+@dlt.table(
+    name="teams_channel_tabs",
+    comment="Raw Teams channel tabs from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "teamId IS NOT NULL")
+def teams_channel_tabs():
+    return _read_landing("enrichment", "teams_channel_tabs", detail_type="tabs")

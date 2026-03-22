@@ -189,6 +189,10 @@ def v_groups():
             # --- Provisioning errors ---
             col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
             col("serviceProvisioningErrors").alias("service_provisioning_errors"),
+            col("resourceProvisioningOptions").alias("resource_provisioning_options"),
+            expr("array_contains(resourceProvisioningOptions, 'Team')")
+            .cast("boolean")
+            .alias("is_teams_enabled"),
             col("createdDateTime").alias("created_at"),
             col("_source_file"),
             col("_dlt_ingested_at"),
@@ -1356,6 +1360,225 @@ dlt.create_streaming_table(
 dlt.apply_changes(
     target="exo_mailbox_permission_entries",
     source="v_exo_mailbox_permission_entries",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# ============================================================================
+# Teams
+# ============================================================================
+
+
+# --- Teams (from team settings Phase 2) ---
+
+
+@dlt.view(name="v_teams")
+def v_teams():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.teams_team_settings")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("description"),
+            col("isArchived").alias("is_archived"),
+            col("webUrl").alias("web_url"),
+            col("classification"),
+            col("specialization"),
+            col("visibility"),
+            col("funSettings").alias("fun_settings"),
+            col("messagingSettings").alias("messaging_settings"),
+            col("memberSettings").alias("member_settings"),
+            col("guestSettings").alias("guest_settings"),
+            col("discoverySettings").alias("discovery_settings"),
+            col("summary"),
+            col("createdDateTime").alias("created_at"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="teams",
+    comment="Cleaned and deduplicated Teams across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="teams",
+    source="v_teams",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Teams Channels ---
+
+
+@dlt.view(name="v_teams_channels")
+def v_teams_channels():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.teams_channels")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("teamId"), col("id")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("teamId").alias("team_id"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("description"),
+            col("membershipType").alias("membership_type"),
+            col("webUrl").alias("web_url"),
+            col("email"),
+            col("isArchived").alias("is_archived"),
+            col("createdDateTime").alias("created_at"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="teams_channels",
+    comment="Cleaned and deduplicated Teams channels across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="teams_channels",
+    source="v_teams_channels",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Teams Channel Members ---
+
+
+@dlt.view(name="v_teams_channel_members")
+def v_teams_channel_members():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.teams_channel_members")
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("teamId"),
+                col("channelId"),
+                col("id"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("teamId").alias("team_id"),
+            col("channelId").alias("channel_id"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("email"),
+            col("roles"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="teams_channel_members",
+    comment="Cleaned and deduplicated Teams private/shared channel members across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="teams_channel_members",
+    source="v_teams_channel_members",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Teams Installed Apps ---
+
+
+@dlt.view(name="v_teams_installed_apps")
+def v_teams_installed_apps():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.teams_installed_apps")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("teamId"), col("appId")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("teamId").alias("team_id"),
+            col("appId").alias("app_id"),
+            col("displayName").alias("app_display_name"),
+            col("teamsAppId").alias("teams_app_id"),
+            col("version"),
+            col("publishingState").alias("publishing_state"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="teams_installed_apps",
+    comment="Cleaned and deduplicated Teams installed apps across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="teams_installed_apps",
+    source="v_teams_installed_apps",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Teams Channel Tabs ---
+
+
+@dlt.view(name="v_teams_channel_tabs")
+def v_teams_channel_tabs():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.teams_channel_tabs")
+        .select(
+            concat_ws(
+                "_",
+                col("_tenant_key"),
+                col("teamId"),
+                col("channelId"),
+                col("id"),
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("teamId").alias("team_id"),
+            col("channelId").alias("channel_id"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("webUrl").alias("web_url"),
+            col("appDisplayName").alias("app_display_name"),
+            col("teamsAppId").alias("teams_app_id"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="teams_channel_tabs",
+    comment="Cleaned and deduplicated Teams channel tabs across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="teams_channel_tabs",
+    source="v_teams_channel_tabs",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,

@@ -18,7 +18,7 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    $select = 'id,displayName,description,mail,mailEnabled,mailNickname,securityEnabled,groupTypes,membershipRule,membershipRuleProcessingState,onPremisesSyncEnabled,onPremisesLastSyncDateTime,onPremisesDomainName,onPremisesNetBiosName,onPremisesProvisioningErrors,onPremisesSamAccountName,onPremisesSecurityIdentifier,serviceProvisioningErrors,createdDateTime,proxyAddresses,visibility'
+    $select = 'id,displayName,description,mail,mailEnabled,mailNickname,securityEnabled,groupTypes,membershipRule,membershipRuleProcessingState,onPremisesSyncEnabled,onPremisesLastSyncDateTime,onPremisesDomainName,onPremisesNetBiosName,onPremisesProvisioningErrors,onPremisesSamAccountName,onPremisesSecurityIdentifier,serviceProvisioningErrors,createdDateTime,proxyAddresses,visibility,resourceProvisioningOptions'
     $uri = "/v1.0/groups?`$select=$select&`$top=999"
 
     do {

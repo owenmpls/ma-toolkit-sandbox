@@ -17,16 +17,21 @@
         "exo_mail_users",
         "exo_distribution_groups",
         "exo_unified_groups",
-        "spo_sites"
+        "spo_sites",
+        "teams_teams"
       ],
       "core_enrichment_entities": [
         "entra_group_members",
-        "exo_group_members"
+        "exo_group_members",
+        "teams_channels"
       ],
       "enrichment_entities": [
         "exo_mailbox_statistics",
         "exo_mailbox_permissions",
-        "spo_site_permissions"
+        "spo_site_permissions",
+        "teams_channel_members",
+        "teams_installed_apps",
+        "teams_channel_tabs"
       ],
       "schedules": {
         "core": "daily",
@@ -52,16 +57,21 @@
         "exo_mail_users",
         "exo_distribution_groups",
         "exo_unified_groups",
-        "spo_sites"
+        "spo_sites",
+        "teams_teams"
       ],
       "core_enrichment_entities": [
         "entra_group_members",
-        "exo_group_members"
+        "exo_group_members",
+        "teams_channels"
       ],
       "enrichment_entities": [
         "exo_mailbox_statistics",
         "exo_mailbox_permissions",
-        "spo_site_permissions"
+        "spo_site_permissions",
+        "teams_channel_members",
+        "teams_installed_apps",
+        "teams_channel_tabs"
       ],
       "schedules": {
         "core": "daily",
