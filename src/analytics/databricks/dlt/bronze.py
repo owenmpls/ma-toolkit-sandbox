@@ -1,6 +1,6 @@
 import dlt
 from pyspark.sql.functions import col, lit, current_timestamp, regexp_extract
-from pyspark.sql.types import ArrayType, StringType, StructField, StructType
+from pyspark.sql.types import ArrayType, BooleanType, StringType, StructField, StructType
 
 STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
 LANDING_CONTAINER = "landing"
@@ -67,11 +67,15 @@ def _read_landing(
 
 
 # ============================================================================
-# Active entities — these have landing data and are processed by DLT.
-# Uncomment additional entities below as their ingestion is configured.
+# Active entities
 #
-# DLT fails the entire pipeline if Auto Loader can't find the landing
-# directory for any defined table, so only define entities with data.
+# Auto Loader fails with CF_EMPTY_DIR_FOR_SCHEMA_INFERENCE when a landing
+# directory has no files (e.g., Phase 2 produced no output, or the ingest
+# container hasn't run yet for this tier). Entities with simple/flat schemas
+# pass a fallback `schema` to _read_landing to bypass inference. Entities
+# with complex nested types (structs, deeply nested arrays) omit the schema
+# to preserve Auto Loader's native type inference — these always have data
+# in practice since every tenant has groups, mailboxes, and sites.
 # ============================================================================
 
 
@@ -199,43 +203,53 @@ def teams_team_settings():
 
 # --- Core enrichment tier ---
 
+# Fallback schemas for detail_type entities whose landing subdirectories may
+# not exist (Phase 2 produced no output, or the ingest container hasn't run).
+# Only defined for entities with simple/flat schemas where all columns are
+# strings, booleans, or simple arrays. DLT captures any extra columns from
+# the JSON in _rescued_data automatically.
+#
+# Entities with complex nested types (exo_mailbox_statistics,
+# exo_mailbox_permissions, spo_site_permissions, teams_team_settings) omit
+# fallback schemas to preserve Auto Loader's native struct inference. These
+# always have data in practice since every tenant has mailboxes and sites.
 
-@dlt.table(
-    name="entra_group_members",
-    comment="Raw entra_group_members from all tenants",
-    table_properties=BRONZE_TABLE_PROPERTIES,
+_ENTRA_GROUP_MEMBERS_SCHEMA = StructType(
+    [
+        StructField("groupId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("userPrincipalName", StringType()),
+        StructField("mail", StringType()),
+        StructField("@odata.type", StringType()),
+    ]
 )
-@dlt.expect("valid_record", "groupId IS NOT NULL")
-def entra_group_members():
-    return _read_landing("core_enrichment", "entra_group_members", detail_type="members")
 
-
-@dlt.table(
-    name="exo_group_members",
-    comment="Raw Exchange Online group memberships from all tenants",
-    table_properties=BRONZE_TABLE_PROPERTIES,
+_EXO_GROUP_MEMBERS_SCHEMA = StructType(
+    [
+        StructField("groupIdentity", StringType()),
+        StructField("groupObjectId", StringType()),
+        StructField("groupType", StringType()),
+        StructField("memberName", StringType()),
+        StructField("memberObjectId", StringType()),
+        StructField("memberType", StringType()),
+        StructField("primarySmtp", StringType()),
+    ]
 )
-@dlt.expect("valid_record", "groupIdentity IS NOT NULL")
-def exo_group_members():
-    return _read_landing("core_enrichment", "exo_group_members", detail_type="members")
 
-
-@dlt.table(
-    name="teams_channels",
-    comment="Raw Teams channels (all types) from all tenants",
-    table_properties=BRONZE_TABLE_PROPERTIES,
+_TEAMS_CHANNELS_SCHEMA = StructType(
+    [
+        StructField("teamId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("description", StringType()),
+        StructField("membershipType", StringType()),
+        StructField("createdDateTime", StringType()),
+        StructField("webUrl", StringType()),
+        StructField("email", StringType()),
+        StructField("isArchived", BooleanType()),
+    ]
 )
-@dlt.expect("valid_record", "teamId IS NOT NULL")
-def teams_channels():
-    return _read_landing("core_enrichment", "teams_channels", detail_type="channels")
-
-
-# --- Enrichment tier ---
-
-# Fallback schemas for entities whose landing paths may be empty (e.g., no
-# private/shared channels in a tenant). Providing a schema to Auto Loader
-# bypasses CF_EMPTY_DIR_FOR_SCHEMA_INFERENCE — when files arrive later,
-# Auto Loader picks them up automatically.
 
 _TEAMS_CHANNEL_MEMBERS_SCHEMA = StructType(
     [
@@ -248,6 +262,77 @@ _TEAMS_CHANNEL_MEMBERS_SCHEMA = StructType(
         StructField("@odata.type", StringType()),
     ]
 )
+
+_TEAMS_INSTALLED_APPS_SCHEMA = StructType(
+    [
+        StructField("teamId", StringType()),
+        StructField("appId", StringType()),
+        StructField("displayName", StringType()),
+        StructField("teamsAppId", StringType()),
+        StructField("version", StringType()),
+        StructField("publishingState", StringType()),
+    ]
+)
+
+_TEAMS_CHANNEL_TABS_SCHEMA = StructType(
+    [
+        StructField("teamId", StringType()),
+        StructField("channelId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("webUrl", StringType()),
+        StructField("appDisplayName", StringType()),
+        StructField("teamsAppId", StringType()),
+    ]
+)
+
+
+@dlt.table(
+    name="entra_group_members",
+    comment="Raw entra_group_members from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "groupId IS NOT NULL")
+def entra_group_members():
+    return _read_landing(
+        "core_enrichment",
+        "entra_group_members",
+        detail_type="members",
+        schema=_ENTRA_GROUP_MEMBERS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="exo_group_members",
+    comment="Raw Exchange Online group memberships from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "groupIdentity IS NOT NULL")
+def exo_group_members():
+    return _read_landing(
+        "core_enrichment",
+        "exo_group_members",
+        detail_type="members",
+        schema=_EXO_GROUP_MEMBERS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="teams_channels",
+    comment="Raw Teams channels (all types) from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "teamId IS NOT NULL")
+def teams_channels():
+    return _read_landing(
+        "core_enrichment",
+        "teams_channels",
+        detail_type="channels",
+        schema=_TEAMS_CHANNELS_SCHEMA,
+    )
+
+
+# --- Enrichment tier ---
 
 
 @dlt.table(
@@ -302,7 +387,12 @@ def teams_channel_members():
 )
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_installed_apps():
-    return _read_landing("enrichment", "teams_installed_apps", detail_type="apps")
+    return _read_landing(
+        "enrichment",
+        "teams_installed_apps",
+        detail_type="apps",
+        schema=_TEAMS_INSTALLED_APPS_SCHEMA,
+    )
 
 
 @dlt.table(
@@ -312,4 +402,9 @@ def teams_installed_apps():
 )
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_channel_tabs():
-    return _read_landing("enrichment", "teams_channel_tabs", detail_type="tabs")
+    return _read_landing(
+        "enrichment",
+        "teams_channel_tabs",
+        detail_type="tabs",
+        schema=_TEAMS_CHANNEL_TABS_SCHEMA,
+    )
