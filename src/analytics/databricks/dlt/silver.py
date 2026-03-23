@@ -1583,3 +1583,145 @@ dlt.apply_changes(
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
 )
+
+
+# ============================================================================
+# Devices
+# ============================================================================
+
+
+# --- Entra ID Devices ---
+
+
+@dlt.view(name="v_devices")
+def v_devices():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_devices")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("deviceId").alias("device_id"),
+            col("displayName").alias("display_name"),
+            col("operatingSystem").alias("operating_system"),
+            col("operatingSystemVersion").alias("operating_system_version"),
+            col("trustType").alias("trust_type"),
+            col("isManaged").alias("is_managed"),
+            col("isCompliant").alias("is_compliant"),
+            col("accountEnabled").alias("account_enabled"),
+            col("approximateLastSignInDateTime").alias(
+                "approximate_last_sign_in"
+            ),
+            col("createdDateTime").alias("created_at"),
+            col("model"),
+            col("manufacturer"),
+            col("profileType").alias("profile_type"),
+            col("deviceCategory").alias("device_category"),
+            col("enrollmentProfileName").alias("enrollment_profile_name"),
+            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
+            col("onPremisesLastSyncDateTime").alias(
+                "on_premises_last_sync"
+            ),
+            col("onPremisesSecurityIdentifier").alias(
+                "on_premises_security_identifier"
+            ),
+            col("mdmAppId").alias("mdm_app_id"),
+            col("registrationDateTime").alias("registration_date_time"),
+            # --- Computed owner fields ---
+            col("registeredOwners")[0]["id"].alias("primary_owner_id"),
+            col("registeredOwners")[0]["userPrincipalName"].alias(
+                "primary_owner_upn"
+            ),
+            size(col("registeredOwners")).alias("registered_owner_count"),
+            size(col("registeredUsers")).alias("registered_user_count"),
+            # --- Full arrays preserved ---
+            col("registeredOwners").alias("registered_owners"),
+            col("registeredUsers").alias("registered_users"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="devices",
+    comment="Cleaned and deduplicated Entra ID devices across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="devices",
+    source="v_devices",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Intune Managed Devices ---
+
+
+@dlt.view(name="v_intune_managed_devices")
+def v_intune_managed_devices():
+    return (
+        spark.readStream.table(
+            "matoolkit_analytics.bronze.intune_managed_devices"
+        )
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("deviceName").alias("device_name"),
+            col("managedDeviceOwnerType").alias("managed_device_owner_type"),
+            col("enrolledDateTime").alias("enrolled_at"),
+            col("lastSyncDateTime").alias("last_sync_at"),
+            col("operatingSystem").alias("operating_system"),
+            col("complianceState").alias("compliance_state"),
+            col("jailBroken").alias("jail_broken"),
+            col("managementAgent").alias("management_agent"),
+            col("osVersion").alias("os_version"),
+            col("azureADRegistered").alias("azure_ad_registered"),
+            col("deviceEnrollmentType").alias("device_enrollment_type"),
+            col("emailAddress").alias("email_address"),
+            col("azureADDeviceId").alias("azure_ad_device_id"),
+            col("deviceRegistrationState").alias(
+                "device_registration_state"
+            ),
+            col("isEncrypted").alias("is_encrypted"),
+            col("userPrincipalName").alias("user_principal_name"),
+            col("model"),
+            col("manufacturer"),
+            col("serialNumber").alias("serial_number"),
+            col("userId").alias("user_id"),
+            col("userDisplayName").alias("user_display_name"),
+            col("totalStorageSpaceInBytes")
+            .cast("long")
+            .alias("total_storage_space_bytes"),
+            col("freeStorageSpaceInBytes")
+            .cast("long")
+            .alias("free_storage_space_bytes"),
+            col("managedDeviceName").alias("managed_device_name"),
+            col("partnerReportedThreatState").alias(
+                "partner_reported_threat_state"
+            ),
+            col("autopilotEnrolled").alias("autopilot_enrolled"),
+            col("isSupervised").alias("is_supervised"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="intune_managed_devices",
+    comment="Cleaned and deduplicated Intune managed devices across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="intune_managed_devices",
+    source="v_intune_managed_devices",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)

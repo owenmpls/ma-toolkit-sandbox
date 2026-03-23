@@ -201,6 +201,100 @@ def teams_team_settings():
     return _read_landing("core", "teams_teams", detail_type="settings")
 
 
+_OWNER_USER_SCHEMA = ArrayType(
+    StructType(
+        [
+            StructField("id", StringType()),
+            StructField("displayName", StringType()),
+            StructField("userPrincipalName", StringType()),
+        ]
+    )
+)
+
+_ENTRA_DEVICES_SCHEMA = StructType(
+    [
+        StructField("id", StringType()),
+        StructField("deviceId", StringType()),
+        StructField("displayName", StringType()),
+        StructField("operatingSystem", StringType()),
+        StructField("operatingSystemVersion", StringType()),
+        StructField("trustType", StringType()),
+        StructField("isManaged", BooleanType()),
+        StructField("isCompliant", BooleanType()),
+        StructField("accountEnabled", BooleanType()),
+        StructField("approximateLastSignInDateTime", StringType()),
+        StructField("createdDateTime", StringType()),
+        StructField("model", StringType()),
+        StructField("manufacturer", StringType()),
+        StructField("profileType", StringType()),
+        StructField("deviceCategory", StringType()),
+        StructField("enrollmentProfileName", StringType()),
+        StructField("onPremisesSyncEnabled", BooleanType()),
+        StructField("onPremisesLastSyncDateTime", StringType()),
+        StructField("onPremisesSecurityIdentifier", StringType()),
+        StructField("mdmAppId", StringType()),
+        StructField("registrationDateTime", StringType()),
+        StructField("registeredOwners", _OWNER_USER_SCHEMA),
+        StructField("registeredUsers", _OWNER_USER_SCHEMA),
+    ]
+)
+
+_INTUNE_MANAGED_DEVICES_SCHEMA = StructType(
+    [
+        StructField("id", StringType()),
+        StructField("deviceName", StringType()),
+        StructField("managedDeviceOwnerType", StringType()),
+        StructField("enrolledDateTime", StringType()),
+        StructField("lastSyncDateTime", StringType()),
+        StructField("operatingSystem", StringType()),
+        StructField("complianceState", StringType()),
+        StructField("jailBroken", StringType()),
+        StructField("managementAgent", StringType()),
+        StructField("osVersion", StringType()),
+        StructField("azureADRegistered", BooleanType()),
+        StructField("deviceEnrollmentType", StringType()),
+        StructField("emailAddress", StringType()),
+        StructField("azureADDeviceId", StringType()),
+        StructField("deviceRegistrationState", StringType()),
+        StructField("isEncrypted", BooleanType()),
+        StructField("userPrincipalName", StringType()),
+        StructField("model", StringType()),
+        StructField("manufacturer", StringType()),
+        StructField("serialNumber", StringType()),
+        StructField("userId", StringType()),
+        StructField("userDisplayName", StringType()),
+        StructField("totalStorageSpaceInBytes", StringType()),
+        StructField("freeStorageSpaceInBytes", StringType()),
+        StructField("managedDeviceName", StringType()),
+        StructField("partnerReportedThreatState", StringType()),
+        StructField("autopilotEnrolled", BooleanType()),
+        StructField("isSupervised", BooleanType()),
+    ]
+)
+
+
+@dlt.table(
+    name="entra_devices",
+    comment="Raw Entra ID device objects from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def entra_devices():
+    return _read_landing("core", "entra_devices", schema=_ENTRA_DEVICES_SCHEMA)
+
+
+@dlt.table(
+    name="intune_managed_devices",
+    comment="Raw Intune managed devices from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def intune_managed_devices():
+    return _read_landing(
+        "core", "intune_managed_devices", schema=_INTUNE_MANAGED_DEVICES_SCHEMA
+    )
+
+
 # --- Core enrichment tier ---
 
 # Fallback schemas for detail_type entities whose landing subdirectories may

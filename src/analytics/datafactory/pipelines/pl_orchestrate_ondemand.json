@@ -9,7 +9,7 @@
         "dependsOn": [],
         "typeProperties": {
           "expression": {
-            "value": "@or(or(or(contains(pipeline().parameters.entityNames, 'entra_users'), contains(pipeline().parameters.entityNames, 'entra_groups')), contains(pipeline().parameters.entityNames, 'entra_contacts')), contains(pipeline().parameters.entityNames, 'entra_group_members'))",
+            "value": "@or(or(or(or(or(contains(pipeline().parameters.entityNames, 'entra_users'), contains(pipeline().parameters.entityNames, 'entra_groups')), contains(pipeline().parameters.entityNames, 'entra_contacts')), contains(pipeline().parameters.entityNames, 'entra_group_members')), contains(pipeline().parameters.entityNames, 'entra_devices')), contains(pipeline().parameters.entityNames, 'intune_managed_devices'))",
             "type": "Expression"
           },
           "ifTrueActivities": [
