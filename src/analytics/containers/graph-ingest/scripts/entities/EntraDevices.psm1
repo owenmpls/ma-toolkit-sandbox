@@ -18,14 +18,16 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    $expand = 'registeredOwners($select=id,displayName,userPrincipalName),registeredUsers($select=id,displayName,userPrincipalName)'
+    # Note: $expand=registeredOwners/registeredUsers is not supported on the
+    # /devices collection endpoint (returns BadRequest). Owner correlation is
+    # done via the silver layer using device.deviceId ↔ user relationships.
     $select = 'id,deviceId,displayName,operatingSystem,operatingSystemVersion,trustType,isManaged,isCompliant,accountEnabled,approximateLastSignInDateTime,createdDateTime,model,manufacturer,profileType,deviceCategory,enrollmentProfileName,onPremisesSyncEnabled,onPremisesLastSyncDateTime,onPremisesSecurityIdentifier,mdmAppId,registrationDateTime'
-    $uri = "/beta/devices?`$expand=$expand&`$select=$select&`$top=999"
+    $uri = "/beta/devices?`$select=$select&`$top=999"
 
     do {
         $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
         foreach ($device in $response.value) {
-            $Writer.WriteLine(($device | ConvertTo-Json -Compress -Depth 10))
+            $Writer.WriteLine(($device | ConvertTo-Json -Compress -Depth 5))
             $EntityIds.Add($device.id)
             $count++
         }

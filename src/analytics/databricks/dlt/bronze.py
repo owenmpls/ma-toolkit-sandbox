@@ -201,16 +201,6 @@ def teams_team_settings():
     return _read_landing("core", "teams_teams", detail_type="settings")
 
 
-_OWNER_USER_SCHEMA = ArrayType(
-    StructType(
-        [
-            StructField("id", StringType()),
-            StructField("displayName", StringType()),
-            StructField("userPrincipalName", StringType()),
-        ]
-    )
-)
-
 _ENTRA_DEVICES_SCHEMA = StructType(
     [
         StructField("id", StringType()),
@@ -234,8 +224,6 @@ _ENTRA_DEVICES_SCHEMA = StructType(
         StructField("onPremisesSecurityIdentifier", StringType()),
         StructField("mdmAppId", StringType()),
         StructField("registrationDateTime", StringType()),
-        StructField("registeredOwners", _OWNER_USER_SCHEMA),
-        StructField("registeredUsers", _OWNER_USER_SCHEMA),
     ]
 )
 

@@ -1627,16 +1627,6 @@ def v_devices():
             ),
             col("mdmAppId").alias("mdm_app_id"),
             col("registrationDateTime").alias("registration_date_time"),
-            # --- Computed owner fields ---
-            col("registeredOwners")[0]["id"].alias("primary_owner_id"),
-            col("registeredOwners")[0]["userPrincipalName"].alias(
-                "primary_owner_upn"
-            ),
-            size(col("registeredOwners")).alias("registered_owner_count"),
-            size(col("registeredUsers")).alias("registered_user_count"),
-            # --- Full arrays preserved ---
-            col("registeredOwners").alias("registered_owners"),
-            col("registeredUsers").alias("registered_users"),
             col("_source_file"),
             col("_dlt_ingested_at"),
         )
