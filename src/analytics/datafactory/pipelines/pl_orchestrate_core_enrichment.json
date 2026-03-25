@@ -41,7 +41,7 @@
               "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(intersection(item().core_enrichment_entities, createArray('entra_group_members'))), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().core_enrichment_entities, createArray('entra_group_members', 'entra_group_owners', 'teams_channels'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [

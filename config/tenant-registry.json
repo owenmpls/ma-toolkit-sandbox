@@ -24,6 +24,7 @@
       ],
       "core_enrichment_entities": [
         "entra_group_members",
+        "entra_group_owners",
         "exo_group_members",
         "teams_channels"
       ],
@@ -66,6 +67,7 @@
       ],
       "core_enrichment_entities": [
         "entra_group_members",
+        "entra_group_owners",
         "exo_group_members",
         "teams_channels"
       ],

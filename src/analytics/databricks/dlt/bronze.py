@@ -307,6 +307,17 @@ _ENTRA_GROUP_MEMBERS_SCHEMA = StructType(
     ]
 )
 
+_ENTRA_GROUP_OWNERS_SCHEMA = StructType(
+    [
+        StructField("groupId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("userPrincipalName", StringType()),
+        StructField("mail", StringType()),
+        StructField("@odata.type", StringType()),
+    ]
+)
+
 _EXO_GROUP_MEMBERS_SCHEMA = StructType(
     [
         StructField("groupIdentity", StringType()),
@@ -381,6 +392,21 @@ def entra_group_members():
         "entra_group_members",
         detail_type="members",
         schema=_ENTRA_GROUP_MEMBERS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="entra_group_owners",
+    comment="Raw entra_group_owners from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "groupId IS NOT NULL")
+def entra_group_owners():
+    return _read_landing(
+        "core_enrichment",
+        "entra_group_owners",
+        detail_type="owners",
+        schema=_ENTRA_GROUP_OWNERS_SCHEMA,
     )
 
 

@@ -818,6 +818,45 @@ dlt.apply_changes(
 )
 
 
+# --- Entra Group Owners ---
+
+
+@dlt.view(name="v_entra_group_owners")
+def v_entra_group_owners():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_group_owners")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("groupId"), col("id")).alias(
+                "_scd_key"
+            ),
+            col("_tenant_key").alias("tenant_key"),
+            col("groupId").alias("group_id"),
+            col("id").alias("owner_id"),
+            col("displayName").alias("display_name"),
+            col("userPrincipalName").alias("user_principal_name"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("`@odata.type`").alias("owner_type"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="entra_group_owners",
+    comment="Cleaned Entra group ownerships across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="entra_group_owners",
+    source="v_entra_group_owners",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
 # --- EXO Group Members ---
 
 
