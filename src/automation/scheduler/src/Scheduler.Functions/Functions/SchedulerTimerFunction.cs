@@ -20,7 +20,6 @@ public class SchedulerTimerFunction
     private readonly IPhaseDispatcher _phaseDispatcher;
     private readonly IVersionTransitionHandler _versionTransitionHandler;
     private readonly IPollingManager _pollingManager;
-    private readonly IDistributedLock _distributedLock;
     private readonly ILogger<SchedulerTimerFunction> _logger;
 
     public SchedulerTimerFunction(
@@ -33,7 +32,6 @@ public class SchedulerTimerFunction
         IPhaseDispatcher phaseDispatcher,
         IVersionTransitionHandler versionTransitionHandler,
         IPollingManager pollingManager,
-        IDistributedLock distributedLock,
         ILogger<SchedulerTimerFunction> logger)
     {
         _runbookRepo = runbookRepo;
@@ -45,7 +43,6 @@ public class SchedulerTimerFunction
         _phaseDispatcher = phaseDispatcher;
         _versionTransitionHandler = versionTransitionHandler;
         _pollingManager = pollingManager;
-        _distributedLock = distributedLock;
         _logger = logger;
     }
 
@@ -53,13 +50,6 @@ public class SchedulerTimerFunction
     public async Task RunAsync([TimerTrigger("0 */5 * * * *")] TimerInfo timer)
     {
         _logger.LogInformation("Scheduler timer triggered at {Time}", DateTime.UtcNow);
-
-        await using var lockHandle = await _distributedLock.TryAcquireAsync("scheduler-timer");
-        if (lockHandle is null)
-        {
-            _logger.LogWarning("Scheduler timer skipped — another instance is already running");
-            return;
-        }
 
         var runbooks = await _runbookRepo.GetActiveRunbooksAsync();
 

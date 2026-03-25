@@ -24,7 +24,6 @@ public class SchedulerTimerFunctionTests
     private readonly Mock<IPhaseDispatcher> _phaseDispatcher;
     private readonly Mock<IVersionTransitionHandler> _versionTransitionHandler;
     private readonly Mock<IPollingManager> _pollingManager;
-    private readonly Mock<IDistributedLock> _distributedLock;
     private readonly Mock<ILogger<SchedulerTimerFunction>> _logger;
     private readonly SchedulerTimerFunction _sut;
 
@@ -39,30 +38,13 @@ public class SchedulerTimerFunctionTests
         _phaseDispatcher = new Mock<IPhaseDispatcher>();
         _versionTransitionHandler = new Mock<IVersionTransitionHandler>();
         _pollingManager = new Mock<IPollingManager>();
-        _distributedLock = new Mock<IDistributedLock>();
         _logger = new Mock<ILogger<SchedulerTimerFunction>>();
-
-        // Default: lock acquired
-        var lockHandle = new Mock<IAsyncDisposable>();
-        _distributedLock.Setup(x => x.TryAcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(lockHandle.Object);
 
         _sut = new SchedulerTimerFunction(
             _runbookRepo.Object, _automationRepo.Object, _batchRepo.Object,
             _dataSourceQuery.Object, _parser.Object, _batchDetector.Object,
             _phaseDispatcher.Object, _versionTransitionHandler.Object,
-            _pollingManager.Object, _distributedLock.Object, _logger.Object);
-    }
-
-    [Fact]
-    public async Task RunAsync_LockNotAcquired_SkipsProcessing()
-    {
-        _distributedLock.Setup(x => x.TryAcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IAsyncDisposable?)null);
-
-        await _sut.RunAsync(CreateTimerInfo());
-
-        _runbookRepo.Verify(x => x.GetActiveRunbooksAsync(), Times.Never);
+            _pollingManager.Object, _logger.Object);
     }
 
     [Fact]
