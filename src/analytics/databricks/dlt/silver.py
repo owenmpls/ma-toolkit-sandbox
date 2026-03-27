@@ -1754,3 +1754,573 @@ dlt.apply_changes(
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
 )
+
+
+# ============================================================================
+# Entra Applications
+# ============================================================================
+
+
+# --- Applications (App Registrations) ---
+
+
+@dlt.view(name="v_applications")
+def v_applications():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_applications")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("appId").alias("app_id"),
+            col("displayName").alias("display_name"),
+            col("description"),
+            col("signInAudience").alias("sign_in_audience"),
+            col("identifierUris").alias("identifier_uris"),
+            col("appRoles").alias("app_roles"),
+            col("requiredResourceAccess").alias("required_resource_access"),
+            col("keyCredentials").alias("key_credentials"),
+            col("passwordCredentials").alias("password_credentials"),
+            col("web"),
+            col("spa"),
+            col("publicClient").alias("public_client"),
+            col("api"),
+            col("optionalClaims").alias("optional_claims"),
+            col("groupMembershipClaims").alias("group_membership_claims"),
+            col("tags"),
+            col("applicationTemplateId").alias("application_template_id"),
+            col("createdDateTime").alias("created_at"),
+            col("publisherDomain").alias("publisher_domain"),
+            col("verifiedPublisher").alias("verified_publisher"),
+            col("info"),
+            col("notes"),
+            col("servicePrincipalLockConfiguration").alias(
+                "service_principal_lock_configuration"
+            ),
+            col("isFallbackPublicClient").alias("is_fallback_public_client"),
+            col("tokenEncryptionKeyId").alias("token_encryption_key_id"),
+            col("certification"),
+            col("samlMetadataUrl").alias("saml_metadata_url"),
+            col("disabledByMicrosoftStatus").alias("disabled_by_microsoft_status"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="applications",
+    comment="Cleaned Entra app registrations across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="applications",
+    source="v_applications",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Service Principals (Enterprise Apps) ---
+
+
+@dlt.view(name="v_service_principals")
+def v_service_principals():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_service_principals")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("appId").alias("app_id"),
+            col("appDisplayName").alias("app_display_name"),
+            col("displayName").alias("display_name"),
+            col("description"),
+            col("servicePrincipalType").alias("service_principal_type"),
+            col("appOwnerOrganizationId").alias("app_owner_organization_id"),
+            col("accountEnabled").alias("account_enabled"),
+            col("appRoleAssignmentRequired").alias("app_role_assignment_required"),
+            col("appRoles").alias("app_roles"),
+            col("oauth2PermissionScopes").alias("oauth2_permission_scopes"),
+            col("tags"),
+            col("servicePrincipalNames").alias("service_principal_names"),
+            col("homepage"),
+            col("loginUrl").alias("login_url"),
+            col("logoutUrl").alias("logout_url"),
+            col("replyUrls").alias("reply_urls"),
+            col("keyCredentials").alias("key_credentials"),
+            col("passwordCredentials").alias("password_credentials"),
+            col("preferredSingleSignOnMode").alias("preferred_sso_mode"),
+            col("samlSingleSignOnSettings").alias("saml_sso_settings"),
+            col("signInAudience").alias("sign_in_audience"),
+            col("notes"),
+            col("notificationEmailAddresses").alias("notification_email_addresses"),
+            col("info"),
+            col("applicationTemplateId").alias("application_template_id"),
+            col("verifiedPublisher").alias("verified_publisher"),
+            col("alternativeNames").alias("alternative_names"),
+            col("tokenEncryptionKeyId").alias("token_encryption_key_id"),
+            col("resourceSpecificApplicationPermissions").alias(
+                "resource_specific_application_permissions"
+            ),
+            col("disabledByMicrosoftStatus").alias("disabled_by_microsoft_status"),
+            col("preferredTokenSigningKeyThumbprint").alias(
+                "preferred_token_signing_key_thumbprint"
+            ),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="service_principals",
+    comment="Cleaned Entra service principals (enterprise apps) across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="service_principals",
+    source="v_service_principals",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- OAuth2 Permission Grants (Delegated Permissions) ---
+
+
+@dlt.view(name="v_oauth2_permission_grants")
+def v_oauth2_permission_grants():
+    return (
+        spark.readStream.table(
+            "matoolkit_analytics.bronze.entra_oauth2_permission_grants"
+        )
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("clientId").alias("client_id"),
+            col("consentType").alias("consent_type"),
+            col("principalId").alias("principal_id"),
+            col("resourceId").alias("resource_id"),
+            col("scope"),
+            (col("consentType") == "AllPrincipals").alias("is_admin_consent"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="oauth2_permission_grants",
+    comment="Cleaned OAuth2 delegated permission grants across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="oauth2_permission_grants",
+    source="v_oauth2_permission_grants",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- App Role Assignments (User/Group/SP assignments to enterprise apps) ---
+
+
+@dlt.view(name="v_app_role_assignments")
+def v_app_role_assignments():
+    return (
+        spark.readStream.table(
+            "matoolkit_analytics.bronze.entra_app_role_assignments"
+        )
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("servicePrincipalId").alias("service_principal_id"),
+            col("id"),
+            col("appRoleId").alias("app_role_id"),
+            col("principalDisplayName").alias("principal_display_name"),
+            col("principalId").alias("principal_id"),
+            col("principalType").alias("principal_type"),
+            col("resourceDisplayName").alias("resource_display_name"),
+            col("resourceId").alias("resource_id"),
+            col("createdDateTime").alias("created_at"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="app_role_assignments",
+    comment="Cleaned user/group/SP assignments to enterprise apps across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="app_role_assignments",
+    source="v_app_role_assignments",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Service Principal Owners ---
+
+
+@dlt.view(name="v_sp_owners")
+def v_sp_owners():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_sp_owners")
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("servicePrincipalId").alias("service_principal_id"),
+            col("id").alias("owner_id"),
+            col("displayName").alias("display_name"),
+            col("userPrincipalName").alias("user_principal_name"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("`@odata.type`").alias("owner_type"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sp_owners",
+    comment="Cleaned service principal ownerships across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="sp_owners",
+    source="v_sp_owners",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Application Registration Owners ---
+
+
+@dlt.view(name="v_app_owners")
+def v_app_owners():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_app_owners")
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("applicationId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("applicationId").alias("application_id"),
+            col("id").alias("owner_id"),
+            col("displayName").alias("display_name"),
+            col("userPrincipalName").alias("user_principal_name"),
+            lower(trim(col("mail"))).alias("mail"),
+            col("`@odata.type`").alias("owner_type"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="app_owners",
+    comment="Cleaned application registration ownerships across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="app_owners",
+    source="v_app_owners",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SP App Role Assignments (Application permissions granted to SPs) ---
+
+
+@dlt.view(name="v_sp_app_role_assignments")
+def v_sp_app_role_assignments():
+    return (
+        spark.readStream.table(
+            "matoolkit_analytics.bronze.entra_sp_app_role_assignments"
+        )
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("servicePrincipalId").alias("service_principal_id"),
+            col("id"),
+            col("appRoleId").alias("app_role_id"),
+            col("principalDisplayName").alias("principal_display_name"),
+            col("principalId").alias("principal_id"),
+            col("principalType").alias("principal_type"),
+            col("resourceDisplayName").alias("resource_display_name"),
+            col("resourceId").alias("resource_id"),
+            col("createdDateTime").alias("created_at"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sp_app_role_assignments",
+    comment="Cleaned application permissions granted to service principals across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="sp_app_role_assignments",
+    source="v_sp_app_role_assignments",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SP Claims Mapping Policies ---
+
+
+@dlt.view(name="v_sp_claims_mapping_policies")
+def v_sp_claims_mapping_policies():
+    return (
+        spark.readStream.table(
+            "matoolkit_analytics.bronze.entra_sp_claims_mapping_policies"
+        )
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("servicePrincipalId").alias("service_principal_id"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("definition"),
+            col("isOrganizationDefault").alias("is_organization_default"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sp_claims_mapping_policies",
+    comment="Cleaned claims mapping policies per service principal across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="sp_claims_mapping_policies",
+    source="v_sp_claims_mapping_policies",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SP Delegated Permission Classifications ---
+
+
+@dlt.view(name="v_sp_delegated_perm_classifications")
+def v_sp_delegated_perm_classifications():
+    return (
+        spark.readStream.table(
+            "matoolkit_analytics.bronze.entra_sp_delegated_perm_classifications"
+        )
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("servicePrincipalId").alias("service_principal_id"),
+            col("id"),
+            col("permissionId").alias("permission_id"),
+            col("permissionName").alias("permission_name"),
+            col("classification"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sp_delegated_perm_classifications",
+    comment="Cleaned delegated permission classifications per SP across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="sp_delegated_perm_classifications",
+    source="v_sp_delegated_perm_classifications",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- Sign-In Logs ---
+
+
+@dlt.view(name="v_sign_in_logs")
+def v_sign_in_logs():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_sign_in_logs")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("createdDateTime").alias("created_at"),
+            col("appDisplayName").alias("app_display_name"),
+            col("appId").alias("app_id"),
+            col("ipAddress").alias("ip_address"),
+            col("clientAppUsed").alias("client_app_used"),
+            col("conditionalAccessStatus").alias("conditional_access_status"),
+            col("isInteractive").alias("is_interactive"),
+            col("resourceDisplayName").alias("resource_display_name"),
+            col("resourceId").alias("resource_id"),
+            col("riskDetail").alias("risk_detail"),
+            col("riskLevelAggregated").alias("risk_level_aggregated"),
+            col("riskLevelDuringSignIn").alias("risk_level_during_sign_in"),
+            col("riskState").alias("risk_state"),
+            col("riskEventTypes_v2").alias("risk_event_types"),
+            col("userDisplayName").alias("user_display_name"),
+            col("userId").alias("user_id"),
+            col("userPrincipalName").alias("user_principal_name"),
+            # Flatten nested structs
+            col("status.errorCode").alias("error_code"),
+            col("status.failureReason").alias("failure_reason"),
+            col("location.city").alias("location_city"),
+            col("location.state").alias("location_state"),
+            col("location.countryOrRegion").alias("location_country"),
+            col("deviceDetail.operatingSystem").alias("device_os"),
+            col("deviceDetail.browser").alias("device_browser"),
+            col("deviceDetail.deviceId").alias("device_id"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sign_in_logs",
+    comment="Cleaned Entra sign-in logs across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="sign_in_logs",
+    source="v_sign_in_logs",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- App Proxy Configuration ---
+
+
+@dlt.view(name="v_app_proxy_config")
+def v_app_proxy_config():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_app_proxy_config")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("applicationId")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("applicationId").alias("application_id"),
+            col("id"),
+            col("displayName").alias("display_name"),
+            col("onPremisesPublishing.externalUrl").alias("external_url"),
+            col("onPremisesPublishing.internalUrl").alias("internal_url"),
+            col("onPremisesPublishing.externalAuthenticationType").alias(
+                "external_auth_type"
+            ),
+            col("onPremisesPublishing.isTranslateHostHeaderEnabled").alias(
+                "is_translate_host_header_enabled"
+            ),
+            col("onPremisesPublishing.isTranslateLinksInBodyEnabled").alias(
+                "is_translate_links_in_body_enabled"
+            ),
+            col("onPremisesPublishing.isHttpOnlyCookieEnabled").alias(
+                "is_http_only_cookie_enabled"
+            ),
+            col("onPremisesPublishing.isSecureCookieEnabled").alias(
+                "is_secure_cookie_enabled"
+            ),
+            col("onPremisesPublishing.isPersistentCookieEnabled").alias(
+                "is_persistent_cookie_enabled"
+            ),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="app_proxy_config",
+    comment="Cleaned Application Proxy configuration across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="app_proxy_config",
+    source="v_app_proxy_config",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+# --- SP Synchronization Jobs (Provisioning) ---
+
+
+@dlt.view(name="v_sp_sync_jobs")
+def v_sp_sync_jobs():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.entra_sp_sync_jobs")
+        .select(
+            concat_ws(
+                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+            ).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("servicePrincipalId").alias("service_principal_id"),
+            col("id"),
+            col("templateId").alias("template_id"),
+            col("schedule"),
+            col("status"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="sp_sync_jobs",
+    comment="Cleaned provisioning/synchronization jobs per SP across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="sp_sync_jobs",
+    source="v_sp_sync_jobs",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)

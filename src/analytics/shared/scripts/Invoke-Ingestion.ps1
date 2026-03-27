@@ -78,6 +78,11 @@ try {
         exit 0
     }
 
+    # --- Expose tenant-level config as environment variables for entity modules ---
+    if ($tenant.sign_in_lookback_days) {
+        $env:SIGN_IN_LOOKBACK_DAYS = $tenant.sign_in_lookback_days
+    }
+
     # --- Process each entity ---
     $date = Get-Date -Format 'yyyy-MM-dd'
 

@@ -20,13 +20,19 @@
         "exo_distribution_groups",
         "exo_unified_groups",
         "spo_sites",
-        "teams_teams"
+        "teams_teams",
+        "entra_applications",
+        "entra_service_principals",
+        "entra_oauth2_permission_grants"
       ],
       "core_enrichment_entities": [
         "entra_group_members",
         "entra_group_owners",
         "exo_group_members",
-        "teams_channels"
+        "teams_channels",
+        "entra_app_role_assignments",
+        "entra_sp_owners",
+        "entra_app_owners"
       ],
       "enrichment_entities": [
         "exo_mailbox_statistics",
@@ -34,14 +40,21 @@
         "spo_site_permissions",
         "teams_channel_members",
         "teams_installed_apps",
-        "teams_channel_tabs"
+        "teams_channel_tabs",
+        "entra_sp_app_role_assignments",
+        "entra_sp_claims_mapping_policies",
+        "entra_sp_delegated_perm_classifications",
+        "entra_sign_in_logs",
+        "entra_app_proxy_config",
+        "entra_sp_sync_jobs"
       ],
       "schedules": {
         "core": "daily",
         "core_enrichment": "daily",
         "enrichment": "weekly"
       },
-      "max_parallelism": 5
+      "max_parallelism": 5,
+      "sign_in_lookback_days": 8
     },
     {
       "tenant_key": "madev2",
@@ -63,13 +76,19 @@
         "exo_distribution_groups",
         "exo_unified_groups",
         "spo_sites",
-        "teams_teams"
+        "teams_teams",
+        "entra_applications",
+        "entra_service_principals",
+        "entra_oauth2_permission_grants"
       ],
       "core_enrichment_entities": [
         "entra_group_members",
         "entra_group_owners",
         "exo_group_members",
-        "teams_channels"
+        "teams_channels",
+        "entra_app_role_assignments",
+        "entra_sp_owners",
+        "entra_app_owners"
       ],
       "enrichment_entities": [
         "exo_mailbox_statistics",
@@ -77,14 +96,21 @@
         "spo_site_permissions",
         "teams_channel_members",
         "teams_installed_apps",
-        "teams_channel_tabs"
+        "teams_channel_tabs",
+        "entra_sp_app_role_assignments",
+        "entra_sp_claims_mapping_policies",
+        "entra_sp_delegated_perm_classifications",
+        "entra_sign_in_logs",
+        "entra_app_proxy_config",
+        "entra_sp_sync_jobs"
       ],
       "schedules": {
         "core": "daily",
         "core_enrichment": "daily",
         "enrichment": "weekly"
       },
-      "max_parallelism": 5
+      "max_parallelism": 5,
+      "sign_in_lookback_days": 8
     }
   ]
 }

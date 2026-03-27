@@ -283,6 +283,50 @@ def intune_managed_devices():
     )
 
 
+@dlt.table(
+    name="entra_applications",
+    comment="Raw Entra app registrations from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def entra_applications():
+    return _read_landing("core", "entra_applications")
+
+
+@dlt.table(
+    name="entra_service_principals",
+    comment="Raw Entra service principals (enterprise apps) from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def entra_service_principals():
+    return _read_landing("core", "entra_service_principals")
+
+
+_ENTRA_OAUTH2_PERMISSION_GRANTS_SCHEMA = StructType(
+    [
+        StructField("id", StringType()),
+        StructField("clientId", StringType()),
+        StructField("consentType", StringType()),
+        StructField("principalId", StringType()),
+        StructField("resourceId", StringType()),
+        StructField("scope", StringType()),
+    ]
+)
+
+
+@dlt.table(
+    name="entra_oauth2_permission_grants",
+    comment="Raw OAuth2 delegated permission grants from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def entra_oauth2_permission_grants():
+    return _read_landing(
+        "core", "entra_oauth2_permission_grants", schema=_ENTRA_OAUTH2_PERMISSION_GRANTS_SCHEMA
+    )
+
+
 # --- Core enrichment tier ---
 
 # Fallback schemas for detail_type entities whose landing subdirectories may
@@ -440,6 +484,88 @@ def teams_channels():
     )
 
 
+_ENTRA_APP_ROLE_ASSIGNMENTS_SCHEMA = StructType(
+    [
+        StructField("servicePrincipalId", StringType()),
+        StructField("id", StringType()),
+        StructField("appRoleId", StringType()),
+        StructField("principalDisplayName", StringType()),
+        StructField("principalId", StringType()),
+        StructField("principalType", StringType()),
+        StructField("resourceDisplayName", StringType()),
+        StructField("resourceId", StringType()),
+        StructField("createdDateTime", StringType()),
+    ]
+)
+
+_ENTRA_SP_OWNERS_SCHEMA = StructType(
+    [
+        StructField("servicePrincipalId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("userPrincipalName", StringType()),
+        StructField("mail", StringType()),
+        StructField("@odata.type", StringType()),
+    ]
+)
+
+_ENTRA_APP_OWNERS_SCHEMA = StructType(
+    [
+        StructField("applicationId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("userPrincipalName", StringType()),
+        StructField("mail", StringType()),
+        StructField("@odata.type", StringType()),
+    ]
+)
+
+
+@dlt.table(
+    name="entra_app_role_assignments",
+    comment="Raw user/group/SP assignments to enterprise apps from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+def entra_app_role_assignments():
+    return _read_landing(
+        "core_enrichment",
+        "entra_app_role_assignments",
+        detail_type="assignments",
+        schema=_ENTRA_APP_ROLE_ASSIGNMENTS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="entra_sp_owners",
+    comment="Raw service principal owners from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+def entra_sp_owners():
+    return _read_landing(
+        "core_enrichment",
+        "entra_sp_owners",
+        detail_type="owners",
+        schema=_ENTRA_SP_OWNERS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="entra_app_owners",
+    comment="Raw application registration owners from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "applicationId IS NOT NULL")
+def entra_app_owners():
+    return _read_landing(
+        "core_enrichment",
+        "entra_app_owners",
+        detail_type="owners",
+        schema=_ENTRA_APP_OWNERS_SCHEMA,
+    )
+
+
 # --- Enrichment tier ---
 
 
@@ -515,4 +641,107 @@ def teams_channel_tabs():
         "teams_channel_tabs",
         detail_type="tabs",
         schema=_TEAMS_CHANNEL_TABS_SCHEMA,
+    )
+
+
+# --- Enrichment tier: Entra Applications ---
+
+_ENTRA_SP_APP_ROLE_ASSIGNMENTS_SCHEMA = StructType(
+    [
+        StructField("servicePrincipalId", StringType()),
+        StructField("id", StringType()),
+        StructField("appRoleId", StringType()),
+        StructField("principalDisplayName", StringType()),
+        StructField("principalId", StringType()),
+        StructField("principalType", StringType()),
+        StructField("resourceDisplayName", StringType()),
+        StructField("resourceId", StringType()),
+        StructField("createdDateTime", StringType()),
+    ]
+)
+
+_ENTRA_SP_DELEGATED_PERM_CLASSIFICATIONS_SCHEMA = StructType(
+    [
+        StructField("servicePrincipalId", StringType()),
+        StructField("id", StringType()),
+        StructField("permissionId", StringType()),
+        StructField("permissionName", StringType()),
+        StructField("classification", StringType()),
+    ]
+)
+
+
+@dlt.table(
+    name="entra_sp_app_role_assignments",
+    comment="Raw application permissions granted to service principals from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+def entra_sp_app_role_assignments():
+    return _read_landing(
+        "enrichment",
+        "entra_sp_app_role_assignments",
+        detail_type="app_role_assignments",
+        schema=_ENTRA_SP_APP_ROLE_ASSIGNMENTS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="entra_sp_claims_mapping_policies",
+    comment="Raw claims mapping policies per service principal from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+def entra_sp_claims_mapping_policies():
+    return _read_landing(
+        "enrichment", "entra_sp_claims_mapping_policies", detail_type="claims_policies"
+    )
+
+
+@dlt.table(
+    name="entra_sp_delegated_perm_classifications",
+    comment="Raw delegated permission classifications per service principal from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+def entra_sp_delegated_perm_classifications():
+    return _read_landing(
+        "enrichment",
+        "entra_sp_delegated_perm_classifications",
+        detail_type="perm_classifications",
+        schema=_ENTRA_SP_DELEGATED_PERM_CLASSIFICATIONS_SCHEMA,
+    )
+
+
+@dlt.table(
+    name="entra_sign_in_logs",
+    comment="Raw Entra sign-in logs from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def entra_sign_in_logs():
+    return _read_landing("enrichment", "entra_sign_in_logs")
+
+
+@dlt.table(
+    name="entra_app_proxy_config",
+    comment="Raw Application Proxy configuration (beta) from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "applicationId IS NOT NULL")
+def entra_app_proxy_config():
+    return _read_landing(
+        "enrichment", "entra_app_proxy_config", detail_type="proxy_config"
+    )
+
+
+@dlt.table(
+    name="entra_sp_sync_jobs",
+    comment="Raw provisioning/synchronization jobs per service principal from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+def entra_sp_sync_jobs():
+    return _read_landing(
+        "enrichment", "entra_sp_sync_jobs", detail_type="sync_jobs"
     )
