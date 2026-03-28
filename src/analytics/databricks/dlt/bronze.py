@@ -759,12 +759,6 @@ def entra_app_proxy_config():
     )
 
 
-@dlt.table(
-    name="entra_sp_sync_jobs",
-    comment="Raw provisioning/synchronization jobs per service principal from all tenants",
-    table_properties=BRONZE_TABLE_PROPERTIES,
-)
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 _ENTRA_SP_SYNC_JOBS_SCHEMA = StructType(
     [
         StructField("servicePrincipalId", StringType()),
@@ -774,6 +768,12 @@ _ENTRA_SP_SYNC_JOBS_SCHEMA = StructType(
 )
 
 
+@dlt.table(
+    name="entra_sp_sync_jobs",
+    comment="Raw provisioning/synchronization jobs per service principal from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_sp_sync_jobs():
     return _read_landing(
         "enrichment",
