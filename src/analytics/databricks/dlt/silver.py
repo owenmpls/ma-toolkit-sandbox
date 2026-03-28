@@ -2239,38 +2239,54 @@ dlt.apply_changes(
 
 @dlt.view(name="v_app_proxy_config")
 def v_app_proxy_config():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.entra_app_proxy_config")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("applicationId")).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("applicationId").alias("application_id"),
-            col("id"),
-            col("displayName").alias("display_name"),
-            col("onPremisesPublishing.externalUrl").alias("external_url"),
-            col("onPremisesPublishing.internalUrl").alias("internal_url"),
-            col("onPremisesPublishing.externalAuthenticationType").alias(
-                "external_auth_type"
-            ),
-            col("onPremisesPublishing.isTranslateHostHeaderEnabled").alias(
-                "is_translate_host_header_enabled"
-            ),
-            col("onPremisesPublishing.isTranslateLinksInBodyEnabled").alias(
-                "is_translate_links_in_body_enabled"
-            ),
-            col("onPremisesPublishing.isHttpOnlyCookieEnabled").alias(
-                "is_http_only_cookie_enabled"
-            ),
-            col("onPremisesPublishing.isSecureCookieEnabled").alias(
-                "is_secure_cookie_enabled"
-            ),
-            col("onPremisesPublishing.isPersistentCookieEnabled").alias(
-                "is_persistent_cookie_enabled"
-            ),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
+    # onPremisesPublishing struct only exists when data is present (not in
+    # fallback schema). Use col().try*() pattern is not available, so select
+    # base columns always and flatten the struct only when it exists.
+    df = spark.readStream.table("matoolkit_analytics.bronze.entra_app_proxy_config")
+    base = df.select(
+        concat_ws("_", col("_tenant_key"), col("applicationId")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("applicationId").alias("application_id"),
+        col("id"),
+        col("displayName").alias("display_name"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
     )
+    if "onPremisesPublishing" in df.columns:
+        base = (
+            df.select(
+                concat_ws("_", col("_tenant_key"), col("applicationId")).alias(
+                    "_scd_key"
+                ),
+                col("_tenant_key").alias("tenant_key"),
+                col("applicationId").alias("application_id"),
+                col("id"),
+                col("displayName").alias("display_name"),
+                col("onPremisesPublishing.externalUrl").alias("external_url"),
+                col("onPremisesPublishing.internalUrl").alias("internal_url"),
+                col("onPremisesPublishing.externalAuthenticationType").alias(
+                    "external_auth_type"
+                ),
+                col("onPremisesPublishing.isTranslateHostHeaderEnabled").alias(
+                    "is_translate_host_header_enabled"
+                ),
+                col("onPremisesPublishing.isTranslateLinksInBodyEnabled").alias(
+                    "is_translate_links_in_body_enabled"
+                ),
+                col("onPremisesPublishing.isHttpOnlyCookieEnabled").alias(
+                    "is_http_only_cookie_enabled"
+                ),
+                col("onPremisesPublishing.isSecureCookieEnabled").alias(
+                    "is_secure_cookie_enabled"
+                ),
+                col("onPremisesPublishing.isPersistentCookieEnabled").alias(
+                    "is_persistent_cookie_enabled"
+                ),
+                col("_source_file"),
+                col("_dlt_ingested_at"),
+            )
+        )
+    return base
 
 
 dlt.create_streaming_table(
@@ -2293,22 +2309,24 @@ dlt.apply_changes(
 
 @dlt.view(name="v_sp_sync_jobs")
 def v_sp_sync_jobs():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.entra_sp_sync_jobs")
-        .select(
-            concat_ws(
-                "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
-            ).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("servicePrincipalId").alias("service_principal_id"),
-            col("id"),
-            col("templateId").alias("template_id"),
-            col("schedule"),
-            col("status"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
-    )
+    # schedule and status structs only exist when data is present (not in
+    # fallback schema). Select base columns and add structs conditionally.
+    df = spark.readStream.table("matoolkit_analytics.bronze.entra_sp_sync_jobs")
+    cols = [
+        concat_ws(
+            "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
+        ).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("servicePrincipalId").alias("service_principal_id"),
+        col("id"),
+        col("templateId").alias("template_id"),
+    ]
+    if "schedule" in df.columns:
+        cols.append(col("schedule"))
+    if "status" in df.columns:
+        cols.append(col("status"))
+    cols.extend([col("_source_file"), col("_dlt_ingested_at")])
+    return df.select(*cols)
 
 
 dlt.create_streaming_table(
