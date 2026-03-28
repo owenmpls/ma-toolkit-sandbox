@@ -660,6 +660,24 @@ _ENTRA_SP_APP_ROLE_ASSIGNMENTS_SCHEMA = StructType(
     ]
 )
 
+_ENTRA_SP_CLAIMS_MAPPING_POLICIES_SCHEMA = StructType(
+    [
+        StructField("servicePrincipalId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+        StructField("definition", ArrayType(StringType())),
+        StructField("isOrganizationDefault", BooleanType()),
+    ]
+)
+
+_ENTRA_APP_PROXY_CONFIG_SCHEMA = StructType(
+    [
+        StructField("applicationId", StringType()),
+        StructField("id", StringType()),
+        StructField("displayName", StringType()),
+    ]
+)
+
 _ENTRA_SP_DELEGATED_PERM_CLASSIFICATIONS_SCHEMA = StructType(
     [
         StructField("servicePrincipalId", StringType()),
@@ -694,7 +712,10 @@ def entra_sp_app_role_assignments():
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_sp_claims_mapping_policies():
     return _read_landing(
-        "enrichment", "entra_sp_claims_mapping_policies", detail_type="claims_policies"
+        "enrichment",
+        "entra_sp_claims_mapping_policies",
+        detail_type="claims_policies",
+        schema=_ENTRA_SP_CLAIMS_MAPPING_POLICIES_SCHEMA,
     )
 
 
@@ -731,7 +752,10 @@ def entra_sign_in_logs():
 @dlt.expect("valid_record", "applicationId IS NOT NULL")
 def entra_app_proxy_config():
     return _read_landing(
-        "enrichment", "entra_app_proxy_config", detail_type="proxy_config"
+        "enrichment",
+        "entra_app_proxy_config",
+        detail_type="proxy_config",
+        schema=_ENTRA_APP_PROXY_CONFIG_SCHEMA,
     )
 
 
@@ -741,7 +765,19 @@ def entra_app_proxy_config():
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+_ENTRA_SP_SYNC_JOBS_SCHEMA = StructType(
+    [
+        StructField("servicePrincipalId", StringType()),
+        StructField("id", StringType()),
+        StructField("templateId", StringType()),
+    ]
+)
+
+
 def entra_sp_sync_jobs():
     return _read_landing(
-        "enrichment", "entra_sp_sync_jobs", detail_type="sync_jobs"
+        "enrichment",
+        "entra_sp_sync_jobs",
+        detail_type="sync_jobs",
+        schema=_ENTRA_SP_SYNC_JOBS_SCHEMA,
     )
