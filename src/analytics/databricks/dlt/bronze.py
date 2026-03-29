@@ -303,7 +303,7 @@ def entra_service_principals():
     return _read_landing("core", "entra_service_principals")
 
 
-_ENTRA_OAUTH2_PERMISSION_GRANTS_SCHEMA = StructType(
+_ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA = StructType(
     [
         StructField("id", StringType()),
         StructField("clientId", StringType()),
@@ -316,14 +316,14 @@ _ENTRA_OAUTH2_PERMISSION_GRANTS_SCHEMA = StructType(
 
 
 @dlt.table(
-    name="entra_oauth2_permission_grants",
+    name="entra_delegated_permission_grants",
     comment="Raw OAuth2 delegated permission grants from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
-def entra_oauth2_permission_grants():
+def entra_delegated_permission_grants():
     return _read_landing(
-        "core", "entra_oauth2_permission_grants", schema=_ENTRA_OAUTH2_PERMISSION_GRANTS_SCHEMA
+        "core", "entra_delegated_permission_grants", schema=_ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA
     )
 
 
@@ -484,7 +484,7 @@ def teams_channels():
     )
 
 
-_ENTRA_APP_ROLE_ASSIGNMENTS_SCHEMA = StructType(
+_ENTRA_SP_ASSIGNMENTS_SCHEMA = StructType(
     [
         StructField("servicePrincipalId", StringType()),
         StructField("id", StringType()),
@@ -522,17 +522,17 @@ _ENTRA_APP_OWNERS_SCHEMA = StructType(
 
 
 @dlt.table(
-    name="entra_app_role_assignments",
+    name="entra_sp_assignments",
     comment="Raw user/group/SP assignments to enterprise apps from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
-def entra_app_role_assignments():
+def entra_sp_assignments():
     return _read_landing(
         "core_enrichment",
-        "entra_app_role_assignments",
+        "entra_sp_assignments",
         detail_type="assignments",
-        schema=_ENTRA_APP_ROLE_ASSIGNMENTS_SCHEMA,
+        schema=_ENTRA_SP_ASSIGNMENTS_SCHEMA,
     )
 
 
@@ -646,7 +646,7 @@ def teams_channel_tabs():
 
 # --- Enrichment tier: Entra Applications ---
 
-_ENTRA_SP_APP_ROLE_ASSIGNMENTS_SCHEMA = StructType(
+_ENTRA_APPLICATION_PERMISSION_GRANTS_SCHEMA = StructType(
     [
         StructField("servicePrincipalId", StringType()),
         StructField("id", StringType()),
@@ -678,7 +678,7 @@ _ENTRA_APP_PROXY_CONFIG_SCHEMA = StructType(
     ]
 )
 
-_ENTRA_SP_DELEGATED_PERM_CLASSIFICATIONS_SCHEMA = StructType(
+_ENTRA_DELEGATED_PERMISSION_CLASSIFICATIONS_SCHEMA = StructType(
     [
         StructField("servicePrincipalId", StringType()),
         StructField("id", StringType()),
@@ -690,17 +690,17 @@ _ENTRA_SP_DELEGATED_PERM_CLASSIFICATIONS_SCHEMA = StructType(
 
 
 @dlt.table(
-    name="entra_sp_app_role_assignments",
+    name="entra_application_permission_grants",
     comment="Raw application permissions granted to service principals from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
-def entra_sp_app_role_assignments():
+def entra_application_permission_grants():
     return _read_landing(
         "enrichment",
-        "entra_sp_app_role_assignments",
+        "entra_application_permission_grants",
         detail_type="app_role_assignments",
-        schema=_ENTRA_SP_APP_ROLE_ASSIGNMENTS_SCHEMA,
+        schema=_ENTRA_APPLICATION_PERMISSION_GRANTS_SCHEMA,
     )
 
 
@@ -720,17 +720,17 @@ def entra_sp_claims_mapping_policies():
 
 
 @dlt.table(
-    name="entra_sp_delegated_perm_classifications",
+    name="entra_delegated_permission_classifications",
     comment="Raw delegated permission classifications per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
-def entra_sp_delegated_perm_classifications():
+def entra_delegated_permission_classifications():
     return _read_landing(
         "enrichment",
-        "entra_sp_delegated_perm_classifications",
+        "entra_delegated_permission_classifications",
         detail_type="perm_classifications",
-        schema=_ENTRA_SP_DELEGATED_PERM_CLASSIFICATIONS_SCHEMA,
+        schema=_ENTRA_DELEGATED_PERMISSION_CLASSIFICATIONS_SCHEMA,
     )
 
 
@@ -759,7 +759,7 @@ def entra_app_proxy_config():
     )
 
 
-_ENTRA_SP_SYNC_JOBS_SCHEMA = StructType(
+_ENTRA_PROVISIONING_JOBS_SCHEMA = StructType(
     [
         StructField("servicePrincipalId", StringType()),
         StructField("id", StringType()),
@@ -769,15 +769,15 @@ _ENTRA_SP_SYNC_JOBS_SCHEMA = StructType(
 
 
 @dlt.table(
-    name="entra_sp_sync_jobs",
+    name="entra_provisioning_jobs",
     comment="Raw provisioning/synchronization jobs per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
-def entra_sp_sync_jobs():
+def entra_provisioning_jobs():
     return _read_landing(
         "enrichment",
-        "entra_sp_sync_jobs",
+        "entra_provisioning_jobs",
         detail_type="sync_jobs",
-        schema=_ENTRA_SP_SYNC_JOBS_SCHEMA,
+        schema=_ENTRA_PROVISIONING_JOBS_SCHEMA,
     )

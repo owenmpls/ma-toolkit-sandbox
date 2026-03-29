@@ -1,11 +1,11 @@
 function Get-EntityConfig {
     return @{
-        Name         = 'entra_oauth2_permission_grants'
+        Name         = 'entra_delegated_permission_grants'
         ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'graph'
-        OutputFile   = 'entra_oauth2_permission_grants'
+        OutputFile   = 'entra_delegated_permission_grants'
         DetailType   = $null
     }
 }

@@ -1,12 +1,12 @@
 function Get-EntityConfig {
     return @{
-        Name         = 'entra_app_role_assignments'
-        ScheduleTier = 'core_enrichment'
+        Name         = 'entra_delegated_permission_classifications'
+        ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'graph'
-        OutputFile   = 'entra_app_role_assignments'
-        DetailType   = 'assignments'
+        OutputFile   = 'entra_delegated_permission_classifications'
+        DetailType   = 'perm_classifications'
     }
 }
 
@@ -62,6 +62,7 @@ function Invoke-Phase2 {
                 )
                 Connect-MgGraph -ClientId $Config.ClientId -TenantId $Config.TenantId `
                     -Certificate $cert -NoWelcome -ErrorAction Stop
+                # Store for reactive reconnection (clone bytes so main context can zero its copy)
                 $global:IngestAuthConfig = $Config
                 $global:IngestCertBytes = [byte[]]$Bytes.Clone()
             }).AddArgument($AuthConfig).AddArgument($CertBytes).AddArgument($i) | Out-Null
@@ -88,9 +89,10 @@ function Invoke-Phase2 {
         }
 
         if ($failedRunspaces -eq $PoolSize) {
-            throw "All runspaces failed to authenticate. Cannot enumerate app role assignments."
+            throw "All runspaces failed to authenticate. Cannot enumerate delegated permission classifications."
         }
 
+        # Zero certificate bytes in main context (runspaces hold their own clones)
         [Array]::Clear($CertBytes, 0, $CertBytes.Length)
 
         if ($failedRunspaces -gt 0) {
@@ -109,12 +111,14 @@ function Invoke-Phase2 {
                 $BaseDelay = 2
                 $MaxDelay = 120
 
+                # Error patterns aligned with cloud-worker retry logic
                 $authPatterns = @('401', 'Unauthorized', 'token.*expired', 'Access token has expired')
                 $throttlePatterns = @(
                     'TooManyRequests', '429', 'throttled', 'Too many requests',
                     'Rate limit', 'Server Busy', 'ServerBusyException'
                 )
 
+                # Inline reconnection helper using globals stored during pre-auth
                 function Reconnect-IngestAuth {
                     $cfg = $global:IngestAuthConfig
                     $bytes = $global:IngestCertBytes
@@ -139,14 +143,14 @@ function Invoke-Phase2 {
 
                         while (-not $spDone) {
                             $attempt++
-                            $uri = "/v1.0/servicePrincipals/$spId/appRoleAssignedTo?`$top=999"
+                            $uri = "/v1.0/servicePrincipals/$spId/delegatedPermissionClassifications"
 
                             try {
                                 do {
                                     $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
-                                    foreach ($assignment in $response.value) {
-                                        $assignment['servicePrincipalId'] = $spId
-                                        $writer.WriteLine(($assignment | ConvertTo-Json -Compress -Depth 5))
+                                    foreach ($item in $response.value) {
+                                        $item['servicePrincipalId'] = $spId
+                                        $writer.WriteLine(($item | ConvertTo-Json -Compress -Depth 5))
                                         $processed++
                                     }
                                     $uri = $response['@odata.nextLink']
@@ -155,6 +159,7 @@ function Invoke-Phase2 {
                             }
                             catch {
                                 $ex = $_.Exception
+                                # Walk exception chain to find the deepest meaningful message
                                 $innermost = $ex
                                 while ($innermost.InnerException) { $innermost = $innermost.InnerException }
                                 $errorMessage = if (-not [string]::IsNullOrWhiteSpace($innermost.Message)) {
@@ -166,12 +171,14 @@ function Invoke-Phase2 {
                                 }
                                 $matchText = "$($ex.Message) $($innermost.Message)"
 
+                                # Not found — SP deleted, skip
                                 if ($matchText -match '404|Request_ResourceNotFound') {
                                     $skipped++
                                     $spDone = $true
                                     continue
                                 }
 
+                                # Max retries exhausted
                                 if ($attempt -ge $MaxRetries) {
                                     $errors.Add("sp=$spId attempt=${attempt}: $errorMessage")
                                     $skipped++
@@ -179,6 +186,7 @@ function Invoke-Phase2 {
                                     continue
                                 }
 
+                                # Auth error — reconnect and retry
                                 $isAuthError = $false
                                 foreach ($p in $authPatterns) {
                                     if ($matchText -match $p) { $isAuthError = $true; break }
@@ -189,6 +197,7 @@ function Invoke-Phase2 {
                                     continue
                                 }
 
+                                # Throttle — exponential backoff with jitter, then retry
                                 $isThrottled = $false
                                 foreach ($p in $throttlePatterns) {
                                     if ($matchText -match $p) { $isThrottled = $true; break }
@@ -209,6 +218,7 @@ function Invoke-Phase2 {
                                     continue
                                 }
 
+                                # Unrecognized error — record and skip
                                 $errors.Add("sp=$spId attempt=${attempt}: $errorMessage")
                                 $skipped++
                                 $spDone = $true
@@ -235,7 +245,7 @@ function Invoke-Phase2 {
             $handles += @{ PowerShell = $ps; Handle = $ps.BeginInvoke(); ChunkIndex = $chunkIndex }
         }
 
-        # --- Collect results ---
+        # --- Collect results with exception chain walking ---
         $completed = [System.Collections.Generic.HashSet[int]]::new()
         $totalProcessed = 0
         $totalSkipped = 0

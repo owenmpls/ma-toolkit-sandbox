@@ -1,12 +1,12 @@
 function Get-EntityConfig {
     return @{
-        Name         = 'entra_sp_delegated_perm_classifications'
+        Name         = 'entra_provisioning_jobs'
         ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'graph'
-        OutputFile   = 'entra_sp_delegated_perm_classifications'
-        DetailType   = 'perm_classifications'
+        OutputFile   = 'entra_provisioning_jobs'
+        DetailType   = 'sync_jobs'
     }
 }
 
@@ -89,7 +89,7 @@ function Invoke-Phase2 {
         }
 
         if ($failedRunspaces -eq $PoolSize) {
-            throw "All runspaces failed to authenticate. Cannot enumerate SP delegated permission classifications."
+            throw "All runspaces failed to authenticate. Cannot enumerate provisioning jobs."
         }
 
         # Zero certificate bytes in main context (runspaces hold their own clones)
@@ -143,7 +143,7 @@ function Invoke-Phase2 {
 
                         while (-not $spDone) {
                             $attempt++
-                            $uri = "/v1.0/servicePrincipals/$spId/delegatedPermissionClassifications"
+                            $uri = "/v1.0/servicePrincipals/$spId/synchronization/jobs"
 
                             try {
                                 do {
@@ -171,8 +171,8 @@ function Invoke-Phase2 {
                                 }
                                 $matchText = "$($ex.Message) $($innermost.Message)"
 
-                                # Not found — SP deleted, skip
-                                if ($matchText -match '404|Request_ResourceNotFound') {
+                                # Not found or no sync configured — skip
+                                if ($matchText -match '404|Request_ResourceNotFound|Synchronization_ObjectNotFound') {
                                     $skipped++
                                     $spDone = $true
                                     continue

@@ -1890,14 +1890,14 @@ dlt.apply_changes(
 )
 
 
-# --- OAuth2 Permission Grants (Delegated Permissions) ---
+# --- Delegated Permission Grants ---
 
 
-@dlt.view(name="v_oauth2_permission_grants")
-def v_oauth2_permission_grants():
+@dlt.view(name="v_delegated_permission_grants")
+def v_delegated_permission_grants():
     return (
         spark.readStream.table(
-            "matoolkit_analytics.bronze.entra_oauth2_permission_grants"
+            "matoolkit_analytics.bronze.entra_delegated_permission_grants"
         )
         .select(
             concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
@@ -1916,28 +1916,28 @@ def v_oauth2_permission_grants():
 
 
 dlt.create_streaming_table(
-    name="oauth2_permission_grants",
-    comment="Cleaned OAuth2 delegated permission grants across all tenants",
+    name="delegated_permission_grants",
+    comment="Cleaned delegated permission grants across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
-    target="oauth2_permission_grants",
-    source="v_oauth2_permission_grants",
+    target="delegated_permission_grants",
+    source="v_delegated_permission_grants",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
 )
 
 
-# --- App Role Assignments (User/Group/SP assignments to enterprise apps) ---
+# --- SP Assignments (User/Group/SP assignments to enterprise apps) ---
 
 
-@dlt.view(name="v_app_role_assignments")
-def v_app_role_assignments():
+@dlt.view(name="v_sp_assignments")
+def v_sp_assignments():
     return (
         spark.readStream.table(
-            "matoolkit_analytics.bronze.entra_app_role_assignments"
+            "matoolkit_analytics.bronze.entra_sp_assignments"
         )
         .select(
             concat_ws(
@@ -1960,14 +1960,14 @@ def v_app_role_assignments():
 
 
 dlt.create_streaming_table(
-    name="app_role_assignments",
-    comment="Cleaned user/group/SP assignments to enterprise apps across all tenants",
+    name="sp_assignments",
+    comment="Cleaned SP assignments (users/groups/SPs assigned to enterprise apps) across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
-    target="app_role_assignments",
-    source="v_app_role_assignments",
+    target="sp_assignments",
+    source="v_sp_assignments",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
@@ -2052,14 +2052,14 @@ dlt.apply_changes(
 )
 
 
-# --- SP App Role Assignments (Application permissions granted to SPs) ---
+# --- Application Permission Grants (Application permissions granted to SPs) ---
 
 
-@dlt.view(name="v_sp_app_role_assignments")
-def v_sp_app_role_assignments():
+@dlt.view(name="v_application_permission_grants")
+def v_application_permission_grants():
     return (
         spark.readStream.table(
-            "matoolkit_analytics.bronze.entra_sp_app_role_assignments"
+            "matoolkit_analytics.bronze.entra_application_permission_grants"
         )
         .select(
             concat_ws(
@@ -2082,14 +2082,14 @@ def v_sp_app_role_assignments():
 
 
 dlt.create_streaming_table(
-    name="sp_app_role_assignments",
-    comment="Cleaned application permissions granted to service principals across all tenants",
+    name="application_permission_grants",
+    comment="Cleaned application permission grants (app-only permissions) across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
-    target="sp_app_role_assignments",
-    source="v_sp_app_role_assignments",
+    target="application_permission_grants",
+    source="v_application_permission_grants",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
@@ -2136,14 +2136,14 @@ dlt.apply_changes(
 )
 
 
-# --- SP Delegated Permission Classifications ---
+# --- Delegated Permission Classifications ---
 
 
-@dlt.view(name="v_sp_delegated_perm_classifications")
-def v_sp_delegated_perm_classifications():
+@dlt.view(name="v_delegated_permission_classifications")
+def v_delegated_permission_classifications():
     return (
         spark.readStream.table(
-            "matoolkit_analytics.bronze.entra_sp_delegated_perm_classifications"
+            "matoolkit_analytics.bronze.entra_delegated_permission_classifications"
         )
         .select(
             concat_ws(
@@ -2162,14 +2162,14 @@ def v_sp_delegated_perm_classifications():
 
 
 dlt.create_streaming_table(
-    name="sp_delegated_perm_classifications",
-    comment="Cleaned delegated permission classifications per SP across all tenants",
+    name="delegated_permission_classifications",
+    comment="Cleaned delegated permission classifications across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
-    target="sp_delegated_perm_classifications",
-    source="v_sp_delegated_perm_classifications",
+    target="delegated_permission_classifications",
+    source="v_delegated_permission_classifications",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
@@ -2304,14 +2304,14 @@ dlt.apply_changes(
 )
 
 
-# --- SP Synchronization Jobs (Provisioning) ---
+# --- Provisioning Jobs ---
 
 
-@dlt.view(name="v_sp_sync_jobs")
-def v_sp_sync_jobs():
+@dlt.view(name="v_provisioning_jobs")
+def v_provisioning_jobs():
     # schedule and status structs only exist when data is present (not in
     # fallback schema). Select base columns and add structs conditionally.
-    df = spark.readStream.table("matoolkit_analytics.bronze.entra_sp_sync_jobs")
+    df = spark.readStream.table("matoolkit_analytics.bronze.entra_provisioning_jobs")
     cols = [
         concat_ws(
             "_", col("_tenant_key"), col("servicePrincipalId"), col("id")
@@ -2330,14 +2330,14 @@ def v_sp_sync_jobs():
 
 
 dlt.create_streaming_table(
-    name="sp_sync_jobs",
-    comment="Cleaned provisioning/synchronization jobs per SP across all tenants",
+    name="provisioning_jobs",
+    comment="Cleaned provisioning jobs across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
-    target="sp_sync_jobs",
-    source="v_sp_sync_jobs",
+    target="provisioning_jobs",
+    source="v_provisioning_jobs",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,

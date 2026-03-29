@@ -1,12 +1,12 @@
 function Get-EntityConfig {
     return @{
-        Name         = 'entra_sp_sync_jobs'
+        Name         = 'entra_application_permission_grants'
         ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'graph'
-        OutputFile   = 'entra_sp_sync_jobs'
-        DetailType   = 'sync_jobs'
+        OutputFile   = 'entra_application_permission_grants'
+        DetailType   = 'app_role_assignments'
     }
 }
 
@@ -89,7 +89,7 @@ function Invoke-Phase2 {
         }
 
         if ($failedRunspaces -eq $PoolSize) {
-            throw "All runspaces failed to authenticate. Cannot enumerate SP synchronization jobs."
+            throw "All runspaces failed to authenticate. Cannot enumerate application permission grants."
         }
 
         # Zero certificate bytes in main context (runspaces hold their own clones)
@@ -143,7 +143,7 @@ function Invoke-Phase2 {
 
                         while (-not $spDone) {
                             $attempt++
-                            $uri = "/v1.0/servicePrincipals/$spId/synchronization/jobs"
+                            $uri = "/v1.0/servicePrincipals/$spId/appRoleAssignments?`$top=999"
 
                             try {
                                 do {
@@ -171,8 +171,8 @@ function Invoke-Phase2 {
                                 }
                                 $matchText = "$($ex.Message) $($innermost.Message)"
 
-                                # Not found or no sync configured — skip
-                                if ($matchText -match '404|Request_ResourceNotFound|Synchronization_ObjectNotFound') {
+                                # Not found — SP deleted, skip
+                                if ($matchText -match '404|Request_ResourceNotFound') {
                                     $skipped++
                                     $spDone = $true
                                     continue

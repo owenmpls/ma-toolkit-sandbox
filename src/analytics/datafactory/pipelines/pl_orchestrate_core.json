@@ -41,7 +41,7 @@
               "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('entra_users','entra_groups','entra_contacts','entra_devices','intune_managed_devices','teams_teams','entra_applications','entra_service_principals','entra_oauth2_permission_grants'))), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().core_entities, createArray('entra_users','entra_groups','entra_contacts','entra_devices','intune_managed_devices','teams_teams','entra_applications','entra_service_principals','entra_delegated_permission_grants'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [

@@ -23,14 +23,14 @@
         "teams_teams",
         "entra_applications",
         "entra_service_principals",
-        "entra_oauth2_permission_grants"
+        "entra_delegated_permission_grants"
       ],
       "core_enrichment_entities": [
         "entra_group_members",
         "entra_group_owners",
         "exo_group_members",
         "teams_channels",
-        "entra_app_role_assignments",
+        "entra_sp_assignments",
         "entra_sp_owners",
         "entra_app_owners"
       ],
@@ -41,12 +41,12 @@
         "teams_channel_members",
         "teams_installed_apps",
         "teams_channel_tabs",
-        "entra_sp_app_role_assignments",
+        "entra_application_permission_grants",
         "entra_sp_claims_mapping_policies",
-        "entra_sp_delegated_perm_classifications",
+        "entra_delegated_permission_classifications",
         "entra_sign_in_logs",
         "entra_app_proxy_config",
-        "entra_sp_sync_jobs"
+        "entra_provisioning_jobs"
       ],
       "schedules": {
         "core": "daily",
@@ -79,14 +79,14 @@
         "teams_teams",
         "entra_applications",
         "entra_service_principals",
-        "entra_oauth2_permission_grants"
+        "entra_delegated_permission_grants"
       ],
       "core_enrichment_entities": [
         "entra_group_members",
         "entra_group_owners",
         "exo_group_members",
         "teams_channels",
-        "entra_app_role_assignments",
+        "entra_sp_assignments",
         "entra_sp_owners",
         "entra_app_owners"
       ],
@@ -97,12 +97,12 @@
         "teams_channel_members",
         "teams_installed_apps",
         "teams_channel_tabs",
-        "entra_sp_app_role_assignments",
+        "entra_application_permission_grants",
         "entra_sp_claims_mapping_policies",
-        "entra_sp_delegated_perm_classifications",
+        "entra_delegated_permission_classifications",
         "entra_sign_in_logs",
         "entra_app_proxy_config",
-        "entra_sp_sync_jobs"
+        "entra_provisioning_jobs"
       ],
       "schedules": {
         "core": "daily",
