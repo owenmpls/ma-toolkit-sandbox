@@ -809,7 +809,8 @@ jobs:
               "analytics.storage_account_name": "${STORAGE_ACCOUNT}"
             },
             "development": true,
-            "channel": "CURRENT"
+            "channel": "CURRENT",
+            "run_as": {"service_principal_name": "${{ secrets.AZURE_CLIENT_ID }}"}
           }
           SPEC
           )
@@ -868,7 +869,8 @@ jobs:
               "analytics.storage_account_name": "${STORAGE_ACCOUNT}"
             },
             "development": true,
-            "channel": "CURRENT"
+            "channel": "CURRENT",
+            "run_as": {"service_principal_name": "${{ secrets.AZURE_CLIENT_ID }}"}
           }
           SPEC
           )
