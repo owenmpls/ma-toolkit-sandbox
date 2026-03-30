@@ -15,6 +15,7 @@ permissions:
 jobs:
   drop-tables:
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
