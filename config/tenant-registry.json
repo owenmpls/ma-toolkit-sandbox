@@ -46,7 +46,9 @@
         "entra_delegated_permission_classifications",
         "entra_sign_in_logs",
         "entra_app_proxy_config",
-        "entra_provisioning_jobs"
+        "entra_provisioning_jobs",
+        "report_spo_site_usage",
+        "report_teams_team_activity"
       ],
       "schedules": {
         "core": "daily",
@@ -54,7 +56,8 @@
         "enrichment": "weekly"
       },
       "max_parallelism": 5,
-      "sign_in_lookback_days": 8
+      "sign_in_lookback_days": 8,
+      "report_period": "D180"
     },
     {
       "tenant_key": "madev2",
@@ -102,7 +105,9 @@
         "entra_delegated_permission_classifications",
         "entra_sign_in_logs",
         "entra_app_proxy_config",
-        "entra_provisioning_jobs"
+        "entra_provisioning_jobs",
+        "report_spo_site_usage",
+        "report_teams_team_activity"
       ],
       "schedules": {
         "core": "daily",
@@ -110,7 +115,8 @@
         "enrichment": "weekly"
       },
       "max_parallelism": 5,
-      "sign_in_lookback_days": 8
+      "sign_in_lookback_days": 8,
+      "report_period": "D180"
     }
   ]
 }
