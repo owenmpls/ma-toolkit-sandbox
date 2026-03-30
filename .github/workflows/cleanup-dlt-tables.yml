@@ -1,0 +1,71 @@
+name: Cleanup DLT Tables
+
+on:
+  workflow_dispatch:
+    inputs:
+      tables:
+        description: 'Comma-separated fully qualified table names to drop'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  drop-tables:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Databricks token
+        id: dbx
+        run: |
+          TOKEN=$(az account get-access-token \
+            --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d \
+            --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Get workspace URL
+        id: workspace
+        run: |
+          URL="https://$(az deployment group show \
+            --name analytics \
+            --resource-group ${{ vars.RESOURCE_GROUP_NAME }} \
+            --query 'properties.outputs.databricksWorkspaceUrl.value' -o tsv)"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Drop tables
+        run: |
+          WORKSPACE_URL="${{ steps.workspace.outputs.url }}"
+          TOKEN="${{ steps.dbx.outputs.token }}"
+
+          WAREHOUSE_ID=$(curl -sSf "${WORKSPACE_URL}/api/2.0/sql/warehouses" \
+            -H "Authorization: Bearer ${TOKEN}" | jq -r '.warehouses[0].id')
+
+          IFS=',' read -ra TABLES <<< "${{ inputs.tables }}"
+          for TABLE in "${TABLES[@]}"; do
+            TABLE=$(echo "$TABLE" | xargs)  # trim whitespace
+            echo "Dropping ${TABLE}..."
+            RESULT=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -X POST "${WORKSPACE_URL}/api/2.0/sql/statements" \
+              -d "{
+                \"warehouse_id\": \"${WAREHOUSE_ID}\",
+                \"statement\": \"DROP TABLE IF EXISTS ${TABLE}\",
+                \"wait_timeout\": \"30s\"
+              }" | tr -d '\000-\037')
+            STATE=$(echo "$RESULT" | jq -r '.status.state')
+            echo "  Result: $STATE"
+            if [ "$STATE" = "FAILED" ]; then
+              echo "  Error: $(echo "$RESULT" | jq -r '.status.error.message')"
+              exit 1
+            fi
+          done
+          echo "All tables dropped."
