@@ -14,7 +14,6 @@ Import-Module (Join-Path $modulesPath 'LogHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'RetryHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'KeyVaultHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'WorkerPool.psm1') -Force
-Import-Module (Join-Path $modulesPath 'ReportHelper.psm1') -Force -ErrorAction SilentlyContinue
 # StorageHelper or StorageHelperRest is loaded by Connect-ToService.ps1
 
 # --- Read environment ---
@@ -82,9 +81,6 @@ try {
     # --- Expose tenant-level config as environment variables for entity modules ---
     if ($tenant.sign_in_lookback_days) {
         $env:SIGN_IN_LOOKBACK_DAYS = $tenant.sign_in_lookback_days
-    }
-    if ($tenant.report_period) {
-        $env:REPORT_PERIOD = $tenant.report_period
     }
 
     # --- Process each entity ---

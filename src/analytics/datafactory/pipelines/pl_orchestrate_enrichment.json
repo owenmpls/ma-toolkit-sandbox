@@ -41,7 +41,7 @@
               "dependsOn": [],
               "typeProperties": {
                 "expression": {
-                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('entra_users','entra_groups','entra_application_permission_grants','entra_sp_claims_mapping_policies','entra_delegated_permission_classifications','entra_sign_in_logs','entra_app_proxy_config','entra_provisioning_jobs','report_spo_site_usage','report_teams_team_activity'))), 0))",
+                  "value": "@and(item().enabled, greater(length(intersection(item().enrichment_entities, createArray('entra_users','entra_groups','entra_application_permission_grants','entra_sp_claims_mapping_policies','entra_delegated_permission_classifications','entra_sign_in_logs','entra_app_proxy_config','entra_provisioning_jobs'))), 0))",
                   "type": "Expression"
                 },
                 "ifTrueActivities": [
