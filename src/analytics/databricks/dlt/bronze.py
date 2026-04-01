@@ -283,6 +283,41 @@ def intune_managed_devices():
     )
 
 
+_MDE_DEVICES_SCHEMA = StructType(
+    [
+        StructField("id", StringType()),
+        StructField("computerDnsName", StringType()),
+        StructField("firstSeen", StringType()),
+        StructField("lastSeen", StringType()),
+        StructField("osPlatform", StringType()),
+        StructField("osArchitecture", StringType()),
+        StructField("version", StringType()),
+        StructField("osBuild", StringType()),
+        StructField("lastIpAddress", StringType()),
+        StructField("lastExternalIpAddress", StringType()),
+        StructField("healthStatus", StringType()),
+        StructField("onboardingStatus", StringType()),
+        StructField("riskScore", StringType()),
+        StructField("exposureLevel", StringType()),
+        StructField("aadDeviceId", StringType()),
+        StructField("machineTags", ArrayType(StringType())),
+        StructField("rbacGroupName", StringType()),
+        StructField("rbacGroupId", StringType()),
+        StructField("deviceValue", StringType()),
+    ]
+)
+
+
+@dlt.table(
+    name="mde_devices",
+    comment="Raw Microsoft Defender for Endpoint device inventory from all tenants",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+@dlt.expect("valid_record", "id IS NOT NULL")
+def mde_devices():
+    return _read_landing("core", "mde_devices", schema=_MDE_DEVICES_SCHEMA)
+
+
 @dlt.table(
     name="entra_applications",
     comment="Raw Entra app registrations from all tenants",

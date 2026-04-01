@@ -1756,6 +1756,58 @@ dlt.apply_changes(
 )
 
 
+# --- Microsoft Defender for Endpoint Devices ---
+
+
+@dlt.view(name="v_mde_devices")
+def v_mde_devices():
+    return (
+        spark.readStream.table("matoolkit_analytics.bronze.mde_devices")
+        .select(
+            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+            col("_tenant_key").alias("tenant_key"),
+            col("id"),
+            col("computerDnsName").alias("computer_dns_name"),
+            col("firstSeen").alias("first_seen"),
+            col("lastSeen").alias("last_seen"),
+            col("osPlatform").alias("os_platform"),
+            col("osArchitecture").alias("os_architecture"),
+            col("version").alias("os_version"),
+            col("osBuild").cast("long").alias("os_build"),
+            col("lastIpAddress").alias("last_ip_address"),
+            col("lastExternalIpAddress").alias(
+                "last_external_ip_address"
+            ),
+            col("healthStatus").alias("health_status"),
+            col("onboardingStatus").alias("onboarding_status"),
+            col("riskScore").alias("risk_score"),
+            col("exposureLevel").alias("exposure_level"),
+            col("aadDeviceId").alias("aad_device_id"),
+            col("machineTags").alias("machine_tags"),
+            col("rbacGroupName").alias("rbac_group_name"),
+            col("rbacGroupId").alias("rbac_group_id"),
+            col("deviceValue").alias("device_value"),
+            col("_source_file"),
+            col("_dlt_ingested_at"),
+        )
+    )
+
+
+dlt.create_streaming_table(
+    name="mde_devices",
+    comment="Cleaned and deduplicated MDE devices across all tenants",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="mde_devices",
+    source="v_mde_devices",
+    keys=["_scd_key"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
 # ============================================================================
 # Entra Applications
 # ============================================================================
