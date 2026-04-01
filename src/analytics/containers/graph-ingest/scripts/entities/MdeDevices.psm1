@@ -17,26 +17,53 @@ function Invoke-Phase1 {
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[string]]$EntityIds
     )
 
-    # --- Acquire MDE token using MSAL (loaded with Microsoft.Graph.Authentication) ---
+    # --- Acquire MDE token via client assertion JWT (no MSAL dependency) ---
+    $clientId = $script:AuthConfig.ClientId
+    $tenantId = $script:AuthConfig.TenantId
     $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
         $script:CertBytes, [string]::Empty,
         [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
     )
 
-    $mdeApp = [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]::Create(
-        $script:AuthConfig.ClientId
-    ).WithCertificate($cert).WithAuthority(
-        "https://login.microsoftonline.com/$($script:AuthConfig.TenantId)"
-    ).Build()
+    $getMdeToken = {
+        $tokenEndpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
 
-    $mdeScope = @('https://api.securitycenter.microsoft.com/.default')
-    $tokenResult = $mdeApp.AcquireTokenForClient($mdeScope).ExecuteAsync().GetAwaiter().GetResult()
-    $headers = @{ Authorization = "Bearer $($tokenResult.AccessToken)" }
+        # Build JWT header with x5t (cert thumbprint)
+        $x5t = [Convert]::ToBase64String($cert.GetCertHash()).Replace('+','-').Replace('/','_').TrimEnd('=')
+        $headerJson = "{`"alg`":`"RS256`",`"typ`":`"JWT`",`"x5t`":`"$x5t`"}"
+        $headerB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($headerJson)).Replace('+','-').Replace('/','_').TrimEnd('=')
+
+        # Build JWT claims
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $claimsJson = "{`"aud`":`"$tokenEndpoint`",`"iss`":`"$clientId`",`"sub`":`"$clientId`",`"jti`":`"$([guid]::NewGuid())`",`"nbf`":$now,`"exp`":$($now + 300)}"
+        $claimsB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($claimsJson)).Replace('+','-').Replace('/','_').TrimEnd('=')
+
+        # Sign with RSA-SHA256
+        $unsigned = "$headerB64.$claimsB64"
+        $sig = $cert.GetRSAPrivateKey().SignData(
+            [Text.Encoding]::UTF8.GetBytes($unsigned),
+            [Security.Cryptography.HashAlgorithmName]::SHA256,
+            [Security.Cryptography.RSASignaturePadding]::Pkcs1
+        )
+        $sigB64 = [Convert]::ToBase64String($sig).Replace('+','-').Replace('/','_').TrimEnd('=')
+
+        $tokenResponse = Invoke-RestMethod -Method POST -Uri $tokenEndpoint -Body @{
+            grant_type            = 'client_credentials'
+            client_id             = $clientId
+            client_assertion_type = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+            client_assertion      = "$unsigned.$sigB64"
+            scope                 = 'https://api.securitycenter.microsoft.com/.default'
+        }
+        return $tokenResponse.access_token
+    }
+
+    $token = & $getMdeToken
+    $headers = @{ Authorization = "Bearer $token" }
 
     # Reconnect callback for Invoke-WithRetry — re-acquires token on 401
     $reconnect = {
-        $freshToken = $mdeApp.AcquireTokenForClient($mdeScope).ExecuteAsync().GetAwaiter().GetResult()
-        $headers['Authorization'] = "Bearer $($freshToken.AccessToken)"
+        $token = & $getMdeToken
+        $headers['Authorization'] = "Bearer $token"
     }
 
     # --- Paginated retrieval from MDE API ---
