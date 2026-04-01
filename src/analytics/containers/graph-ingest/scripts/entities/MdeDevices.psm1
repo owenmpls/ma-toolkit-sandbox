@@ -40,7 +40,8 @@ function Invoke-Phase1 {
 
         # Sign with RSA-SHA256
         $unsigned = "$headerB64.$claimsB64"
-        $sig = $cert.GetRSAPrivateKey().SignData(
+        $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cert)
+        $sig = $rsa.SignData(
             [Text.Encoding]::UTF8.GetBytes($unsigned),
             [Security.Cryptography.HashAlgorithmName]::SHA256,
             [Security.Cryptography.RSASignaturePadding]::Pkcs1
