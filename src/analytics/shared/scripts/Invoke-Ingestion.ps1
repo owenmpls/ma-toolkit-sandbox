@@ -63,6 +63,14 @@ try {
 
     Write-Log "Discovered $($entityModules.Count) entity modules"
 
+    # --- Inject auth state into entity modules (for non-Graph APIs like MDE) ---
+    foreach ($entityEntry in $entityModules.Values) {
+        & $entityEntry.Module {
+            $script:CertBytes = $args[0]
+            $script:AuthConfig = $args[1]
+        } $script:CertBytes $script:AuthConfig
+    }
+
     # --- Filter to entities for this tenant + tier ---
     $wantedEntities = switch ($scheduleTier) {
         'core'             { $tenant.core_entities }
