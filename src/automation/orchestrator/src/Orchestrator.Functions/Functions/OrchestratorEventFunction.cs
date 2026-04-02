@@ -15,6 +15,7 @@ public class OrchestratorEventFunction
     private readonly IMemberRemovedHandler _memberRemovedHandler;
     private readonly IPollCheckHandler _pollCheckHandler;
     private readonly IRetryCheckHandler _retryCheckHandler;
+    private readonly IDispatchTimeoutHandler _dispatchTimeoutHandler;
     private readonly ILogger<OrchestratorEventFunction> _logger;
 
     public OrchestratorEventFunction(
@@ -24,6 +25,7 @@ public class OrchestratorEventFunction
         IMemberRemovedHandler memberRemovedHandler,
         IPollCheckHandler pollCheckHandler,
         IRetryCheckHandler retryCheckHandler,
+        IDispatchTimeoutHandler dispatchTimeoutHandler,
         ILogger<OrchestratorEventFunction> logger)
     {
         _batchInitHandler = batchInitHandler;
@@ -32,6 +34,7 @@ public class OrchestratorEventFunction
         _memberRemovedHandler = memberRemovedHandler;
         _pollCheckHandler = pollCheckHandler;
         _retryCheckHandler = retryCheckHandler;
+        _dispatchTimeoutHandler = dispatchTimeoutHandler;
         _logger = logger;
     }
 
@@ -92,6 +95,12 @@ public class OrchestratorEventFunction
                     var retryCheckMessage = JsonSerializer.Deserialize<RetryCheckMessage>(body);
                     if (retryCheckMessage != null)
                         await _retryCheckHandler.HandleAsync(retryCheckMessage);
+                    break;
+
+                case "dispatch-timeout":
+                    var dispatchTimeoutMessage = JsonSerializer.Deserialize<DispatchTimeoutMessage>(body);
+                    if (dispatchTimeoutMessage != null)
+                        await _dispatchTimeoutHandler.HandleAsync(dispatchTimeoutMessage);
                     break;
 
                 default:
