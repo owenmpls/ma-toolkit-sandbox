@@ -58,6 +58,17 @@ public class InitExecutionRepository : IInitExecutionRepository
             new { Status = StepStatus.Polling, Now = now });
     }
 
+    public async Task<IEnumerable<InitExecutionRecord>> GetDispatchedStepsOlderThanAsync(DateTime cutoff)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<InitExecutionRecord>(@"
+            SELECT ie.* FROM init_executions ie
+            JOIN batches b ON ie.batch_id = b.id
+            WHERE ie.status = @Status
+              AND ie.dispatched_at <= @Cutoff",
+            new { Status = StepStatus.Dispatched, Cutoff = cutoff });
+    }
+
     public async Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null)
     {
         var conn = transaction?.Connection ?? _db.CreateConnection();

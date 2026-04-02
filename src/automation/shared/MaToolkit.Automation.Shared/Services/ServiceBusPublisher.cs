@@ -58,6 +58,14 @@ public class ServiceBusPublisher : IServiceBusPublisher
             message.StepExecutionId, message.PollCount);
     }
 
+    public async Task PublishDispatchTimeoutAsync(DispatchTimeoutMessage message)
+    {
+        await SendMessageAsync(message, message.MessageType);
+        _logger.LogWarning(
+            "Published dispatch-timeout for step execution {StepExecutionId} (step {StepName}, dispatched at {DispatchedAt})",
+            message.StepExecutionId, message.StepName, message.DispatchedAt);
+    }
+
     private async Task SendMessageAsync<T>(T payload, string messageType)
     {
         await using var sender = _client.CreateSender(_topicName);

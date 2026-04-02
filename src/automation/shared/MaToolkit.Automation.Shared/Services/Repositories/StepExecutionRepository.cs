@@ -86,6 +86,18 @@ public class StepExecutionRepository : IStepExecutionRepository
             new { Status = StepStatus.Polling, Now = now });
     }
 
+    public async Task<IEnumerable<StepExecutionRecord>> GetDispatchedStepsOlderThanAsync(DateTime cutoff)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<StepExecutionRecord>(@"
+            SELECT se.* FROM step_executions se
+            JOIN phase_executions pe ON se.phase_execution_id = pe.id
+            JOIN batches b ON pe.batch_id = b.id
+            WHERE se.status = @Status
+              AND se.dispatched_at <= @Cutoff",
+            new { Status = StepStatus.Dispatched, Cutoff = cutoff });
+    }
+
     public async Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null)
     {
         var conn = transaction?.Connection ?? _db.CreateConnection();
