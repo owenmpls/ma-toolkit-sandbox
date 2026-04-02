@@ -70,6 +70,7 @@ builder.Services.AddScoped<IBatchDetector, BatchDetector>();
 builder.Services.AddScoped<IPhaseDispatcher, PhaseDispatcher>();
 builder.Services.AddScoped<IVersionTransitionHandler, VersionTransitionHandler>();
 builder.Services.AddScoped<IPollingManager, PollingManager>();
+builder.Services.AddScoped<IDispatchTimeoutChecker, DispatchTimeoutChecker>();
 
 builder.Services.AddApplicationInsightsTelemetryWorkerService();
 

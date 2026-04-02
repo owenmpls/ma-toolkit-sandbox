@@ -20,6 +20,7 @@ public class SchedulerTimerFunction
     private readonly IPhaseDispatcher _phaseDispatcher;
     private readonly IVersionTransitionHandler _versionTransitionHandler;
     private readonly IPollingManager _pollingManager;
+    private readonly IDispatchTimeoutChecker _dispatchTimeoutChecker;
     private readonly ILogger<SchedulerTimerFunction> _logger;
 
     public SchedulerTimerFunction(
@@ -32,6 +33,7 @@ public class SchedulerTimerFunction
         IPhaseDispatcher phaseDispatcher,
         IVersionTransitionHandler versionTransitionHandler,
         IPollingManager pollingManager,
+        IDispatchTimeoutChecker dispatchTimeoutChecker,
         ILogger<SchedulerTimerFunction> logger)
     {
         _runbookRepo = runbookRepo;
@@ -43,6 +45,7 @@ public class SchedulerTimerFunction
         _phaseDispatcher = phaseDispatcher;
         _versionTransitionHandler = versionTransitionHandler;
         _pollingManager = pollingManager;
+        _dispatchTimeoutChecker = dispatchTimeoutChecker;
         _logger = logger;
     }
 
@@ -78,6 +81,9 @@ public class SchedulerTimerFunction
 
         // Check polling steps across all runbooks
         await _pollingManager.CheckPollingStepsAsync(DateTime.UtcNow);
+
+        // Check for dispatched steps that have timed out
+        await _dispatchTimeoutChecker.CheckDispatchedStepsAsync(DateTime.UtcNow);
 
         _logger.LogInformation("Scheduler timer completed");
     }

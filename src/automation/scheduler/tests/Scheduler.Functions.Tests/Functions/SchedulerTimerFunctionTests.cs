@@ -24,6 +24,7 @@ public class SchedulerTimerFunctionTests
     private readonly Mock<IPhaseDispatcher> _phaseDispatcher;
     private readonly Mock<IVersionTransitionHandler> _versionTransitionHandler;
     private readonly Mock<IPollingManager> _pollingManager;
+    private readonly Mock<IDispatchTimeoutChecker> _dispatchTimeoutChecker;
     private readonly Mock<ILogger<SchedulerTimerFunction>> _logger;
     private readonly SchedulerTimerFunction _sut;
 
@@ -38,13 +39,14 @@ public class SchedulerTimerFunctionTests
         _phaseDispatcher = new Mock<IPhaseDispatcher>();
         _versionTransitionHandler = new Mock<IVersionTransitionHandler>();
         _pollingManager = new Mock<IPollingManager>();
+        _dispatchTimeoutChecker = new Mock<IDispatchTimeoutChecker>();
         _logger = new Mock<ILogger<SchedulerTimerFunction>>();
 
         _sut = new SchedulerTimerFunction(
             _runbookRepo.Object, _automationRepo.Object, _batchRepo.Object,
             _dataSourceQuery.Object, _parser.Object, _batchDetector.Object,
             _phaseDispatcher.Object, _versionTransitionHandler.Object,
-            _pollingManager.Object, _logger.Object);
+            _pollingManager.Object, _dispatchTimeoutChecker.Object, _logger.Object);
     }
 
     [Fact]
@@ -181,6 +183,16 @@ public class SchedulerTimerFunctionTests
         await _sut.RunAsync(CreateTimerInfo());
 
         _pollingManager.Verify(x => x.CheckPollingStepsAsync(It.IsAny<DateTime>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunAsync_AlwaysChecksDispatchTimeouts()
+    {
+        _runbookRepo.Setup(x => x.GetActiveRunbooksAsync()).ReturnsAsync(new List<RunbookRecord>());
+
+        await _sut.RunAsync(CreateTimerInfo());
+
+        _dispatchTimeoutChecker.Verify(x => x.CheckDispatchedStepsAsync(It.IsAny<DateTime>()), Times.Once);
     }
 
     private static TimerInfo CreateTimerInfo()

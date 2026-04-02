@@ -14,4 +14,6 @@ public class SchedulerSettings
 
     [Required]
     public string OrchestratorTopicName { get; set; } = "orchestrator-events";
+
+    public int DispatchTimeoutMinutes { get; set; } = 30;
 }
