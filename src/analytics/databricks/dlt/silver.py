@@ -715,6 +715,17 @@ def v_spo_sites():
     sites = spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
     details = spark.table("matoolkit_analytics.bronze.spo_site_usage")
 
+    # Add new enrichment columns as null if they don't exist yet in bronze
+    # (Phase 2 may not have written data with these fields yet)
+    _new_cols = [
+        "storageQuota", "webTemplate", "isModern", "groupId",
+        "isGroupConnected", "isTeamsConnected", "hubSiteId", "isHubSite",
+        "owner", "readOnly", "language",
+    ]
+    for c in _new_cols:
+        if c not in details.columns:
+            details = details.withColumn(c, lit(None))
+
     return sites.join(
         details,
         (sites._tenant_key == details._tenant_key)
