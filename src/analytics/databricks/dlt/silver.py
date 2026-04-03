@@ -218,151 +218,169 @@ dlt.apply_changes(
 # --- Mailboxes ---
 
 
+# Stream-static join: bronze.exo_mailboxes (core, streaming) LEFT JOIN
+# bronze.exo_mailbox_statistics (enrichment, static) on ExchangeGuid = MailboxGuid.
+
+
 @dlt.view(name="v_mailboxes")
 def v_mailboxes():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.exo_mailboxes")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("ExchangeGuid")).alias(
-                "_scd_key"
-            ),
-            col("_tenant_key").alias("tenant_key"),
-            # --- Identity ---
-            col("ExchangeGuid").alias("exchange_guid"),
-            col("ExternalDirectoryObjectId").alias(
-                "external_directory_object_id"
-            ),
-            col("UserPrincipalName").alias("user_principal_name"),
-            lower(trim(col("PrimarySmtpAddress"))).alias(
-                "primary_smtp_address"
-            ),
-            col("DisplayName").alias("display_name"),
-            col("Alias").alias("alias"),
-            col("EmailAddresses").alias("email_addresses"),
-            # --- Type & status ---
-            col("Database").alias("database"),
-            col("WhenCreated").alias("when_created"),
-            col("WhenMailboxCreated").alias("when_mailbox_created"),
-            col("IsMailboxEnabled").alias("is_mailbox_enabled"),
-            col("HiddenFromAddressListsEnabled").alias(
-                "hidden_from_address_lists"
-            ),
-            # --- Resource ---
-            col("IsResource").alias("is_resource"),
-            col("ResourceType").alias("resource_type"),
-            col("ResourceCapacity").alias("resource_capacity"),
-            col("RoomMailboxAccountEnabled").alias(
-                "room_mailbox_account_enabled"
-            ),
-            # --- Forwarding ---
-            col("ForwardingAddress").alias("forwarding_address"),
-            col("ForwardingSmtpAddress").alias("forwarding_smtp_address"),
-            col("DeliverToMailboxAndForward").alias(
-                "deliver_to_mailbox_and_forward"
-            ),
-            # --- Delegation ---
-            col("GrantSendOnBehalfTo").alias("grant_send_on_behalf_to"),
-            col("MessageCopyForSendOnBehalfEnabled").alias(
-                "message_copy_for_send_on_behalf"
-            ),
-            col("MessageCopyForSentAsEnabled").alias(
-                "message_copy_for_sent_as"
-            ),
-            # --- Archive ---
-            col("ArchiveStatus").alias("archive_status"),
-            col("ArchiveState").alias("archive_state"),
-            col("ArchiveGuid").alias("archive_guid"),
-            col("ArchiveName").alias("archive_name"),
-            col("AutoExpandingArchiveEnabled").alias(
-                "auto_expanding_archive"
-            ),
-            # --- Compliance holds ---
-            col("LitigationHoldEnabled").alias("litigation_hold_enabled"),
-            col("LitigationHoldDate").alias("litigation_hold_date"),
-            col("LitigationHoldOwner").alias("litigation_hold_owner"),
-            col("LitigationHoldDuration").alias("litigation_hold_duration"),
-            col("InPlaceHolds").alias("in_place_holds"),
-            col("ComplianceTagHoldApplied").alias(
-                "compliance_tag_hold_applied"
-            ),
-            col("DelayHoldApplied").alias("delay_hold_applied"),
-            # --- Retention ---
-            col("RetentionPolicy").alias("retention_policy"),
-            col("RetentionHoldEnabled").alias("retention_hold_enabled"),
-            col("RetainDeletedItemsFor").alias("retain_deleted_items_for"),
-            col("SingleItemRecoveryEnabled").alias(
-                "single_item_recovery_enabled"
-            ),
-            # --- Quotas ---
-            col("IssueWarningQuota").alias("issue_warning_quota"),
-            col("ProhibitSendQuota").alias("prohibit_send_quota"),
-            col("ProhibitSendReceiveQuota").alias(
-                "prohibit_send_receive_quota"
-            ),
-            col("UseDatabaseQuotaDefaults").alias(
-                "use_database_quota_defaults"
-            ),
-            # --- Transport limits ---
-            col("MaxReceiveSize").alias("max_receive_size"),
-            col("MaxSendSize").alias("max_send_size"),
-            col("RecipientLimits").alias("recipient_limits"),
-            # --- Migration state ---
-            col("MailboxMoveStatus").alias("mailbox_move_status"),
-            col("MailboxMoveBatchName").alias("mailbox_move_batch_name"),
-            col("MailboxMoveRemoteHostName").alias(
-                "mailbox_move_remote_host_name"
-            ),
-            col("MailboxMoveFlags").alias("mailbox_move_flags"),
-            # --- Soft-delete / inactive ---
-            col("IsInactiveMailbox").alias("is_inactive_mailbox"),
-            col("IsSoftDeletedByDisable").alias(
-                "is_soft_deleted_by_disable"
-            ),
-            col("IsSoftDeletedByRemove").alias(
-                "is_soft_deleted_by_remove"
-            ),
-            col("WhenSoftDeleted").alias("when_soft_deleted"),
-            # --- Custom attributes ---
-            col("CustomAttribute1").alias("custom_attribute_1"),
-            col("CustomAttribute2").alias("custom_attribute_2"),
-            col("CustomAttribute3").alias("custom_attribute_3"),
-            col("CustomAttribute4").alias("custom_attribute_4"),
-            col("CustomAttribute5").alias("custom_attribute_5"),
-            col("CustomAttribute6").alias("custom_attribute_6"),
-            col("CustomAttribute7").alias("custom_attribute_7"),
-            col("CustomAttribute8").alias("custom_attribute_8"),
-            col("CustomAttribute9").alias("custom_attribute_9"),
-            col("CustomAttribute10").alias("custom_attribute_10"),
-            col("CustomAttribute11").alias("custom_attribute_11"),
-            col("CustomAttribute12").alias("custom_attribute_12"),
-            col("CustomAttribute13").alias("custom_attribute_13"),
-            col("CustomAttribute14").alias("custom_attribute_14"),
-            col("CustomAttribute15").alias("custom_attribute_15"),
-            col("ExtensionCustomAttribute1").alias(
-                "extension_custom_attribute_1"
-            ),
-            col("ExtensionCustomAttribute2").alias(
-                "extension_custom_attribute_2"
-            ),
-            col("ExtensionCustomAttribute3").alias(
-                "extension_custom_attribute_3"
-            ),
-            col("ExtensionCustomAttribute4").alias(
-                "extension_custom_attribute_4"
-            ),
-            col("ExtensionCustomAttribute5").alias(
-                "extension_custom_attribute_5"
-            ),
-            # --- Metadata ---
-            col("_source_file"),
-            col("_dlt_ingested_at"),
-        )
+    mbx = spark.readStream.table("matoolkit_analytics.bronze.exo_mailboxes")
+    stats = spark.table("matoolkit_analytics.bronze.exo_mailbox_statistics")
+
+    return mbx.join(
+        stats,
+        (mbx._tenant_key == stats._tenant_key)
+        & (mbx.ExchangeGuid == stats.MailboxGuid),
+        "left",
+    ).select(
+        concat_ws("_", mbx._tenant_key, mbx.ExchangeGuid).alias(
+            "_scd_key"
+        ),
+        mbx._tenant_key.alias("tenant_key"),
+        # --- Identity ---
+        mbx.ExchangeGuid.alias("exchange_guid"),
+        mbx.ExternalDirectoryObjectId.alias(
+            "external_directory_object_id"
+        ),
+        mbx.UserPrincipalName.alias("user_principal_name"),
+        lower(trim(mbx.PrimarySmtpAddress)).alias(
+            "primary_smtp_address"
+        ),
+        mbx.DisplayName.alias("display_name"),
+        mbx.Alias.alias("alias"),
+        mbx.EmailAddresses.alias("email_addresses"),
+        # --- Type & status ---
+        mbx.Database.alias("database"),
+        mbx.WhenCreated.alias("when_created"),
+        mbx.WhenMailboxCreated.alias("when_mailbox_created"),
+        mbx.IsMailboxEnabled.alias("is_mailbox_enabled"),
+        mbx.HiddenFromAddressListsEnabled.alias(
+            "hidden_from_address_lists"
+        ),
+        # --- Resource ---
+        mbx.IsResource.alias("is_resource"),
+        mbx.ResourceType.alias("resource_type"),
+        mbx.ResourceCapacity.alias("resource_capacity"),
+        mbx.RoomMailboxAccountEnabled.alias(
+            "room_mailbox_account_enabled"
+        ),
+        # --- Forwarding ---
+        mbx.ForwardingAddress.alias("forwarding_address"),
+        mbx.ForwardingSmtpAddress.alias("forwarding_smtp_address"),
+        mbx.DeliverToMailboxAndForward.alias(
+            "deliver_to_mailbox_and_forward"
+        ),
+        # --- Delegation ---
+        mbx.GrantSendOnBehalfTo.alias("grant_send_on_behalf_to"),
+        mbx.MessageCopyForSendOnBehalfEnabled.alias(
+            "message_copy_for_send_on_behalf"
+        ),
+        mbx.MessageCopyForSentAsEnabled.alias(
+            "message_copy_for_sent_as"
+        ),
+        # --- Archive ---
+        mbx.ArchiveStatus.alias("archive_status"),
+        mbx.ArchiveState.alias("archive_state"),
+        mbx.ArchiveGuid.alias("archive_guid"),
+        mbx.ArchiveName.alias("archive_name"),
+        mbx.AutoExpandingArchiveEnabled.alias(
+            "auto_expanding_archive"
+        ),
+        # --- Compliance holds ---
+        mbx.LitigationHoldEnabled.alias("litigation_hold_enabled"),
+        mbx.LitigationHoldDate.alias("litigation_hold_date"),
+        mbx.LitigationHoldOwner.alias("litigation_hold_owner"),
+        mbx.LitigationHoldDuration.alias("litigation_hold_duration"),
+        mbx.InPlaceHolds.alias("in_place_holds"),
+        mbx.ComplianceTagHoldApplied.alias(
+            "compliance_tag_hold_applied"
+        ),
+        mbx.DelayHoldApplied.alias("delay_hold_applied"),
+        # --- Retention ---
+        mbx.RetentionPolicy.alias("retention_policy"),
+        mbx.RetentionHoldEnabled.alias("retention_hold_enabled"),
+        mbx.RetainDeletedItemsFor.alias("retain_deleted_items_for"),
+        mbx.SingleItemRecoveryEnabled.alias(
+            "single_item_recovery_enabled"
+        ),
+        # --- Quotas ---
+        mbx.IssueWarningQuota.alias("issue_warning_quota"),
+        mbx.ProhibitSendQuota.alias("prohibit_send_quota"),
+        mbx.ProhibitSendReceiveQuota.alias(
+            "prohibit_send_receive_quota"
+        ),
+        mbx.UseDatabaseQuotaDefaults.alias(
+            "use_database_quota_defaults"
+        ),
+        # --- Transport limits ---
+        mbx.MaxReceiveSize.alias("max_receive_size"),
+        mbx.MaxSendSize.alias("max_send_size"),
+        mbx.RecipientLimits.alias("recipient_limits"),
+        # --- Migration state ---
+        mbx.MailboxMoveStatus.alias("mailbox_move_status"),
+        mbx.MailboxMoveBatchName.alias("mailbox_move_batch_name"),
+        mbx.MailboxMoveRemoteHostName.alias(
+            "mailbox_move_remote_host_name"
+        ),
+        mbx.MailboxMoveFlags.alias("mailbox_move_flags"),
+        # --- Soft-delete / inactive ---
+        mbx.IsInactiveMailbox.alias("is_inactive_mailbox"),
+        mbx.IsSoftDeletedByDisable.alias(
+            "is_soft_deleted_by_disable"
+        ),
+        mbx.IsSoftDeletedByRemove.alias(
+            "is_soft_deleted_by_remove"
+        ),
+        mbx.WhenSoftDeleted.alias("when_soft_deleted"),
+        # --- Custom attributes ---
+        mbx.CustomAttribute1.alias("custom_attribute_1"),
+        mbx.CustomAttribute2.alias("custom_attribute_2"),
+        mbx.CustomAttribute3.alias("custom_attribute_3"),
+        mbx.CustomAttribute4.alias("custom_attribute_4"),
+        mbx.CustomAttribute5.alias("custom_attribute_5"),
+        mbx.CustomAttribute6.alias("custom_attribute_6"),
+        mbx.CustomAttribute7.alias("custom_attribute_7"),
+        mbx.CustomAttribute8.alias("custom_attribute_8"),
+        mbx.CustomAttribute9.alias("custom_attribute_9"),
+        mbx.CustomAttribute10.alias("custom_attribute_10"),
+        mbx.CustomAttribute11.alias("custom_attribute_11"),
+        mbx.CustomAttribute12.alias("custom_attribute_12"),
+        mbx.CustomAttribute13.alias("custom_attribute_13"),
+        mbx.CustomAttribute14.alias("custom_attribute_14"),
+        mbx.CustomAttribute15.alias("custom_attribute_15"),
+        mbx.ExtensionCustomAttribute1.alias(
+            "extension_custom_attribute_1"
+        ),
+        mbx.ExtensionCustomAttribute2.alias(
+            "extension_custom_attribute_2"
+        ),
+        mbx.ExtensionCustomAttribute3.alias(
+            "extension_custom_attribute_3"
+        ),
+        mbx.ExtensionCustomAttribute4.alias(
+            "extension_custom_attribute_4"
+        ),
+        mbx.ExtensionCustomAttribute5.alias(
+            "extension_custom_attribute_5"
+        ),
+        # --- Statistics (from enrichment) ---
+        stats.ItemCount.cast("long").alias("item_count"),
+        stats.TablesTotalSize.cast("long").alias(
+            "total_item_size_bytes"
+        ),
+        stats.DeletedItemCount.cast("long").alias("deleted_item_count"),
+        stats.LastLogonTime.alias("last_logon_time"),
+        stats.LastLoggedOnUserAccount.alias("last_logon_user"),
+        stats.IsArchiveMailbox.alias("is_archive_mailbox"),
+        # --- Metadata ---
+        mbx._source_file,
+        mbx._dlt_ingested_at,
     )
 
 
 dlt.create_streaming_table(
     name="mailboxes",
-    comment="Cleaned Exchange Online mailboxes across all tenants",
+    comment="Exchange Online mailboxes with statistics across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
@@ -914,50 +932,6 @@ dlt.create_streaming_table(
 dlt.apply_changes(
     target="exo_group_members",
     source="v_exo_group_members",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
-
-
-# --- EXO Mailbox Statistics ---
-
-
-@dlt.view(name="v_exo_mailbox_statistics")
-def v_exo_mailbox_statistics():
-    df = spark.readStream.table("matoolkit_analytics.bronze.exo_mailbox_statistics")
-
-    # TotalItemSize / TotalDeletedItemSize land as struct<IsUnlimited:boolean>
-    # when PowerShell serialises ByteQuantifiedSize incorrectly (Value is an
-    # empty object).  Use TablesTotalSize (bigint, always populated) as the
-    # best available total-size proxy until the enrichment container ships
-    # numeric byte counts.
-    return df.select(
-        concat_ws("_", col("_tenant_key"), col("MailboxGuid")).alias("_scd_key"),
-        col("_tenant_key").alias("tenant_key"),
-        col("MailboxGuid").alias("mailbox_guid"),
-        col("DisplayName").alias("display_name"),
-        col("ItemCount").cast("long").alias("item_count"),
-        col("TablesTotalSize").cast("long").alias("total_item_size_bytes"),
-        col("DeletedItemCount").cast("long").alias("deleted_item_count"),
-        lit(None).cast("long").alias("total_deleted_item_size_bytes"),
-        col("LastLogonTime").alias("last_logon_time"),
-        col("LastLoggedOnUserAccount").alias("last_logon_user"),
-        col("IsArchiveMailbox").alias("is_archive_mailbox"),
-        col("_source_file"),
-        col("_dlt_ingested_at"),
-    )
-
-
-dlt.create_streaming_table(
-    name="exo_mailbox_statistics",
-    comment="Exchange Online mailbox statistics (size, item counts) across all tenants",
-    table_properties=SILVER_TABLE_PROPERTIES,
-)
-
-dlt.apply_changes(
-    target="exo_mailbox_statistics",
-    source="v_exo_mailbox_statistics",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
