@@ -706,73 +706,67 @@ dlt.apply_changes(
 
 
 # --- SharePoint Sites ---
+# Stream-static join: bronze.spo_sites (Phase 1 enumeration, streaming) LEFT JOIN
+# bronze.spo_site_usage (Phase 2 enrichment, static) to produce a single unified table.
 
 
 @dlt.view(name="v_spo_sites")
 def v_spo_sites():
-    df = spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
+    sites = spark.readStream.table("matoolkit_analytics.bronze.spo_sites")
+    details = spark.table("matoolkit_analytics.bronze.spo_site_usage")
 
-    return df.select(
-        concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
-        col("_tenant_key").alias("tenant_key"),
-        col("id"),
-        col("name"),
-        col("displayName").alias("display_name"),
-        col("webUrl").alias("web_url"),
-        col("description"),
-        col("createdDateTime").alias("created_at"),
-        col("lastModifiedDateTime").alias("last_modified_at"),
-        col("hostname"),
-        col("isPersonalSite").alias("is_personal_site"),
-        col("_source_file"),
-        col("_dlt_ingested_at"),
+    return sites.join(
+        details,
+        (sites._tenant_key == details._tenant_key)
+        & (sites.webUrl == details.siteUrl),
+        "left",
+    ).select(
+        # Phase 1 — Graph getAllSites
+        concat_ws("_", sites._tenant_key, sites.id).alias("_scd_key"),
+        sites._tenant_key.alias("tenant_key"),
+        sites.id,
+        sites.name,
+        sites.displayName.alias("display_name"),
+        sites.webUrl.alias("web_url"),
+        sites.description,
+        sites.createdDateTime.alias("created_at"),
+        sites.lastModifiedDateTime.alias("last_modified_at"),
+        sites.hostname,
+        sites.isPersonalSite.alias("is_personal_site"),
+        # Phase 2 — PnP enrichment: usage
+        details.storageUsed.alias("storage_used"),
+        details.storagePercentUsed.alias("storage_percent_used"),
+        details.storageQuota.cast("long").alias("storage_quota"),
+        details.totalItemCount.alias("total_item_count"),
+        details.listCount.alias("list_count"),
+        # Phase 2 — PnP enrichment: template & generation
+        details.webTemplate.alias("web_template"),
+        details.isModern.alias("is_modern"),
+        # Phase 2 — PnP enrichment: group & Teams
+        details.groupId.alias("group_id"),
+        details.isGroupConnected.alias("is_group_connected"),
+        details.isTeamsConnected.alias("is_teams_connected"),
+        # Phase 2 — PnP enrichment: hub site
+        details.hubSiteId.alias("hub_site_id"),
+        details.isHubSite.alias("is_hub_site"),
+        # Phase 2 — PnP enrichment: owner, lock state, language
+        details.owner,
+        details.readOnly.alias("read_only"),
+        details.language,
+        sites._source_file,
+        sites._dlt_ingested_at,
     )
 
 
 dlt.create_streaming_table(
     name="spo_sites",
-    comment="Cleaned SharePoint sites (metadata only) across all tenants",
+    comment="SharePoint sites with usage, template, group, hub, and assessment metadata across all tenants",
     table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 dlt.apply_changes(
     target="spo_sites",
     source="v_spo_sites",
-    keys=["_scd_key"],
-    sequence_by=col("_dlt_ingested_at"),
-    stored_as_scd_type=1,
-)
-
-
-# --- SharePoint Site Usage ---
-
-
-@dlt.view(name="v_spo_site_usage")
-def v_spo_site_usage():
-    df = spark.readStream.table("matoolkit_analytics.bronze.spo_site_usage")
-
-    return df.select(
-        concat_ws("_", col("_tenant_key"), col("siteUrl")).alias("_scd_key"),
-        col("_tenant_key").alias("tenant_key"),
-        col("siteUrl").alias("site_url"),
-        col("storageUsed").alias("storage_used"),
-        col("storagePercentUsed").alias("storage_percent_used"),
-        col("totalItemCount").alias("total_item_count"),
-        col("listCount").alias("list_count"),
-        col("_source_file"),
-        col("_dlt_ingested_at"),
-    )
-
-
-dlt.create_streaming_table(
-    name="spo_site_usage",
-    comment="SharePoint site storage and item counts across all tenants",
-    table_properties=SILVER_TABLE_PROPERTIES,
-)
-
-dlt.apply_changes(
-    target="spo_site_usage",
-    source="v_spo_site_usage",
     keys=["_scd_key"],
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,

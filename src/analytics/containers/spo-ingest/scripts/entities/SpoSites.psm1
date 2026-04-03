@@ -164,16 +164,43 @@ function Invoke-Phase2 {
                                     siteUrl = $siteUrl
                                 }
 
-                                $pnpSite = Get-PnPSite -Includes Usage -ErrorAction Stop
+                                $pnpSite = Get-PnPSite -Includes Usage, GroupId, HubSiteId, IsHubSite, IsTeamsConnected, Owner, ReadOnly -ErrorAction Stop
+                                $pnpWeb = Get-PnPWeb -Includes WebTemplate, Configuration, Language -ErrorAction Stop
+
+                                # Usage
                                 if ($pnpSite.Usage) {
                                     $record.storageUsed = $pnpSite.Usage.Storage
                                     $record.storagePercentUsed = $pnpSite.Usage.StoragePercentageUsed
+                                    $record.storageQuota = $pnpSite.Usage.StorageQuota
                                 }
 
                                 $lists = Get-PnPList -ErrorAction Stop
                                 $totalItems = ($lists | Measure-Object -Property ItemCount -Sum).Sum
                                 $record.totalItemCount = [long]$totalItems
                                 $record.listCount = $lists.Count
+
+                                # Template & generation
+                                $template = "$($pnpWeb.WebTemplate)#$($pnpWeb.Configuration)"
+                                $record.webTemplate = $template
+                                $modernTemplates = @('GROUP#0', 'SITEPAGEPUBLISHING#0', 'TEAMCHANNEL#0', 'TEAMCHANNEL#1')
+                                $record.isModern = $template -in $modernTemplates
+
+                                # M365 group association
+                                $gid = $pnpSite.GroupId
+                                $empty = [guid]::Empty
+                                $record.groupId = if ($gid -and $gid -ne $empty) { $gid.ToString() } else { $null }
+                                $record.isGroupConnected = [bool]($gid -and $gid -ne $empty)
+                                $record.isTeamsConnected = [bool]$pnpSite.IsTeamsConnected
+
+                                # Hub site
+                                $hid = $pnpSite.HubSiteId
+                                $record.hubSiteId = if ($hid -and $hid -ne $empty) { $hid.ToString() } else { $null }
+                                $record.isHubSite = [bool]$pnpSite.IsHubSite
+
+                                # Owner, lock state, language
+                                $record.owner = if ($pnpSite.Owner) { $pnpSite.Owner.Email } else { $null }
+                                $record.readOnly = [bool]$pnpSite.ReadOnly
+                                $record.language = $pnpWeb.Language
 
                                 $writer.WriteLine(($record | ConvertTo-Json -Compress -Depth 5))
                                 $processed++
