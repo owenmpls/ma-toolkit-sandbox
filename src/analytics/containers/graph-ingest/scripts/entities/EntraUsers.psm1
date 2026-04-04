@@ -40,10 +40,9 @@ function Invoke-Phase1 {
         'onPremisesDistinguishedName','onPremisesExtensionAttributes','onPremisesImmutableId'
         'onPremisesProvisioningErrors','onPremisesSamAccountName','onPremisesSecurityIdentifier'
         'onPremisesUserPrincipalName','serviceProvisioningErrors'
-        # Activity (requires AuditLog.Read.All on the app registration)
-        'signInActivity'
-        # OneDrive
-        'mySite'
+        # signInActivity requires AuditLog.Read.All — add to $select once
+        # the permission is granted on each tenant's app registration.
+        # mySite requires User.Read.All with admin consent — add when available.
     ) -join ','
     $uri = "/v1.0/users?`$select=$select&`$top=999"
 
