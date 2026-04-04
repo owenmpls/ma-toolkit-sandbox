@@ -66,7 +66,6 @@ def v_users():
         "employeeId": "string",
         "employeeType": "string",
         "employeeHireDate": "string",
-        "employeeOrgData": "string",
         "creationType": "string",
         "lastPasswordChangeDateTime": "string",
         "passwordPolicies": "string",
@@ -111,8 +110,6 @@ def v_users():
         col("employeeId").alias("employee_id"),
         col("employeeType").alias("employee_type"),
         col("employeeHireDate").alias("employee_hire_date"),
-        col("employeeOrgData.division").alias("employee_division"),
-        col("employeeOrgData.costCenter").alias("employee_cost_center"),
         # --- Account status ---
         col("accountEnabled").alias("account_enabled"),
         col("userType").alias("user_type"),
