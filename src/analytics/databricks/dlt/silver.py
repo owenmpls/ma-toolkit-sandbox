@@ -71,7 +71,6 @@ def v_users():
         "lastPasswordChangeDateTime": "string",
         "passwordPolicies": "string",
         "deletedDateTime": "string",
-        "showInAddressList": "boolean",
         "securityIdentifier": "string",
         "externalUserState": "string",
         "externalUserStateChangeDateTime": "string",
@@ -125,7 +124,6 @@ def v_users():
         col("lastPasswordChangeDateTime").alias("last_password_change"),
         col("passwordPolicies").alias("password_policies"),
         col("deletedDateTime").alias("deleted_at"),
-        col("showInAddressList").alias("show_in_address_list"),
         col("securityIdentifier").alias("security_identifier"),
         # --- Guest / external ---
         col("externalUserState").alias("external_user_state"),

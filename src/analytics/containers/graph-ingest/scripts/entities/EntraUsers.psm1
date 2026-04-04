@@ -31,7 +31,7 @@ function Invoke-Phase1 {
         # Account status
         'accountEnabled','userType','creationType','createdDateTime'
         'lastPasswordChangeDateTime','passwordPolicies'
-        'deletedDateTime','showInAddressList','securityIdentifier'
+        'deletedDateTime','securityIdentifier'
         # Guest / external
         'externalUserState','externalUserStateChangeDateTime','identities'
         # Licensing & sync
@@ -40,7 +40,7 @@ function Invoke-Phase1 {
         'onPremisesDistinguishedName','onPremisesExtensionAttributes','onPremisesImmutableId'
         'onPremisesProvisioningErrors','onPremisesSamAccountName','onPremisesSecurityIdentifier'
         'onPremisesUserPrincipalName','serviceProvisioningErrors'
-        # Activity
+        # Activity (requires AuditLog.Read.All on the app registration)
         'signInActivity'
         # OneDrive
         'mySite'
