@@ -49,85 +49,158 @@ SILVER_TABLE_PROPERTIES = {
 
 @dlt.view(name="v_users")
 def v_users():
-    return (
-        spark.readStream.table("matoolkit_analytics.bronze.entra_users")
-        .select(
-            concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
-            col("_tenant_key").alias("tenant_key"),
-            col("id"),
-            col("userPrincipalName").alias("user_principal_name"),
-            lower(trim(col("mail"))).alias("mail"),
-            col("displayName").alias("display_name"),
-            col("givenName").alias("given_name"),
-            col("surname"),
-            col("jobTitle").alias("job_title"),
-            col("department"),
-            col("officeLocation").alias("office_location"),
-            col("city"),
-            col("state"),
-            col("country"),
-            col("companyName").alias("company_name"),
-            col("accountEnabled").alias("account_enabled"),
-            col("userType").alias("user_type"),
-            col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
-            col("proxyAddresses").alias("proxy_addresses"),
-            col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
-            # --- On-premises attributes ---
-            col("onPremisesDomainName").alias("on_premises_domain_name"),
-            col("onPremisesDistinguishedName").alias("on_premises_distinguished_name"),
-            col("onPremisesImmutableId").alias("on_premises_immutable_id"),
-            col("onPremisesSamAccountName").alias("on_premises_sam_account_name"),
-            col("onPremisesSecurityIdentifier").alias("on_premises_security_identifier"),
-            col("onPremisesUserPrincipalName").alias("on_premises_user_principal_name"),
-            # --- Extension attributes (from onPremisesExtensionAttributes) ---
-            col("onPremisesExtensionAttributes.extensionAttribute1").alias("extension_attribute_1"),
-            col("onPremisesExtensionAttributes.extensionAttribute2").alias("extension_attribute_2"),
-            col("onPremisesExtensionAttributes.extensionAttribute3").alias("extension_attribute_3"),
-            col("onPremisesExtensionAttributes.extensionAttribute4").alias("extension_attribute_4"),
-            col("onPremisesExtensionAttributes.extensionAttribute5").alias("extension_attribute_5"),
-            col("onPremisesExtensionAttributes.extensionAttribute6").alias("extension_attribute_6"),
-            col("onPremisesExtensionAttributes.extensionAttribute7").alias("extension_attribute_7"),
-            col("onPremisesExtensionAttributes.extensionAttribute8").alias("extension_attribute_8"),
-            col("onPremisesExtensionAttributes.extensionAttribute9").alias("extension_attribute_9"),
-            col("onPremisesExtensionAttributes.extensionAttribute10").alias("extension_attribute_10"),
-            col("onPremisesExtensionAttributes.extensionAttribute11").alias("extension_attribute_11"),
-            col("onPremisesExtensionAttributes.extensionAttribute12").alias("extension_attribute_12"),
-            col("onPremisesExtensionAttributes.extensionAttribute13").alias("extension_attribute_13"),
-            col("onPremisesExtensionAttributes.extensionAttribute14").alias("extension_attribute_14"),
-            col("onPremisesExtensionAttributes.extensionAttribute15").alias("extension_attribute_15"),
-            # --- Provisioning errors ---
-            col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
-            col("serviceProvisioningErrors").alias("service_provisioning_errors"),
-            col("createdDateTime").alias("created_at"),
-            when(
-                expr(
-                    "exists(assignedLicenses, x -> x.skuId = '06ebc4ee-1bb5-47dd-8120-11324bc54e06')"
-                ),
-                lit("E5"),
-            )
-            .when(
-                expr(
-                    "exists(assignedLicenses, x -> x.skuId = '05e9a617-0261-4cee-bb44-138d3ef5d965')"
-                ),
-                lit("E3"),
-            )
-            .when(
-                expr(
-                    "exists(assignedLicenses, x -> x.skuId = '66b55226-6b4f-492c-910c-a3b7a3c9d993')"
-                ),
-                lit("F3"),
-            )
-            .when(
-                expr(
-                    "exists(assignedLicenses, x -> x.skuId = '18181a46-0d4e-45cd-891e-60aabd171b4e')"
-                ),
-                lit("E1"),
-            )
-            .otherwise(lit(None))
-            .alias("license_type"),
-            col("_source_file"),
-            col("_dlt_ingested_at"),
+    df = spark.readStream.table("matoolkit_analytics.bronze.entra_users")
+
+    # New columns may not exist in bronze yet — add as typed nulls
+    _new_cols = {
+        "mailNickname": "string",
+        "streetAddress": "string",
+        "postalCode": "string",
+        "usageLocation": "string",
+        "preferredLanguage": "string",
+        "preferredDataLocation": "string",
+        "businessPhones": "string",
+        "mobilePhone": "string",
+        "faxNumber": "string",
+        "otherMails": "string",
+        "employeeId": "string",
+        "employeeType": "string",
+        "employeeHireDate": "string",
+        "employeeOrgData": "string",
+        "creationType": "string",
+        "lastPasswordChangeDateTime": "string",
+        "passwordPolicies": "string",
+        "deletedDateTime": "string",
+        "showInAddressList": "boolean",
+        "securityIdentifier": "string",
+        "externalUserState": "string",
+        "externalUserStateChangeDateTime": "string",
+        "identities": "string",
+        "signInActivity": "string",
+        "mySite": "string",
+    }
+    for c, t in _new_cols.items():
+        if c not in df.columns:
+            df = df.withColumn(c, lit(None).cast(t))
+
+    return df.select(
+        concat_ws("_", col("_tenant_key"), col("id")).alias("_scd_key"),
+        col("_tenant_key").alias("tenant_key"),
+        col("id"),
+        col("userPrincipalName").alias("user_principal_name"),
+        lower(trim(col("mail"))).alias("mail"),
+        col("displayName").alias("display_name"),
+        col("givenName").alias("given_name"),
+        col("surname"),
+        col("mailNickname").alias("mail_nickname"),
+        # --- Organization ---
+        col("jobTitle").alias("job_title"),
+        col("department"),
+        col("officeLocation").alias("office_location"),
+        col("city"),
+        col("state"),
+        col("country"),
+        col("companyName").alias("company_name"),
+        col("streetAddress").alias("street_address"),
+        col("postalCode").alias("postal_code"),
+        col("usageLocation").alias("usage_location"),
+        col("preferredLanguage").alias("preferred_language"),
+        col("preferredDataLocation").alias("preferred_data_location"),
+        # --- Contact ---
+        col("businessPhones").alias("business_phones"),
+        col("mobilePhone").alias("mobile_phone"),
+        col("faxNumber").alias("fax_number"),
+        col("otherMails").alias("other_mails"),
+        # --- Employee ---
+        col("employeeId").alias("employee_id"),
+        col("employeeType").alias("employee_type"),
+        col("employeeHireDate").alias("employee_hire_date"),
+        col("employeeOrgData.division").alias("employee_division"),
+        col("employeeOrgData.costCenter").alias("employee_cost_center"),
+        # --- Account status ---
+        col("accountEnabled").alias("account_enabled"),
+        col("userType").alias("user_type"),
+        col("creationType").alias("creation_type"),
+        col("createdDateTime").alias("created_at"),
+        col("lastPasswordChangeDateTime").alias("last_password_change"),
+        col("passwordPolicies").alias("password_policies"),
+        col("deletedDateTime").alias("deleted_at"),
+        col("showInAddressList").alias("show_in_address_list"),
+        col("securityIdentifier").alias("security_identifier"),
+        # --- Guest / external ---
+        col("externalUserState").alias("external_user_state"),
+        col("externalUserStateChangeDateTime").alias(
+            "external_user_state_changed_at"
+        ),
+        col("identities"),
+        # --- Sign-in activity ---
+        col("signInActivity.lastSignInDateTime").alias(
+            "last_sign_in"
+        ),
+        col("signInActivity.lastNonInteractiveSignInDateTime").alias(
+            "last_non_interactive_sign_in"
+        ),
+        # --- Licensing ---
+        col("proxyAddresses").alias("proxy_addresses"),
+        when(
+            expr(
+                "exists(assignedLicenses, x -> x.skuId = '06ebc4ee-1bb5-47dd-8120-11324bc54e06')"
+            ),
+            lit("E5"),
         )
+        .when(
+            expr(
+                "exists(assignedLicenses, x -> x.skuId = '05e9a617-0261-4cee-bb44-138d3ef5d965')"
+            ),
+            lit("E3"),
+        )
+        .when(
+            expr(
+                "exists(assignedLicenses, x -> x.skuId = '66b55226-6b4f-492c-910c-a3b7a3c9d993')"
+            ),
+            lit("F3"),
+        )
+        .when(
+            expr(
+                "exists(assignedLicenses, x -> x.skuId = '18181a46-0d4e-45cd-891e-60aabd171b4e')"
+            ),
+            lit("E1"),
+        )
+        .otherwise(lit(None))
+        .alias("license_type"),
+        # --- On-premises sync ---
+        col("onPremisesSyncEnabled").alias("on_premises_sync_enabled"),
+        col("onPremisesLastSyncDateTime").alias("on_premises_last_sync"),
+        col("onPremisesDomainName").alias("on_premises_domain_name"),
+        col("onPremisesDistinguishedName").alias("on_premises_distinguished_name"),
+        col("onPremisesImmutableId").alias("on_premises_immutable_id"),
+        col("onPremisesSamAccountName").alias("on_premises_sam_account_name"),
+        col("onPremisesSecurityIdentifier").alias("on_premises_security_identifier"),
+        col("onPremisesUserPrincipalName").alias("on_premises_user_principal_name"),
+        # --- Extension attributes ---
+        col("onPremisesExtensionAttributes.extensionAttribute1").alias("extension_attribute_1"),
+        col("onPremisesExtensionAttributes.extensionAttribute2").alias("extension_attribute_2"),
+        col("onPremisesExtensionAttributes.extensionAttribute3").alias("extension_attribute_3"),
+        col("onPremisesExtensionAttributes.extensionAttribute4").alias("extension_attribute_4"),
+        col("onPremisesExtensionAttributes.extensionAttribute5").alias("extension_attribute_5"),
+        col("onPremisesExtensionAttributes.extensionAttribute6").alias("extension_attribute_6"),
+        col("onPremisesExtensionAttributes.extensionAttribute7").alias("extension_attribute_7"),
+        col("onPremisesExtensionAttributes.extensionAttribute8").alias("extension_attribute_8"),
+        col("onPremisesExtensionAttributes.extensionAttribute9").alias("extension_attribute_9"),
+        col("onPremisesExtensionAttributes.extensionAttribute10").alias("extension_attribute_10"),
+        col("onPremisesExtensionAttributes.extensionAttribute11").alias("extension_attribute_11"),
+        col("onPremisesExtensionAttributes.extensionAttribute12").alias("extension_attribute_12"),
+        col("onPremisesExtensionAttributes.extensionAttribute13").alias("extension_attribute_13"),
+        col("onPremisesExtensionAttributes.extensionAttribute14").alias("extension_attribute_14"),
+        col("onPremisesExtensionAttributes.extensionAttribute15").alias("extension_attribute_15"),
+        # --- Provisioning errors ---
+        col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
+        col("serviceProvisioningErrors").alias("service_provisioning_errors"),
+        # --- OneDrive ---
+        col("mySite").alias("my_site"),
+        # --- Metadata ---
+        col("_source_file"),
+        col("_dlt_ingested_at"),
     )
 
 
