@@ -31,7 +31,7 @@ function Invoke-Phase1 {
         # Account status
         'accountEnabled','userType','creationType','createdDateTime'
         'lastPasswordChangeDateTime','passwordPolicies'
-        'deletedDateTime','securityIdentifier'
+        'securityIdentifier'
         # Guest / external
         'externalUserState','externalUserStateChangeDateTime','identities'
         # Licensing & sync
@@ -40,9 +40,6 @@ function Invoke-Phase1 {
         'onPremisesDistinguishedName','onPremisesExtensionAttributes','onPremisesImmutableId'
         'onPremisesProvisioningErrors','onPremisesSamAccountName','onPremisesSecurityIdentifier'
         'onPremisesUserPrincipalName','serviceProvisioningErrors'
-        # signInActivity requires AuditLog.Read.All — add to $select once
-        # the permission is granted on each tenant's app registration.
-        # mySite requires User.Read.All with admin consent — add when available.
     ) -join ','
     $uri = "/v1.0/users?`$select=$select&`$top=999"
 

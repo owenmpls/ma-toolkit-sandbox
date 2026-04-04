@@ -70,13 +70,10 @@ def v_users():
         "creationType": "string",
         "lastPasswordChangeDateTime": "string",
         "passwordPolicies": "string",
-        "deletedDateTime": "string",
         "securityIdentifier": "string",
         "externalUserState": "string",
         "externalUserStateChangeDateTime": "string",
         "identities": "string",
-        "signInActivity": "string",
-        "mySite": "string",
     }
     for c, t in _new_cols.items():
         if c not in df.columns:
@@ -123,7 +120,6 @@ def v_users():
         col("createdDateTime").alias("created_at"),
         col("lastPasswordChangeDateTime").alias("last_password_change"),
         col("passwordPolicies").alias("password_policies"),
-        col("deletedDateTime").alias("deleted_at"),
         col("securityIdentifier").alias("security_identifier"),
         # --- Guest / external ---
         col("externalUserState").alias("external_user_state"),
@@ -131,13 +127,6 @@ def v_users():
             "external_user_state_changed_at"
         ),
         col("identities"),
-        # --- Sign-in activity ---
-        col("signInActivity.lastSignInDateTime").alias(
-            "last_sign_in"
-        ),
-        col("signInActivity.lastNonInteractiveSignInDateTime").alias(
-            "last_non_interactive_sign_in"
-        ),
         # --- Licensing ---
         col("proxyAddresses").alias("proxy_addresses"),
         when(
@@ -194,8 +183,6 @@ def v_users():
         # --- Provisioning errors ---
         col("onPremisesProvisioningErrors").alias("on_premises_provisioning_errors"),
         col("serviceProvisioningErrors").alias("service_provisioning_errors"),
-        # --- OneDrive ---
-        col("mySite").alias("my_site"),
         # --- Metadata ---
         col("_source_file"),
         col("_dlt_ingested_at"),
