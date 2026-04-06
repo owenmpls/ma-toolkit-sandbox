@@ -153,6 +153,10 @@ resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
 }
 
+resource orchestratorDeployContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
+  name: '${orchestratorStorage.name}/default/deployment'
+}
+
 resource orchestratorAppInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: orchestratorAiName
   location: location
@@ -189,18 +193,38 @@ resource orchestratorFunc 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: orchestratorPlan.id
     httpsOnly: true
+    publicNetworkAccess: 'Enabled'
     virtualNetworkSubnetId: !empty(orchestratorSubnetId) ? orchestratorSubnetId : null
-    vnetRouteAllEnabled: !empty(orchestratorSubnetId)
     siteConfig: {
+      vnetRouteAllEnabled: !empty(orchestratorSubnetId)
       appSettings: [
         { name: 'AzureWebJobsStorage__accountName', value: orchestratorStorageName }
-        { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'dotnet-isolated' }
+        { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: orchestratorAppInsights.properties.ConnectionString }
         { name: 'Ingestion__KeyVaultName', value: keyVaultName }
         { name: 'Ingestion__SubscriptionId', value: subscription().subscriptionId }
         { name: 'Ingestion__ResourceGroupName', value: resourceGroup().name }
         { name: 'Ingestion__ConfigPath', value: 'Config' }
       ]
+      minTlsVersion: '1.2'
+      ftpsState: 'Disabled'
+    }
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${orchestratorStorage.properties.primaryEndpoints.blob}deployment'
+          authentication: { type: 'SystemAssignedIdentity' }
+        }
+      }
+      scaleAndConcurrency: {
+        instanceMemoryMB: 2048
+        maximumInstanceCount: 100
+      }
+      runtime: {
+        name: 'dotnet-isolated'
+        version: '8.0'
+      }
     }
   }
 }
