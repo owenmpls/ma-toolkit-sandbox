@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'entra_provisioning_jobs'
-        ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'graph'

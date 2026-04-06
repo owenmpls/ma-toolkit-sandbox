@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'entra_sign_in_logs'
-        ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'graph'

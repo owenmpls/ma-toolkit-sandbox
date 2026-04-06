@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'exo_group_members'
-        ScheduleTier = 'core_enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'exo'

@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'teams_channels'
-        ScheduleTier = 'core_enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'graph'

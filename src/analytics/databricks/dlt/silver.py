@@ -2436,3 +2436,77 @@ dlt.apply_changes(
     sequence_by=col("_dlt_ingested_at"),
     stored_as_scd_type=1,
 )
+
+
+# =============================================================================
+# Orchestrator run history
+# =============================================================================
+
+
+@dlt.view(name="v_orchestrator_runs")
+def v_orchestrator_runs():
+    df = spark.readStream.table("matoolkit_analytics.bronze.orchestrator_runs")
+    return df.select(
+        col("run_id"),
+        col("job_name"),
+        col("trigger_type"),
+        col("triggered_by"),
+        col("status"),
+        col("started_at"),
+        col("completed_at"),
+        col("tenant_count").cast("int").alias("tenant_count"),
+        col("entity_count").cast("int").alias("entity_count"),
+        col("resolved_entities"),
+        col("resolved_tenants"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
+    )
+
+
+dlt.create_streaming_table(
+    name="orchestrator_runs",
+    comment="Ingestion orchestrator run history",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="orchestrator_runs",
+    source="v_orchestrator_runs",
+    keys=["run_id"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)
+
+
+@dlt.view(name="v_orchestrator_tasks")
+def v_orchestrator_tasks():
+    df = spark.readStream.table("matoolkit_analytics.bronze.orchestrator_tasks")
+    return df.select(
+        col("run_id"),
+        col("job_name"),
+        col("tenant_key"),
+        col("container_type"),
+        col("aca_execution_name"),
+        col("entities"),
+        col("status"),
+        col("started_at"),
+        col("completed_at"),
+        col("error_message"),
+        col("_source_file"),
+        col("_dlt_ingested_at"),
+    )
+
+
+dlt.create_streaming_table(
+    name="orchestrator_tasks",
+    comment="Ingestion orchestrator task history (per tenant x container)",
+    table_properties=SILVER_TABLE_PROPERTIES,
+)
+
+dlt.apply_changes(
+    target="orchestrator_tasks",
+    source="v_orchestrator_tasks",
+    keys=["run_id", "tenant_key", "container_type"],
+    sequence_by=col("_dlt_ingested_at"),
+    stored_as_scd_type=1,
+)

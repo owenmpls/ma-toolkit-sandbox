@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import col, lit, current_timestamp, regexp_extract
+from pyspark.sql.functions import col, current_timestamp, regexp_extract
 from pyspark.sql.types import ArrayType, BooleanType, StringType, StructField, StructType
 
 STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
@@ -20,15 +20,14 @@ BRONZE_TABLE_PROPERTIES = {
 }
 
 
-def _read_landing(
-    schedule_tier, entity_type, detail_type=None, file_pattern="*.jsonl", schema=None
-):
+def _read_landing(entity_type, detail_type=None, file_pattern="*.jsonl", schema=None):
     """Read JSONL files from the landing container using Auto Loader.
 
     Note: Do NOT set cloudFiles.schemaLocation or cloudFiles.schemaEvolutionMode
     here — DLT manages schema inference and checkpoints internally.
 
     Args:
+        entity_type: Entity name used as the top-level directory in the landing zone.
         detail_type: If set, read only from the Phase 2 sub-directory (e.g. "members")
                      to avoid mixing Phase 1 group listings with Phase 2 member records.
         file_pattern: Glob pattern for file names (default "*.jsonl"). Use a specific
@@ -40,9 +39,9 @@ def _read_landing(
                 Auto Loader picks them up automatically.
     """
     if detail_type:
-        landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/*/{detail_type}/"
+        landing_path = f"{BASE_PATH}/{entity_type}/*/*/{detail_type}/"
     else:
-        landing_path = f"{BASE_PATH}/{schedule_tier}/{entity_type}/*/"
+        landing_path = f"{BASE_PATH}/{entity_type}/*/"
     reader = (
         spark.readStream
         .format("cloudFiles")
@@ -61,7 +60,6 @@ def _read_landing(
         )
         .withColumn("_source_file", col("_metadata.file_path"))
         .withColumn("_source_system", lit("graph_api"))
-        .withColumn("_schedule_tier", lit(schedule_tier))
         .withColumn("_dlt_ingested_at", current_timestamp())
     )
 
@@ -79,7 +77,7 @@ def _read_landing(
 # ============================================================================
 
 
-# --- Core tier ---
+# --- Tier 1: Core entities ---
 
 @dlt.table(
     name="entra_users",
@@ -88,7 +86,7 @@ def _read_landing(
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_users():
-    return _read_landing("core", "entra_users")
+    return _read_landing("entra_users")
 
 
 @dlt.table(
@@ -98,7 +96,7 @@ def entra_users():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_groups():
-    return _read_landing("core", "entra_groups")
+    return _read_landing("entra_groups")
 
 
 @dlt.table(
@@ -108,7 +106,7 @@ def entra_groups():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_contacts():
-    return _read_landing("core", "entra_contacts")
+    return _read_landing("entra_contacts")
 
 
 @dlt.table(
@@ -118,7 +116,7 @@ def entra_contacts():
 )
 @dlt.expect("valid_record", "ExchangeGuid IS NOT NULL")
 def exo_mailboxes():
-    return _read_landing("core", "exo_mailboxes")
+    return _read_landing("exo_mailboxes")
 
 
 @dlt.table(
@@ -128,7 +126,7 @@ def exo_mailboxes():
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_contacts():
-    return _read_landing("core", "exo_contacts")
+    return _read_landing("exo_contacts")
 
 
 @dlt.table(
@@ -138,7 +136,7 @@ def exo_contacts():
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_mail_users():
-    return _read_landing("core", "exo_mail_users")
+    return _read_landing("exo_mail_users")
 
 
 @dlt.table(
@@ -148,7 +146,7 @@ def exo_mail_users():
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_distribution_groups():
-    return _read_landing("core", "exo_distribution_groups")
+    return _read_landing("exo_distribution_groups")
 
 
 @dlt.table(
@@ -158,7 +156,7 @@ def exo_distribution_groups():
 )
 @dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
 def exo_unified_groups():
-    return _read_landing("core", "exo_unified_groups")
+    return _read_landing("exo_unified_groups")
 
 
 @dlt.table(
@@ -168,7 +166,7 @@ def exo_unified_groups():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def spo_sites():
-    return _read_landing("core", "spo_sites", file_pattern="spo_sites_*.jsonl")
+    return _read_landing("spo_sites", file_pattern="spo_sites_*.jsonl")
 
 
 @dlt.table(
@@ -178,7 +176,7 @@ def spo_sites():
 )
 @dlt.expect("valid_record", "siteUrl IS NOT NULL")
 def spo_site_usage():
-    return _read_landing("core", "spo_sites", detail_type="usage")
+    return _read_landing("spo_sites", detail_type="usage")
 
 
 @dlt.table(
@@ -188,7 +186,7 @@ def spo_site_usage():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def teams_teams():
-    return _read_landing("core", "teams_teams", file_pattern="teams_teams_*.jsonl")
+    return _read_landing("teams_teams", file_pattern="teams_teams_*.jsonl")
 
 
 @dlt.table(
@@ -198,7 +196,7 @@ def teams_teams():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def teams_team_settings():
-    return _read_landing("core", "teams_teams", detail_type="settings")
+    return _read_landing("teams_teams", detail_type="settings")
 
 
 _ENTRA_DEVICES_SCHEMA = StructType(
@@ -268,7 +266,7 @@ _INTUNE_MANAGED_DEVICES_SCHEMA = StructType(
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_devices():
-    return _read_landing("core", "entra_devices", schema=_ENTRA_DEVICES_SCHEMA)
+    return _read_landing("entra_devices", schema=_ENTRA_DEVICES_SCHEMA)
 
 
 @dlt.table(
@@ -279,7 +277,7 @@ def entra_devices():
 @dlt.expect("valid_record", "id IS NOT NULL")
 def intune_managed_devices():
     return _read_landing(
-        "core", "intune_managed_devices", schema=_INTUNE_MANAGED_DEVICES_SCHEMA
+        "intune_managed_devices", schema=_INTUNE_MANAGED_DEVICES_SCHEMA
     )
 
 
@@ -315,7 +313,7 @@ _MDE_DEVICES_SCHEMA = StructType(
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def mde_devices():
-    return _read_landing("core", "mde_devices", schema=_MDE_DEVICES_SCHEMA)
+    return _read_landing("mde_devices", schema=_MDE_DEVICES_SCHEMA)
 
 
 @dlt.table(
@@ -325,7 +323,7 @@ def mde_devices():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_applications():
-    return _read_landing("core", "entra_applications")
+    return _read_landing("entra_applications")
 
 
 @dlt.table(
@@ -335,7 +333,7 @@ def entra_applications():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_service_principals():
-    return _read_landing("core", "entra_service_principals")
+    return _read_landing("entra_service_principals")
 
 
 _ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA = StructType(
@@ -358,11 +356,11 @@ _ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA = StructType(
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_delegated_permission_grants():
     return _read_landing(
-        "core", "entra_delegated_permission_grants", schema=_ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA
+        "entra_delegated_permission_grants", schema=_ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA
     )
 
 
-# --- Core enrichment tier ---
+# --- Tier 2: Core enrichment entities ---
 
 # Fallback schemas for detail_type entities whose landing subdirectories may
 # not exist (Phase 2 produced no output, or the ingest container hasn't run).
@@ -467,7 +465,6 @@ _TEAMS_CHANNEL_TABS_SCHEMA = StructType(
 @dlt.expect("valid_record", "groupId IS NOT NULL")
 def entra_group_members():
     return _read_landing(
-        "core_enrichment",
         "entra_group_members",
         detail_type="members",
         schema=_ENTRA_GROUP_MEMBERS_SCHEMA,
@@ -482,7 +479,6 @@ def entra_group_members():
 @dlt.expect("valid_record", "groupId IS NOT NULL")
 def entra_group_owners():
     return _read_landing(
-        "core_enrichment",
         "entra_group_owners",
         detail_type="owners",
         schema=_ENTRA_GROUP_OWNERS_SCHEMA,
@@ -497,7 +493,6 @@ def entra_group_owners():
 @dlt.expect("valid_record", "groupIdentity IS NOT NULL")
 def exo_group_members():
     return _read_landing(
-        "core_enrichment",
         "exo_group_members",
         detail_type="members",
         schema=_EXO_GROUP_MEMBERS_SCHEMA,
@@ -512,7 +507,6 @@ def exo_group_members():
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_channels():
     return _read_landing(
-        "core_enrichment",
         "teams_channels",
         detail_type="channels",
         schema=_TEAMS_CHANNELS_SCHEMA,
@@ -564,7 +558,6 @@ _ENTRA_APP_OWNERS_SCHEMA = StructType(
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_sp_assignments():
     return _read_landing(
-        "core_enrichment",
         "entra_sp_assignments",
         detail_type="assignments",
         schema=_ENTRA_SP_ASSIGNMENTS_SCHEMA,
@@ -579,7 +572,6 @@ def entra_sp_assignments():
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_sp_owners():
     return _read_landing(
-        "core_enrichment",
         "entra_sp_owners",
         detail_type="owners",
         schema=_ENTRA_SP_OWNERS_SCHEMA,
@@ -594,14 +586,13 @@ def entra_sp_owners():
 @dlt.expect("valid_record", "applicationId IS NOT NULL")
 def entra_app_owners():
     return _read_landing(
-        "core_enrichment",
         "entra_app_owners",
         detail_type="owners",
         schema=_ENTRA_APP_OWNERS_SCHEMA,
     )
 
 
-# --- Enrichment tier ---
+# --- Tier 3: Enrichment entities ---
 
 
 @dlt.table(
@@ -611,7 +602,7 @@ def entra_app_owners():
 )
 @dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
 def exo_mailbox_statistics():
-    return _read_landing("enrichment", "exo_mailbox_statistics", detail_type="statistics")
+    return _read_landing("exo_mailbox_statistics", detail_type="statistics")
 
 
 @dlt.table(
@@ -621,7 +612,7 @@ def exo_mailbox_statistics():
 )
 @dlt.expect("valid_record", "siteUrl IS NOT NULL")
 def spo_site_permissions():
-    return _read_landing("enrichment", "spo_site_permissions", detail_type="permissions")
+    return _read_landing("spo_site_permissions", detail_type="permissions")
 
 
 @dlt.table(
@@ -631,7 +622,7 @@ def spo_site_permissions():
 )
 @dlt.expect("valid_record", "exchangeGuid IS NOT NULL")
 def exo_mailbox_permissions():
-    return _read_landing("enrichment", "exo_mailbox_permissions", detail_type="permissions")
+    return _read_landing("exo_mailbox_permissions", detail_type="permissions")
 
 
 @dlt.table(
@@ -642,7 +633,6 @@ def exo_mailbox_permissions():
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_channel_members():
     return _read_landing(
-        "enrichment",
         "teams_channel_members",
         detail_type="members",
         schema=_TEAMS_CHANNEL_MEMBERS_SCHEMA,
@@ -657,7 +647,6 @@ def teams_channel_members():
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_installed_apps():
     return _read_landing(
-        "enrichment",
         "teams_installed_apps",
         detail_type="apps",
         schema=_TEAMS_INSTALLED_APPS_SCHEMA,
@@ -672,14 +661,13 @@ def teams_installed_apps():
 @dlt.expect("valid_record", "teamId IS NOT NULL")
 def teams_channel_tabs():
     return _read_landing(
-        "enrichment",
         "teams_channel_tabs",
         detail_type="tabs",
         schema=_TEAMS_CHANNEL_TABS_SCHEMA,
     )
 
 
-# --- Enrichment tier: Entra Applications ---
+# --- Tier 3: Entra Applications ---
 
 _ENTRA_APPLICATION_PERMISSION_GRANTS_SCHEMA = StructType(
     [
@@ -732,7 +720,6 @@ _ENTRA_DELEGATED_PERMISSION_CLASSIFICATIONS_SCHEMA = StructType(
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_application_permission_grants():
     return _read_landing(
-        "enrichment",
         "entra_application_permission_grants",
         detail_type="app_role_assignments",
         schema=_ENTRA_APPLICATION_PERMISSION_GRANTS_SCHEMA,
@@ -747,7 +734,6 @@ def entra_application_permission_grants():
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_sp_claims_mapping_policies():
     return _read_landing(
-        "enrichment",
         "entra_sp_claims_mapping_policies",
         detail_type="claims_policies",
         schema=_ENTRA_SP_CLAIMS_MAPPING_POLICIES_SCHEMA,
@@ -762,7 +748,6 @@ def entra_sp_claims_mapping_policies():
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_delegated_permission_classifications():
     return _read_landing(
-        "enrichment",
         "entra_delegated_permission_classifications",
         detail_type="perm_classifications",
         schema=_ENTRA_DELEGATED_PERMISSION_CLASSIFICATIONS_SCHEMA,
@@ -776,7 +761,7 @@ def entra_delegated_permission_classifications():
 )
 @dlt.expect("valid_record", "id IS NOT NULL")
 def entra_sign_in_logs():
-    return _read_landing("enrichment", "entra_sign_in_logs")
+    return _read_landing("entra_sign_in_logs")
 
 
 @dlt.table(
@@ -787,7 +772,6 @@ def entra_sign_in_logs():
 @dlt.expect("valid_record", "applicationId IS NOT NULL")
 def entra_app_proxy_config():
     return _read_landing(
-        "enrichment",
         "entra_app_proxy_config",
         detail_type="proxy_config",
         schema=_ENTRA_APP_PROXY_CONFIG_SCHEMA,
@@ -811,8 +795,28 @@ _ENTRA_PROVISIONING_JOBS_SCHEMA = StructType(
 @dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
 def entra_provisioning_jobs():
     return _read_landing(
-        "enrichment",
         "entra_provisioning_jobs",
         detail_type="sync_jobs",
         schema=_ENTRA_PROVISIONING_JOBS_SCHEMA,
     )
+
+
+# --- Orchestrator run history ---
+
+
+@dlt.table(
+    name="orchestrator_runs",
+    comment="Ingestion orchestrator run history",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+def orchestrator_runs():
+    return _read_landing("_orchestrator/runs")
+
+
+@dlt.table(
+    name="orchestrator_tasks",
+    comment="Ingestion orchestrator task history (per tenant x container dispatch)",
+    table_properties=BRONZE_TABLE_PROPERTIES,
+)
+def orchestrator_tasks():
+    return _read_landing("_orchestrator/tasks")

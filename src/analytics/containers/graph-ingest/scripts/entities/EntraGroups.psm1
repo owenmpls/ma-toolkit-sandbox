@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'entra_groups'
-        ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'graph'

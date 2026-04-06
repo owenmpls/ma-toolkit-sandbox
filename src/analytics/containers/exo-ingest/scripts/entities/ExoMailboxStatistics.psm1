@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'exo_mailbox_statistics'
-        ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'exo'

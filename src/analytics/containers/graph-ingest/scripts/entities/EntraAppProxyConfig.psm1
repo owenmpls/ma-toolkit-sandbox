@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'entra_app_proxy_config'
-        ScheduleTier = 'enrichment'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'graph'

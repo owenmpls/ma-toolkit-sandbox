@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'mde_devices'
-        ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'mde'

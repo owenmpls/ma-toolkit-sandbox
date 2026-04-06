@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IngestionOrchestrator.Functions/IngestionOrchestrator.Functions.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IngestionOrchestrator.Functions.Tests/IngestionOrchestrator.Functions.Tests.csproj" />
+  </Folder>
+</Solution>

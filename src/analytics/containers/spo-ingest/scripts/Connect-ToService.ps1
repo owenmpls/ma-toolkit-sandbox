@@ -1,12 +1,25 @@
 param(
-    [Parameter(Mandatory)][psobject]$TenantConfig,
+    [Parameter(Mandatory)][string]$TenantId,
+    [Parameter(Mandatory)][string]$ClientId,
+    [Parameter(Mandatory)][string]$Organization,
+    [Parameter(Mandatory)][string]$AdminUrl,
     [Parameter(Mandatory)][string]$CertificatePath
 )
 
-Import-Module (Join-Path $PSScriptRoot 'modules/StorageHelper.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'modules/StorageHelperRest.psm1') -Force
+
+# Configure storage auth from environment
+$script:StorageAuthMethod = $env:STORAGE_AUTH_METHOD ?? 'managed_identity'
+if ($script:StorageAuthMethod -eq 'service_principal') {
+    $spCertPath = Get-CertificateFromKeyVault -VaultName $env:KEYVAULT_NAME -CertName $env:STORAGE_SP_CERT_NAME
+    $script:StorageCertBytes = [System.IO.File]::ReadAllBytes($spCertPath)
+    $script:StorageSpTenantId = $env:STORAGE_SP_TENANT_ID
+    $script:StorageSpClientId = $env:STORAGE_SP_CLIENT_ID
+    Remove-CertificateFile -Path $spCertPath
+}
 
 # Set upload function reference for Invoke-Ingestion.ps1
-$script:UploadFunction = ${function:Write-ToAdls}
+$script:UploadFunction = ${function:Write-ToAdlsRest}
 
 # Load certificate bytes and export as Base64 for PnP
 $certBytes = [System.IO.File]::ReadAllBytes($CertificatePath)
@@ -20,19 +33,18 @@ $pfxBytes = $x509.Export(
 $certBase64 = [System.Convert]::ToBase64String($pfxBytes)
 
 # Connect to SharePoint Online admin site
-Connect-PnPOnline -Url $TenantConfig.admin_url `
-    -ClientId $TenantConfig.client_id `
-    -Tenant $TenantConfig.organization `
+Connect-PnPOnline -Url $AdminUrl `
+    -ClientId $ClientId `
+    -Tenant $Organization `
     -CertificateBase64Encoded $certBase64
 
-Write-Log "Connected to SharePoint Online for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
+Write-Log "Connected to SharePoint Online for tenant '$($env:TENANT_KEY)'" -TenantKey $env:TENANT_KEY
 
 # Store auth config for RunspacePool reconnection in Phase 2.
-# Uses $script: scope so Invoke-Ingestion.ps1 can pass it to entity Invoke-Phase2.
 $script:AuthConfig = @{
-    ClientId          = $TenantConfig.client_id
-    TenantDomain      = $TenantConfig.organization
+    ClientId          = $ClientId
+    TenantDomain      = $Organization
     CertificateBase64 = $certBase64
-    AdminUrl          = $TenantConfig.admin_url
+    AdminUrl          = $AdminUrl
 }
 $script:CertBytes = $certBytes

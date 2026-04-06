@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'entra_delegated_permission_grants'
-        ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'graph'

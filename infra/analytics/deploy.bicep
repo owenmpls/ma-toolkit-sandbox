@@ -128,15 +128,85 @@ module networkSecurityPerimeter 'modules/network-security-perimeter/main.bicep' 
   }
 }
 
-// --- Data Factory ---
-module dataFactory 'modules/data-factory/main.bicep' = {
-  name: 'analytics-data-factory'
-  params: {
-    factoryName: '${baseName}-analytics-adf-${environment}'
-    location: location
-    tags: tags
+// --- Ingestion Orchestrator Function App ---
+
+@description('Subnet resource ID for orchestrator VNet integration. Leave empty to skip.')
+param orchestratorSubnetId string = ''
+
+var orchestratorBaseName = '${baseName}-ingest-orch'
+var orchestratorStorageName = take(replace('${orchestratorBaseName}st', '-', ''), 24)
+var orchestratorFuncName = '${orchestratorBaseName}-func-${take(uniqueSuffix, 8)}'
+var orchestratorPlanName = '${orchestratorBaseName}-plan'
+var orchestratorAiName = '${orchestratorBaseName}-ai'
+var orchestratorTags = union(tags, { component: 'ingestion-orchestrator' })
+
+resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: orchestratorStorageName
+  location: location
+  tags: orchestratorTags
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+  properties: {
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
   }
 }
+
+resource orchestratorAppInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: orchestratorAiName
+  location: location
+  tags: orchestratorTags
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: !empty(logAnalyticsWorkspaceId) ? logAnalyticsWorkspaceId : null
+  }
+}
+
+resource orchestratorPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: orchestratorPlanName
+  location: location
+  tags: orchestratorTags
+  kind: 'functionapp'
+  sku: {
+    tier: 'FlexConsumption'
+    name: 'FC1'
+  }
+  properties: {
+    reserved: true
+  }
+}
+
+resource orchestratorFunc 'Microsoft.Web/sites@2023-12-01' = {
+  name: orchestratorFuncName
+  location: location
+  tags: orchestratorTags
+  kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    serverFarmId: orchestratorPlan.id
+    httpsOnly: true
+    virtualNetworkSubnetId: !empty(orchestratorSubnetId) ? orchestratorSubnetId : null
+    vnetRouteAllEnabled: !empty(orchestratorSubnetId)
+    siteConfig: {
+      appSettings: [
+        { name: 'AzureWebJobsStorage__accountName', value: orchestratorStorageName }
+        { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'dotnet-isolated' }
+        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: orchestratorAppInsights.properties.ConnectionString }
+        { name: 'Ingestion__KeyVaultName', value: keyVaultName }
+        { name: 'Ingestion__SubscriptionId', value: subscription().subscriptionId }
+        { name: 'Ingestion__ResourceGroupName', value: resourceGroup().name }
+        { name: 'Ingestion__ConfigPath', value: 'Config' }
+      ]
+    }
+  }
+}
+
+@description('Resource ID of the Log Analytics workspace for App Insights. Leave empty to skip workspace linkage.')
+param logAnalyticsWorkspaceId string = ''
 
 // --- ACA Environment ---
 resource acaEnvironment 'Microsoft.App/managedEnvironments@2025-01-01' = {
@@ -182,10 +252,10 @@ var jobConfigs = [
   }
 ]
 
+// ACA Jobs receive most env vars at start time from the orchestrator.
+// Only KEYVAULT_NAME is static (needed for cert loading at container startup).
 var commonEnvVars = [
   { name: 'KEYVAULT_NAME', value: keyVaultName }
-  { name: 'STORAGE_ACCOUNT_NAME', value: storageAccountName }
-  { name: 'LANDING_CONTAINER', value: 'landing' }
 ]
 
 module acaJobs 'modules/container-app-job/main.bicep' = [
@@ -313,33 +383,38 @@ resource databricksStorageRole 'Microsoft.Authorization/roleAssignments@2022-04-
   }
 }
 
-// Key Vault Secrets User for Data Factory (read tenant registry secrets)
-resource adfKvSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, 'data-factory', '4633458b-17de-408a-b874-0445c86b69e6')
-  scope: keyVault
+// --- RBAC for Ingestion Orchestrator ---
+
+// Storage Blob Data Contributor on analytics ADLS (write run/task JSONL)
+resource orchestratorStorageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(analyticsStorage.id, orchestratorFuncName, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  scope: analyticsStorage
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
-    principalId: dataFactory.outputs.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: orchestratorFunc.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
-// Contributor on ACA Jobs for Data Factory (start jobs via ARM) — created
-// via deploy-infra workflow step to avoid ARM RoleAssignmentExists errors
-// on redeploys (nested module role assignments cause irrecoverable failures).
-
-// Contributor on Databricks Workspace for Data Factory (trigger DLT pipelines)
-resource databricksWorkspaceRef 'Microsoft.Databricks/workspaces@2024-05-01' existing = {
-  name: '${baseName}-analytics-dbw-${environment}'
-  dependsOn: [databricksWorkspace]
+// Storage Blob Data Owner on orchestrator's own storage (AzureWebJobsStorage)
+resource orchestratorOwnStorageRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(orchestratorStorage.id, orchestratorFuncName, 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+  scope: orchestratorStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+    principalId: orchestratorFunc.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
 }
 
-resource adfDatabricksContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(databricksWorkspaceRef.id, 'data-factory', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-  scope: databricksWorkspaceRef
+// Contributor scoped to the resource group — gives the orchestrator access to
+// start and poll ACA Job executions via ARM API. In production, scope this to
+// individual ACA Job resources using existing resource references.
+resource orchestratorRgContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, orchestratorFuncName, 'b24988ac-6180-42a0-ab88-20f7382dd24c')
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-    principalId: dataFactory.outputs.principalId
+    principalId: orchestratorFunc.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -350,4 +425,5 @@ output acaEnvironmentId string = acaEnvironment.id
 output jobNames array = [acaJobs[0].outputs.jobName, acaJobs[1].outputs.jobName, acaJobs[2].outputs.jobName]
 output jobPrincipalIds array = [acaJobs[0].outputs.systemAssignedPrincipalId, acaJobs[1].outputs.systemAssignedPrincipalId, acaJobs[2].outputs.systemAssignedPrincipalId]
 output databricksWorkspaceUrl string = databricksWorkspace.outputs.workspaceUrl
-output dataFactoryName string = dataFactory.outputs.factoryName
+output orchestratorFunctionAppName string = orchestratorFunc.name
+output orchestratorPrincipalId string = orchestratorFunc.identity.principalId

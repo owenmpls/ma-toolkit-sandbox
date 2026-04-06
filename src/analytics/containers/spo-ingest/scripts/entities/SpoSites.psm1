@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'spo_sites'
-        ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $true
         ApiSource    = 'spo'

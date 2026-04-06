@@ -1,0 +1,41 @@
+{
+  "entities": [
+    { "name": "entra_users",                               "tier": 1, "container": "graph-ingest" },
+    { "name": "entra_groups",                              "tier": 1, "container": "graph-ingest" },
+    { "name": "entra_contacts",                            "tier": 1, "container": "graph-ingest" },
+    { "name": "entra_devices",                             "tier": 1, "container": "graph-ingest" },
+    { "name": "entra_applications",                        "tier": 1, "container": "graph-ingest" },
+    { "name": "entra_service_principals",                  "tier": 1, "container": "graph-ingest" },
+    { "name": "entra_delegated_permission_grants",         "tier": 1, "container": "graph-ingest" },
+    { "name": "intune_managed_devices",                    "tier": 1, "container": "graph-ingest" },
+    { "name": "mde_devices",                               "tier": 1, "container": "graph-ingest" },
+    { "name": "teams_teams",                               "tier": 1, "container": "graph-ingest" },
+    { "name": "exo_mailboxes",                             "tier": 1, "container": "exo-ingest" },
+    { "name": "exo_contacts",                              "tier": 1, "container": "exo-ingest" },
+    { "name": "exo_mail_users",                            "tier": 1, "container": "exo-ingest" },
+    { "name": "exo_distribution_groups",                   "tier": 1, "container": "exo-ingest" },
+    { "name": "exo_unified_groups",                        "tier": 1, "container": "exo-ingest" },
+    { "name": "spo_sites",                                 "tier": 1, "container": "spo-ingest" },
+
+    { "name": "entra_group_members",                       "tier": 2, "container": "graph-ingest" },
+    { "name": "entra_group_owners",                        "tier": 2, "container": "graph-ingest" },
+    { "name": "entra_sp_assignments",                      "tier": 2, "container": "graph-ingest" },
+    { "name": "entra_sp_owners",                           "tier": 2, "container": "graph-ingest" },
+    { "name": "entra_app_owners",                          "tier": 2, "container": "graph-ingest" },
+    { "name": "teams_channels",                            "tier": 2, "container": "graph-ingest" },
+    { "name": "exo_group_members",                         "tier": 2, "container": "exo-ingest" },
+
+    { "name": "entra_application_permission_grants",       "tier": 3, "container": "graph-ingest" },
+    { "name": "entra_sp_claims_mapping_policies",          "tier": 3, "container": "graph-ingest" },
+    { "name": "entra_delegated_permission_classifications", "tier": 3, "container": "graph-ingest" },
+    { "name": "entra_sign_in_logs",                        "tier": 3, "container": "graph-ingest" },
+    { "name": "entra_app_proxy_config",                    "tier": 3, "container": "graph-ingest" },
+    { "name": "entra_provisioning_jobs",                   "tier": 3, "container": "graph-ingest" },
+    { "name": "teams_channel_members",                     "tier": 3, "container": "graph-ingest" },
+    { "name": "teams_installed_apps",                      "tier": 3, "container": "graph-ingest" },
+    { "name": "teams_channel_tabs",                        "tier": 3, "container": "graph-ingest" },
+    { "name": "exo_mailbox_statistics",                    "tier": 3, "container": "exo-ingest" },
+    { "name": "exo_mailbox_permissions",                   "tier": 3, "container": "exo-ingest" },
+    { "name": "spo_site_permissions",                      "tier": 3, "container": "spo-ingest" }
+  ]
+}

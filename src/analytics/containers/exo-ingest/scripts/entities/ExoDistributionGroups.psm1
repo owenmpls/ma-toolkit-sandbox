@@ -1,7 +1,6 @@
 function Get-EntityConfig {
     return @{
         Name         = 'exo_distribution_groups'
-        ScheduleTier = 'core'
         Phase1       = $true
         Phase2       = $false
         ApiSource    = 'exo'
