@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import col, current_timestamp, regexp_extract
+from pyspark.sql.functions import col, current_timestamp, lit, regexp_extract
 from pyspark.sql.types import ArrayType, BooleanType, StringType, StructField, StructType
 
 STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
