@@ -13,7 +13,6 @@ public interface IContainerJobDispatcher
 {
     Task<string> StartJobAsync(string containerJobName, TenantConfig tenant,
         IReadOnlyList<string> entityNames, StorageConfig storage);
-    Task<string> GetExecutionStatusAsync(string containerJobName, string executionName);
 }
 
 public class ContainerJobDispatcher : IContainerJobDispatcher
@@ -88,21 +87,6 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
             containerJobName, executionName, tenant.TenantKey);
 
         return executionName;
-    }
-
-    public async Task<string> GetExecutionStatusAsync(string containerJobName, string executionName)
-    {
-        await SetAuthHeaderAsync();
-
-        var url = $"{ArmBaseUrl}/subscriptions/{_settings.SubscriptionId}/resourceGroups/{_settings.ResourceGroupName}" +
-                  $"/providers/Microsoft.App/jobs/{containerJobName}/executions/{executionName}?api-version={ArmApiVersion}";
-
-        var response = await _httpClient.GetAsync(url);
-        response.EnsureSuccessStatusCode();
-
-        var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
-        return doc.RootElement.GetProperty("properties").GetProperty("status").GetString()!;
     }
 
     private Dictionary<string, string> BuildEnvVars(TenantConfig tenant,

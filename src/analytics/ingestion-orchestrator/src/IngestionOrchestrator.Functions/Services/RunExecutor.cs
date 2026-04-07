@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using IngestionOrchestrator.Functions.Models;
 using Microsoft.Extensions.Logging;
 
@@ -6,28 +5,19 @@ namespace IngestionOrchestrator.Functions.Services;
 
 public interface IRunExecutor
 {
-    ConcurrentDictionary<string, ActiveRun> ActiveRuns { get; }
-
     Task ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
         IReadOnlyList<string>? tenantKeyOverrides = null,
         EntitySelector? entitySelectorOverride = null);
 }
 
-public record ActiveRun(string RunId, DateTimeOffset StartedAt);
-
 public class RunExecutor : IRunExecutor
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan PollTimeout = TimeSpan.FromHours(8);
-
     private readonly IEntityResolver _entityResolver;
     private readonly ITenantResolver _tenantResolver;
     private readonly IContainerJobDispatcher _dispatcher;
     private readonly IRunHistoryWriter _historyWriter;
     private readonly IConfigLoader _configLoader;
     private readonly ILogger<RunExecutor> _logger;
-
-    public ConcurrentDictionary<string, ActiveRun> ActiveRuns { get; } = new();
 
     public RunExecutor(
         IEntityResolver entityResolver,
@@ -75,161 +65,68 @@ public class RunExecutor : IRunExecutor
             return;
         }
 
-        // Track active run
-        var activeRun = new ActiveRun(runId, startedAt);
-        if (!ActiveRuns.TryAdd(job.Name, activeRun))
+        // Group entities by container type
+        var entityGroups = entities.GroupBy(e => e.Container)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.Name).ToList());
+
+        _logger.LogInformation(
+            "Run {RunId} for job {Job}: dispatching {TaskCount} container jobs across {TenantCount} tenants ({EntityCount} entities)",
+            runId, job.Name, tenants.Count * entityGroups.Count, tenants.Count, entities.Count);
+
+        // Dispatch container jobs
+        var taskRecords = new List<TaskRecord>();
+
+        foreach (var tenant in tenants)
         {
-            _logger.LogWarning("Job {Job} skipped — run {ActiveRun} still active",
-                job.Name, ActiveRuns[job.Name].RunId);
-
-            await _historyWriter.WriteRunAsync(new RunRecord(
-                runId, job.Name, triggerType, triggeredBy, "skipped",
-                startedAt, DateTimeOffset.UtcNow,
-                tenants.Count, entities.Count,
-                entities.Select(e => e.Name).ToList(),
-                tenants.Select(t => t.TenantKey).ToList()));
-            return;
-        }
-
-        try
-        {
-            _logger.LogInformation(
-                "Starting run {RunId} for job {Job}: {TenantCount} tenants, {EntityCount} entities",
-                runId, job.Name, tenants.Count, entities.Count);
-
-            // Write initial run record
-            await _historyWriter.WriteRunAsync(new RunRecord(
-                runId, job.Name, triggerType, triggeredBy, "running",
-                startedAt, null, tenants.Count, entities.Count,
-                entities.Select(e => e.Name).ToList(),
-                tenants.Select(t => t.TenantKey).ToList()));
-
-            // Group entities by container type
-            var entityGroups = entities.GroupBy(e => e.Container)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.Name).ToList());
-
-            // Dispatch container jobs
-            var taskRecords = new List<TaskRecord>();
-            var dispatched = new List<(TaskRecord Record, string ContainerJobName, string ExecutionName)>();
-
-            foreach (var tenant in tenants)
+            foreach (var (containerType, entityNames) in entityGroups)
             {
-                foreach (var (containerType, entityNames) in entityGroups)
+                var taskRecord = new TaskRecord(
+                    runId, job.Name, tenant.TenantKey, containerType,
+                    null, entityNames, "dispatched",
+                    DateTimeOffset.UtcNow, null, null);
+
+                try
                 {
-                    var taskRecord = new TaskRecord(
-                        runId, job.Name, tenant.TenantKey, containerType,
-                        null, entityNames, "dispatched",
-                        DateTimeOffset.UtcNow, null, null);
+                    var executionName = await _dispatcher.StartJobAsync(
+                        containerType, tenant, entityNames, _configLoader.Storage);
 
-                    try
-                    {
-                        var executionName = await _dispatcher.StartJobAsync(
-                            containerType, tenant, entityNames, _configLoader.Storage);
+                    taskRecord = taskRecord with { AcaExecutionName = executionName };
 
-                        taskRecord = taskRecord with
-                        {
-                            AcaExecutionName = executionName,
-                            Status = "running"
-                        };
-                        dispatched.Add((taskRecord, containerType, executionName));
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to start {Container} for tenant {Tenant}",
-                            containerType, tenant.TenantKey);
-                        taskRecord = taskRecord with
-                        {
-                            Status = "failed",
-                            CompletedAt = DateTimeOffset.UtcNow,
-                            ErrorMessage = ex.Message
-                        };
-                    }
-
-                    taskRecords.Add(taskRecord);
+                    _logger.LogInformation(
+                        "Dispatched {Container} for tenant {Tenant} (execution: {Execution})",
+                        containerType, tenant.TenantKey, executionName);
                 }
-            }
-
-            // Poll for completion
-            var pending = dispatched.ToList();
-            var deadline = DateTimeOffset.UtcNow + PollTimeout;
-
-            while (pending.Count > 0 && DateTimeOffset.UtcNow < deadline)
-            {
-                await Task.Delay(PollInterval);
-
-                for (int i = pending.Count - 1; i >= 0; i--)
+                catch (Exception ex)
                 {
-                    var (record, containerJobName, executionName) = pending[i];
-                    try
+                    _logger.LogError(ex, "Failed to start {Container} for tenant {Tenant}",
+                        containerType, tenant.TenantKey);
+                    taskRecord = taskRecord with
                     {
-                        var status = await _dispatcher.GetExecutionStatusAsync(
-                            containerJobName, executionName);
-
-                        if (status is "Succeeded" or "Failed")
-                        {
-                            var idx = taskRecords.FindIndex(t =>
-                                t.TenantKey == record.TenantKey &&
-                                t.ContainerType == record.ContainerType);
-
-                            taskRecords[idx] = record with
-                            {
-                                Status = status == "Succeeded" ? "succeeded" : "failed",
-                                CompletedAt = DateTimeOffset.UtcNow,
-                                ErrorMessage = status == "Failed"
-                                    ? $"ACA Job execution {executionName} failed" : null
-                            };
-
-                            pending.RemoveAt(i);
-                            _logger.LogInformation(
-                                "Task {Container}/{Tenant} completed: {Status}",
-                                containerJobName, record.TenantKey, status);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Error polling {Container}/{Tenant}",
-                            containerJobName, record.TenantKey);
-                    }
+                        Status = "dispatch_failed",
+                        CompletedAt = DateTimeOffset.UtcNow,
+                        ErrorMessage = ex.Message
+                    };
                 }
+
+                taskRecords.Add(taskRecord);
             }
-
-            // Mark timed-out tasks as failed
-            foreach (var (record, containerJobName, _) in pending)
-            {
-                var idx = taskRecords.FindIndex(t =>
-                    t.TenantKey == record.TenantKey &&
-                    t.ContainerType == record.ContainerType);
-                taskRecords[idx] = record with
-                {
-                    Status = "failed",
-                    CompletedAt = DateTimeOffset.UtcNow,
-                    ErrorMessage = "Timed out waiting for ACA Job completion"
-                };
-            }
-
-            // Write task records
-            await _historyWriter.WriteTasksAsync(runId, taskRecords);
-
-            // Write final run record
-            var hasFailures = taskRecords.Any(t => t.Status == "failed");
-            var allFailed = taskRecords.All(t => t.Status == "failed");
-            var finalStatus = allFailed ? "failed"
-                : hasFailures ? "completed_with_errors"
-                : "completed";
-
-            await _historyWriter.WriteRunAsync(new RunRecord(
-                runId, job.Name, triggerType, triggeredBy, finalStatus,
-                startedAt, DateTimeOffset.UtcNow,
-                tenants.Count, entities.Count,
-                entities.Select(e => e.Name).ToList(),
-                tenants.Select(t => t.TenantKey).ToList()));
-
-            _logger.LogInformation("Run {RunId} for job {Job} finished: {Status}",
-                runId, job.Name, finalStatus);
         }
-        finally
-        {
-            ActiveRuns.TryRemove(job.Name, out _);
-        }
+
+        var dispatched = taskRecords.Count(t => t.Status == "dispatched");
+        var failed = taskRecords.Count(t => t.Status == "dispatch_failed");
+
+        _logger.LogInformation(
+            "Run {RunId} for job {Job}: dispatched {Dispatched} jobs ({Failed} failed to dispatch)",
+            runId, job.Name, dispatched, failed);
+
+        // Write run history (best-effort — containers write their own per-entity manifests)
+        await _historyWriter.WriteRunAsync(new RunRecord(
+            runId, job.Name, triggerType, triggeredBy, "dispatched",
+            startedAt, DateTimeOffset.UtcNow,
+            tenants.Count, entities.Count,
+            entities.Select(e => e.Name).ToList(),
+            tenants.Select(t => t.TenantKey).ToList()));
+
+        await _historyWriter.WriteTasksAsync(runId, taskRecords);
     }
 }

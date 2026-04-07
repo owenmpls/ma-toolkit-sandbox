@@ -1,0 +1,7 @@
+{
+  "account_url": "https://stanalytics.dfs.core.windows.net",
+  "container": "landing",
+  "auth": {
+    "method": "managed_identity"
+  }
+}

@@ -1,0 +1,101 @@
+[
+  {
+    "name": "IngestionTimer",
+    "scriptFile": "IngestionOrchestrator.Functions.dll",
+    "entryPoint": "IngestionOrchestrator.Functions.Functions.IngestionTimerFunction.RunAsync",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "timer",
+        "direction": "In",
+        "type": "timerTrigger",
+        "schedule": "0 * * * * *",
+        "properties": {}
+      }
+    ]
+  },
+  {
+    "name": "ManualRun",
+    "scriptFile": "IngestionOrchestrator.Functions.dll",
+    "entryPoint": "IngestionOrchestrator.Functions.Functions.ManualRunFunction.RunAsync",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Function",
+        "methods": [
+          "post"
+        ],
+        "route": "run",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Preview",
+    "scriptFile": "IngestionOrchestrator.Functions.dll",
+    "entryPoint": "IngestionOrchestrator.Functions.Functions.PreviewFunction.RunAsync",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Function",
+        "methods": [
+          "post"
+        ],
+        "route": "preview",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Config",
+    "scriptFile": "IngestionOrchestrator.Functions.dll",
+    "entryPoint": "IngestionOrchestrator.Functions.Functions.PreviewFunction.GetConfig",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Function",
+        "methods": [
+          "get"
+        ],
+        "route": "config",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  }
+]

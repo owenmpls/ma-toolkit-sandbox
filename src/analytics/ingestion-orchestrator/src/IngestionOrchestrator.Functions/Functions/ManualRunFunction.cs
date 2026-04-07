@@ -78,13 +78,13 @@ public class ManualRunFunction
                 ExcludeEntities: body.ExcludeEntities);
         }
 
-        // Execute synchronously — Flex Consumption may terminate the instance
-        // after the HTTP response returns, so fire-and-forget doesn't work.
+        // Dispatch ACA Jobs and return. Containers run independently —
+        // the orchestrator doesn't poll or wait for completion.
         await _runExecutor.ExecuteAsync(
             job, "manual", triggeredBy,
             body.TenantKeys, entityOverride);
 
-        return new OkObjectResult(new { job_name = job.Name, status = "completed" });
+        return new OkObjectResult(new { job_name = job.Name, status = "dispatched" });
     }
 
     private record ManualRunRequest(
