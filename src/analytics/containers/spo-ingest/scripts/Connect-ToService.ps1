@@ -8,16 +8,6 @@ param(
 
 Import-Module (Join-Path $PSScriptRoot 'modules/StorageHelperRest.psm1') -Force
 
-# Configure storage auth from environment
-$script:StorageAuthMethod = $env:STORAGE_AUTH_METHOD ?? 'managed_identity'
-if ($script:StorageAuthMethod -eq 'service_principal') {
-    $spCertPath = Get-CertificateFromKeyVault -VaultName $env:KEYVAULT_NAME -CertName $env:STORAGE_SP_CERT_NAME
-    $script:StorageCertBytes = [System.IO.File]::ReadAllBytes($spCertPath)
-    $script:StorageSpTenantId = $env:STORAGE_SP_TENANT_ID
-    $script:StorageSpClientId = $env:STORAGE_SP_CLIENT_ID
-    Remove-CertificateFile -Path $spCertPath
-}
-
 # Set upload function reference for Invoke-Ingestion.ps1
 $script:UploadFunction = ${function:Write-ToAdlsRest}
 
