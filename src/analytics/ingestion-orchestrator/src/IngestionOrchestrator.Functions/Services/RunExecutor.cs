@@ -15,7 +15,7 @@ public class RunExecutor : IRunExecutor
     private readonly IEntityResolver _entityResolver;
     private readonly ITenantResolver _tenantResolver;
     private readonly IContainerJobDispatcher _dispatcher;
-    private readonly IRunHistoryWriter _historyWriter;
+    private readonly IRunTracker _runTracker;
     private readonly IConfigLoader _configLoader;
     private readonly ILogger<RunExecutor> _logger;
 
@@ -23,14 +23,14 @@ public class RunExecutor : IRunExecutor
         IEntityResolver entityResolver,
         ITenantResolver tenantResolver,
         IContainerJobDispatcher dispatcher,
-        IRunHistoryWriter historyWriter,
+        IRunTracker runTracker,
         IConfigLoader configLoader,
         ILogger<RunExecutor> logger)
     {
         _entityResolver = entityResolver;
         _tenantResolver = tenantResolver;
         _dispatcher = dispatcher;
-        _historyWriter = historyWriter;
+        _runTracker = runTracker;
         _configLoader = configLoader;
         _logger = logger;
     }
@@ -73,24 +73,27 @@ public class RunExecutor : IRunExecutor
             "Run {RunId} for job {Job}: dispatching {TaskCount} container jobs across {TenantCount} tenants ({EntityCount} entities)",
             runId, job.Name, tenants.Count * entityGroups.Count, tenants.Count, entities.Count);
 
-        // Dispatch container jobs
-        var taskRecords = new List<TaskRecord>();
+        // Dispatch container jobs and build tracked tasks
+        var trackedTasks = new List<TrackedTask>();
 
         foreach (var tenant in tenants)
         {
             foreach (var (containerType, entityNames) in entityGroups)
             {
-                var taskRecord = new TaskRecord(
-                    runId, job.Name, tenant.TenantKey, containerType,
-                    null, entityNames, "dispatched",
-                    DateTimeOffset.UtcNow, null, null);
+                var task = new TrackedTask
+                {
+                    ContainerJobName = containerType,
+                    TenantKey = tenant.TenantKey,
+                    ContainerType = containerType,
+                    Entities = entityNames
+                };
 
                 try
                 {
                     var executionName = await _dispatcher.StartJobAsync(
                         containerType, tenant, entityNames, _configLoader.Storage);
 
-                    taskRecord = taskRecord with { AcaExecutionName = executionName };
+                    task.AcaExecutionName = executionName;
 
                     _logger.LogInformation(
                         "Dispatched {Container} for tenant {Tenant} (execution: {Execution})",
@@ -100,33 +103,33 @@ public class RunExecutor : IRunExecutor
                 {
                     _logger.LogError(ex, "Failed to start {Container} for tenant {Tenant}",
                         containerType, tenant.TenantKey);
-                    taskRecord = taskRecord with
-                    {
-                        Status = "dispatch_failed",
-                        CompletedAt = DateTimeOffset.UtcNow,
-                        ErrorMessage = ex.Message
-                    };
+                    task.Status = "dispatch_failed";
+                    task.CompletedAt = DateTimeOffset.UtcNow;
+                    task.ErrorMessage = ex.Message;
                 }
 
-                taskRecords.Add(taskRecord);
+                trackedTasks.Add(task);
             }
         }
 
-        var dispatched = taskRecords.Count(t => t.Status == "dispatched");
-        var failed = taskRecords.Count(t => t.Status == "dispatch_failed");
+        var dispatched = trackedTasks.Count(t => t.Status == "dispatched");
+        var failed = trackedTasks.Count(t => t.Status == "dispatch_failed");
 
         _logger.LogInformation(
             "Run {RunId} for job {Job}: dispatched {Dispatched} jobs ({Failed} failed to dispatch)",
             runId, job.Name, dispatched, failed);
 
-        // Write run history (best-effort — containers write their own per-entity manifests)
-        await _historyWriter.WriteRunAsync(new RunRecord(
-            runId, job.Name, triggerType, triggeredBy, "dispatched",
-            startedAt, DateTimeOffset.UtcNow,
-            tenants.Count, entities.Count,
-            entities.Select(e => e.Name).ToList(),
-            tenants.Select(t => t.TenantKey).ToList()));
-
-        await _historyWriter.WriteTasksAsync(runId, taskRecords);
+        // Register with tracker — timer will check status on subsequent ticks
+        _runTracker.Track(new TrackedRun
+        {
+            RunId = runId,
+            JobName = job.Name,
+            TriggerType = triggerType,
+            TriggeredBy = triggeredBy,
+            StartedAt = startedAt,
+            ResolvedEntities = entities.Select(e => e.Name).ToList(),
+            ResolvedTenants = tenants.Select(t => t.TenantKey).ToList(),
+            Tasks = trackedTasks
+        });
     }
 }

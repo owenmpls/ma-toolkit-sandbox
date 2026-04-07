@@ -27,6 +27,7 @@ builder.Services.AddSingleton<IEntityResolver, EntityResolver>();
 builder.Services.AddSingleton<ITenantResolver, TenantResolver>();
 builder.Services.AddSingleton<IRunHistoryWriter, RunHistoryWriter>();
 builder.Services.AddHttpClient<IContainerJobDispatcher, ContainerJobDispatcher>();
+builder.Services.AddSingleton<IRunTracker, RunTracker>();
 builder.Services.AddSingleton<IRunExecutor, RunExecutor>();
 
 builder.Services.AddApplicationInsightsTelemetryWorkerService();

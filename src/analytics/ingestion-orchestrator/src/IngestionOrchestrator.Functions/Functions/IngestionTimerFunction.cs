@@ -9,15 +9,18 @@ public class IngestionTimerFunction
 {
     private readonly IConfigLoader _configLoader;
     private readonly IRunExecutor _runExecutor;
+    private readonly IRunTracker _runTracker;
     private readonly ILogger<IngestionTimerFunction> _logger;
 
     public IngestionTimerFunction(
         IConfigLoader configLoader,
         IRunExecutor runExecutor,
+        IRunTracker runTracker,
         ILogger<IngestionTimerFunction> logger)
     {
         _configLoader = configLoader;
         _runExecutor = runExecutor;
+        _runTracker = runTracker;
         _logger = logger;
     }
 
@@ -25,6 +28,10 @@ public class IngestionTimerFunction
     public async Task RunAsync(
         [TimerTrigger("0 * * * * *")] TimerInfo timer)
     {
+        // 1. Check status of previously dispatched runs
+        await _runTracker.CheckActiveRunsAsync();
+
+        // 2. Evaluate cron schedules for new dispatches
         var now = DateTime.UtcNow;
         var windowStart = now.AddSeconds(-30);
 
@@ -41,11 +48,7 @@ public class IngestionTimerFunction
                 if (nextOccurrence == null || nextOccurrence > now)
                     continue;
 
-                _logger.LogInformation("Job {Job} is due, starting execution", job.Name);
-
-                // Await execution — Flex Consumption may terminate the instance after
-                // the function returns, so fire-and-forget doesn't work. The timer
-                // function timeout (default 30 min) bounds the total execution time.
+                _logger.LogInformation("Job {Job} is due, dispatching", job.Name);
                 await _runExecutor.ExecuteAsync(job, "scheduled", triggeredBy: null);
             }
             catch (Exception ex)
