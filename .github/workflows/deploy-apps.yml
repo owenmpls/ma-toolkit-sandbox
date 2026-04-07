@@ -15,6 +15,7 @@ on:
           - cloud-worker
           - hybrid-worker
           - analytics
+          - ingestion-orchestrator
           - tenant-registry
 
   push:
@@ -50,6 +51,7 @@ jobs:
       hybrid_worker: ${{ steps.filter.outputs.hybrid_worker }}
       shared: ${{ steps.filter.outputs.shared }}
       analytics: ${{ steps.filter.outputs.analytics }}
+      ingestion_orchestrator: ${{ steps.filter.outputs.ingestion_orchestrator }}
       tenant_registry: ${{ steps.filter.outputs.tenant_registry }}
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +73,9 @@ jobs:
               - 'src/automation/shared/**'
             analytics:
               - 'src/analytics/**'
+            ingestion_orchestrator:
+              - 'src/analytics/ingestion-orchestrator/**'
+              - 'config/ingestion/**'
             tenant_registry:
               - 'config/tenant-registry.json'
 
@@ -89,6 +94,7 @@ jobs:
       deploy_cloud_worker: ${{ steps.resolve.outputs.cloud_worker }}
       deploy_hybrid_worker: ${{ steps.resolve.outputs.hybrid_worker }}
       deploy_analytics: ${{ steps.resolve.outputs.analytics }}
+      deploy_ingestion_orchestrator: ${{ steps.resolve.outputs.ingestion_orchestrator }}
       deploy_tenant_registry: ${{ steps.resolve.outputs.tenant_registry }}
     steps:
       - name: Checkout
@@ -123,6 +129,7 @@ jobs:
             echo "cloud_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "cloud-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "hybrid_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "hybrid-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "analytics=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "analytics" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "ingestion_orchestrator=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "ingestion-orchestrator" ] || [ "$COMPONENT" = "analytics" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "tenant_registry=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "tenant-registry" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           else
             # Push trigger — deploy components whose files changed (or all .NET if shared changed)
@@ -133,6 +140,7 @@ jobs:
             echo "cloud_worker=$( [ "${{ needs.changes.outputs.cloud_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "hybrid_worker=$( [ "${{ needs.changes.outputs.hybrid_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "analytics=$( [ "${{ needs.changes.outputs.analytics }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "ingestion_orchestrator=$( [ "${{ needs.changes.outputs.ingestion_orchestrator }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "tenant_registry=$( [ "${{ needs.changes.outputs.tenant_registry }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           fi
 
@@ -146,18 +154,21 @@ jobs:
           dotnet restore src/automation/scheduler/src/Scheduler.Functions/
           dotnet restore src/automation/orchestrator/src/Orchestrator.Functions/
           dotnet restore src/automation/admin-api/src/AdminApi.Functions/
+          dotnet restore src/analytics/ingestion-orchestrator/src/IngestionOrchestrator.Functions/
 
       - name: Build all projects
         run: |
           dotnet build src/automation/scheduler/src/Scheduler.Functions/ --no-restore -c Release
           dotnet build src/automation/orchestrator/src/Orchestrator.Functions/ --no-restore -c Release
           dotnet build src/automation/admin-api/src/AdminApi.Functions/ --no-restore -c Release
+          dotnet build src/analytics/ingestion-orchestrator/src/IngestionOrchestrator.Functions/ --no-restore -c Release
 
       - name: Run tests
         run: |
           dotnet test src/automation/shared/MaToolkit.Automation.Shared.Tests/ -c Release --no-build --verbosity normal || true
           dotnet test src/automation/admin-api/tests/AdminApi.Functions.Tests/ -c Release --verbosity normal
           dotnet test src/automation/orchestrator/tests/Orchestrator.Functions.Tests/ -c Release --verbosity normal
+          dotnet test src/analytics/ingestion-orchestrator/tests/IngestionOrchestrator.Functions.Tests/ -c Release --verbosity normal
 
       - name: Publish scheduler
         if: steps.resolve.outputs.scheduler == 'true'
@@ -210,6 +221,24 @@ jobs:
           name: admin-api
           path: admin-api.zip
 
+      - name: Publish ingestion-orchestrator
+        if: steps.resolve.outputs.ingestion_orchestrator == 'true'
+        run: |
+          dotnet publish src/analytics/ingestion-orchestrator/src/IngestionOrchestrator.Functions/ \
+            -c Release --no-build -o publish/ingestion-orchestrator
+          cp config/ingestion/*.json publish/ingestion-orchestrator/Config/
+
+      - name: Package ingestion-orchestrator artifact
+        if: steps.resolve.outputs.ingestion_orchestrator == 'true'
+        run: cd publish/ingestion-orchestrator && zip -r ../../ingestion-orchestrator.zip .
+
+      - name: Upload ingestion-orchestrator artifact
+        if: steps.resolve.outputs.ingestion_orchestrator == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-orchestrator
+          path: ingestion-orchestrator.zip
+
   # ---------------------------------------------------------------
   # Deploy Function Apps
   # ---------------------------------------------------------------
@@ -221,7 +250,8 @@ jobs:
       always() && needs.build-and-test.result == 'success' &&
       (needs.build-and-test.outputs.deploy_scheduler == 'true' ||
        needs.build-and-test.outputs.deploy_orchestrator == 'true' ||
-       needs.build-and-test.outputs.deploy_admin_api == 'true')
+       needs.build-and-test.outputs.deploy_admin_api == 'true' ||
+       needs.build-and-test.outputs.deploy_ingestion_orchestrator == 'true')
     steps:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -249,6 +279,14 @@ jobs:
             --query properties.outputs \
             --output json)
           echo "admin_api_app=$(echo "$api_outputs" | jq -r '.functionAppName.value')" >> "$GITHUB_OUTPUT"
+
+          # Ingestion orchestrator name
+          analytics_outputs=$(az deployment group show \
+            --name analytics \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs \
+            --output json 2>/dev/null || echo '{}')
+          echo "ingestion_orchestrator_app=$(echo "$analytics_outputs" | jq -r '.orchestratorFunctionAppName.value // empty')" >> "$GITHUB_OUTPUT"
 
       - name: Download scheduler artifact
         if: needs.build-and-test.outputs.deploy_scheduler == 'true'
@@ -291,6 +329,20 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --name "${{ steps.names.outputs.admin_api_app }}" \
             --src admin-api.zip
+
+      - name: Download ingestion-orchestrator artifact
+        if: needs.build-and-test.outputs.deploy_ingestion_orchestrator == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ingestion-orchestrator
+
+      - name: Deploy ingestion-orchestrator
+        if: needs.build-and-test.outputs.deploy_ingestion_orchestrator == 'true'
+        run: |
+          az functionapp deployment source config-zip \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "${{ steps.names.outputs.ingestion_orchestrator_app }}" \
+            --src ingestion-orchestrator.zip
 
   # ---------------------------------------------------------------
   # Deploy Cloud Worker container
