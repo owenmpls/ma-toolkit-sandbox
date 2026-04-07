@@ -46,10 +46,12 @@ try {
     $certPath = Get-CertificateFromKeyVault -VaultName $kvName -CertName $certName
 
     # --- Connect to service (container-specific) ---
+    # Only pass params that the container's Connect-ToService.ps1 accepts.
     $connectScript = Join-Path $PSScriptRoot 'Connect-ToService.ps1'
+    $scriptParams = (Get-Command $connectScript).Parameters.Keys
     $connectParams = @{ CertificatePath = $certPath; TenantId = $tenantId; ClientId = $clientId }
-    if ($organization) { $connectParams['Organization'] = $organization }
-    if ($adminUrl)     { $connectParams['AdminUrl'] = $adminUrl }
+    if ($organization -and $scriptParams -contains 'Organization') { $connectParams['Organization'] = $organization }
+    if ($adminUrl -and $scriptParams -contains 'AdminUrl')         { $connectParams['AdminUrl'] = $adminUrl }
     . $connectScript @connectParams
 
     # --- Discover entity modules ---
