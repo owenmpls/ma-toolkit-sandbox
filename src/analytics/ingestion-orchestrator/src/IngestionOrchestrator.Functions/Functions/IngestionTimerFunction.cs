@@ -43,8 +43,10 @@ public class IngestionTimerFunction
 
                 _logger.LogInformation("Job {Job} is due, starting execution", job.Name);
 
-                // Fire and forget — RunExecutor handles its own overlap protection and lifecycle
-                _ = Task.Run(() => _runExecutor.ExecuteAsync(job, "scheduled", triggeredBy: null));
+                // Await execution — Flex Consumption may terminate the instance after
+                // the function returns, so fire-and-forget doesn't work. The timer
+                // function timeout (default 30 min) bounds the total execution time.
+                await _runExecutor.ExecuteAsync(job, "scheduled", triggeredBy: null);
             }
             catch (Exception ex)
             {

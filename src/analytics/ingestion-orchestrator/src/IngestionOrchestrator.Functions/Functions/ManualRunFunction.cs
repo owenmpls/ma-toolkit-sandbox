@@ -78,12 +78,13 @@ public class ManualRunFunction
                 ExcludeEntities: body.ExcludeEntities);
         }
 
-        // Fire and forget
-        _ = Task.Run(() => _runExecutor.ExecuteAsync(
+        // Execute synchronously — Flex Consumption may terminate the instance
+        // after the HTTP response returns, so fire-and-forget doesn't work.
+        await _runExecutor.ExecuteAsync(
             job, "manual", triggeredBy,
-            body.TenantKeys, entityOverride));
+            body.TenantKeys, entityOverride);
 
-        return new AcceptedResult(null as string, new { job_name = job.Name, status = "accepted" });
+        return new OkObjectResult(new { job_name = job.Name, status = "completed" });
     }
 
     private record ManualRunRequest(
