@@ -119,8 +119,8 @@ public class RunExecutor : IRunExecutor
             "Run {RunId} for job {Job}: dispatched {Dispatched} jobs ({Failed} failed to dispatch)",
             runId, job.Name, dispatched, failed);
 
-        // Register with tracker — timer will check status on subsequent ticks
-        _runTracker.Track(new TrackedRun
+        // Persist to tracking blob — timer will check status on subsequent ticks
+        await _runTracker.TrackAsync(new TrackedRun
         {
             RunId = runId,
             JobName = job.Name,
