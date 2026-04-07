@@ -1,5 +1,5 @@
 {
-  "account_url": "https://stanalytics.dfs.core.windows.net",
+  "account_url": "https://stanalytics2tyokr3hrp3w.dfs.core.windows.net",
   "container": "landing",
   "auth": {
     "method": "managed_identity"
