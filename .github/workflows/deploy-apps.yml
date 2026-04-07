@@ -226,6 +226,7 @@ jobs:
         run: |
           dotnet publish src/analytics/ingestion-orchestrator/src/IngestionOrchestrator.Functions/ \
             -c Release --no-build -o publish/ingestion-orchestrator
+          mkdir -p publish/ingestion-orchestrator/Config
           cp config/ingestion/*.json publish/ingestion-orchestrator/Config/
 
       - name: Package ingestion-orchestrator artifact
