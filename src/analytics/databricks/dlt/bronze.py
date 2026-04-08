@@ -174,14 +174,16 @@ def spo_sites():
     return _read_landing("spo_sites", file_pattern="spo_sites_*.jsonl")
 
 
-@dlt.table(
-    name="spo_site_usage",
-    comment="Raw SharePoint site usage (storage, item counts) from all tenants",
-    table_properties=BRONZE_TABLE_PROPERTIES,
-)
-@dlt.expect("valid_record", "siteUrl IS NOT NULL")
-def spo_site_usage():
-    return _read_landing("spo_sites", detail_type="usage")
+# spo_site_usage commented out — requires spo_sites Phase 2 "usage" subdirectory
+# which only exists after SPO enrichment runs. Uncomment once enrichment data lands.
+# @dlt.table(
+#     name="spo_site_usage",
+#     comment="Raw SharePoint site usage (storage, item counts) from all tenants",
+#     table_properties=BRONZE_TABLE_PROPERTIES,
+# )
+# @dlt.expect("valid_record", "siteUrl IS NOT NULL")
+# def spo_site_usage():
+#     return _read_landing("spo_sites", detail_type="usage")
 
 
 @dlt.table(
@@ -194,14 +196,16 @@ def teams_teams():
     return _read_landing("teams_teams", file_pattern="teams_teams_*.jsonl")
 
 
-@dlt.table(
-    name="teams_team_settings",
-    comment="Raw Teams settings (Phase 2 per-team detail) from all tenants",
-    table_properties=BRONZE_TABLE_PROPERTIES,
-)
-@dlt.expect("valid_record", "id IS NOT NULL")
-def teams_team_settings():
-    return _read_landing("teams_teams", detail_type="settings")
+# teams_team_settings commented out — requires teams_teams Phase 2 "settings" subdirectory
+# which only exists after Teams enrichment runs. Uncomment once enrichment data lands.
+# @dlt.table(
+#     name="teams_team_settings",
+#     comment="Raw Teams settings (Phase 2 per-team detail) from all tenants",
+#     table_properties=BRONZE_TABLE_PROPERTIES,
+# )
+# @dlt.expect("valid_record", "id IS NOT NULL")
+# def teams_team_settings():
+#     return _read_landing("teams_teams", detail_type="settings")
 
 
 _ENTRA_DEVICES_SCHEMA = StructType(
