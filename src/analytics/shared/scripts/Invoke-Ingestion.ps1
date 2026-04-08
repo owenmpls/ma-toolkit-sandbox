@@ -46,13 +46,17 @@ try {
     $certPath = Get-CertificateFromKeyVault -VaultName $kvName -CertName $certName
 
     # --- Connect to service (container-specific) ---
-    # Only pass params that the container's Connect-ToService.ps1 accepts.
+    # Build a TenantConfig object from env vars (same shape as old KV tenant registry)
+    $tenantConfig = [PSCustomObject]@{
+        tenant_key   = $tenantKey
+        tenant_id    = $tenantId
+        organization = $organization
+        client_id    = $clientId
+        cert_name    = $certName
+        admin_url    = $adminUrl
+    }
     $connectScript = Join-Path $PSScriptRoot 'Connect-ToService.ps1'
-    $scriptParams = (Get-Command $connectScript).Parameters.Keys
-    $connectParams = @{ CertificatePath = $certPath; TenantId = $tenantId; ClientId = $clientId }
-    if ($organization -and $scriptParams -contains 'Organization') { $connectParams['Organization'] = $organization }
-    if ($adminUrl -and $scriptParams -contains 'AdminUrl')         { $connectParams['AdminUrl'] = $adminUrl }
-    . $connectScript @connectParams
+    . $connectScript -TenantConfig $tenantConfig -CertificatePath $certPath
 
     # --- Discover entity modules ---
     $entitiesPath = Join-Path $PSScriptRoot 'entities'

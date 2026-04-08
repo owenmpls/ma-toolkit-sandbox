@@ -1,7 +1,5 @@
 param(
-    [Parameter(Mandatory)][string]$TenantId,
-    [Parameter(Mandatory)][string]$ClientId,
-    [Parameter(Mandatory)][string]$Organization,
+    [Parameter(Mandatory)][psobject]$TenantConfig,
     [Parameter(Mandatory)][string]$CertificatePath
 )
 
@@ -19,27 +17,17 @@ $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
 
 $exoParams = @{
     Certificate  = $cert
-    AppId        = $ClientId
-    Organization = $Organization
+    AppId        = $TenantConfig.client_id
+    Organization = $TenantConfig.organization
     ShowBanner   = $false
 }
-
-Write-Log "EXO Connect: AppId=$ClientId, Org=$Organization, CertThumbprint=$($cert.Thumbprint)" -TenantKey $env:TENANT_KEY
 Connect-ExchangeOnline @exoParams
 
-# Diagnostic: verify connection context
-try {
-    $ctx = Get-ConnectionInformation
-    Write-Log "EXO Context: Org=$($ctx.Organization), UserPrincipalName=$($ctx.UserPrincipalName), ConnectionId=$($ctx.ConnectionId), TokenStatus=$($ctx.TokenStatus)" -TenantKey $env:TENANT_KEY
-} catch {
-    Write-Log "EXO Context check failed: $($_.Exception.Message)" -Level WARN -TenantKey $env:TENANT_KEY
-}
-
-Write-Log "Connected to Exchange Online for tenant '$($env:TENANT_KEY)'" -TenantKey $env:TENANT_KEY
+Write-Log "Connected to Exchange Online for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
 
 # Store auth config for RunspacePool reconnection
 $script:AuthConfig = @{
-    ClientId     = $ClientId
-    Organization = $Organization
+    ClientId     = $TenantConfig.client_id
+    Organization = $TenantConfig.organization
 }
 $script:CertBytes = $certBytes

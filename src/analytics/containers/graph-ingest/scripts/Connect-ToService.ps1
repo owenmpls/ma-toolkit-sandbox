@@ -1,6 +1,5 @@
 param(
-    [Parameter(Mandatory)][string]$TenantId,
-    [Parameter(Mandatory)][string]$ClientId,
+    [Parameter(Mandatory)][psobject]$TenantConfig,
     [Parameter(Mandatory)][string]$CertificatePath
 )
 
@@ -17,15 +16,15 @@ $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
 )
 
 Connect-MgGraph -Certificate $cert `
-    -ClientId $ClientId `
-    -TenantId $TenantId `
+    -ClientId $TenantConfig.client_id `
+    -TenantId $TenantConfig.tenant_id `
     -NoWelcome
 
-Write-Log "Connected to Microsoft Graph for tenant '$($env:TENANT_KEY)'" -TenantKey $env:TENANT_KEY
+Write-Log "Connected to Microsoft Graph for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
 
 # Store auth config for RunspacePool reconnection
 $script:AuthConfig = @{
-    ClientId = $ClientId
-    TenantId = $TenantId
+    ClientId = $TenantConfig.client_id
+    TenantId = $TenantConfig.tenant_id
 }
 $script:CertBytes = $certBytes

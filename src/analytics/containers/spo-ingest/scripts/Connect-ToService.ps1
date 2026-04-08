@@ -1,8 +1,5 @@
 param(
-    [Parameter(Mandatory)][string]$TenantId,
-    [Parameter(Mandatory)][string]$ClientId,
-    [Parameter(Mandatory)][string]$Organization,
-    [Parameter(Mandatory)][string]$AdminUrl,
+    [Parameter(Mandatory)][psobject]$TenantConfig,
     [Parameter(Mandatory)][string]$CertificatePath
 )
 
@@ -23,18 +20,18 @@ $pfxBytes = $x509.Export(
 $certBase64 = [System.Convert]::ToBase64String($pfxBytes)
 
 # Connect to SharePoint Online admin site
-Connect-PnPOnline -Url $AdminUrl `
-    -ClientId $ClientId `
-    -Tenant $Organization `
+Connect-PnPOnline -Url $TenantConfig.admin_url `
+    -ClientId $TenantConfig.client_id `
+    -Tenant $TenantConfig.organization `
     -CertificateBase64Encoded $certBase64
 
-Write-Log "Connected to SharePoint Online for tenant '$($env:TENANT_KEY)'" -TenantKey $env:TENANT_KEY
+Write-Log "Connected to SharePoint Online for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
 
 # Store auth config for RunspacePool reconnection in Phase 2.
 $script:AuthConfig = @{
-    ClientId          = $ClientId
-    TenantDomain      = $Organization
+    ClientId          = $TenantConfig.client_id
+    TenantDomain      = $TenantConfig.organization
     CertificateBase64 = $certBase64
-    AdminUrl          = $AdminUrl
+    AdminUrl          = $TenantConfig.admin_url
 }
 $script:CertBytes = $certBytes
