@@ -7,6 +7,10 @@ namespace IngestionOrchestrator.Functions.Functions;
 
 public class IngestionTimerFunction
 {
+    // Track last dispatch time per job to prevent double-dispatch within the same
+    // cron window. Static so it survives across function invocations on the same instance.
+    private static readonly Dictionary<string, DateTime> _lastDispatched = new();
+
     private readonly IConfigLoader _configLoader;
     private readonly IRunExecutor _runExecutor;
     private readonly IRunTracker _runTracker;
@@ -33,7 +37,6 @@ public class IngestionTimerFunction
 
         // 2. Evaluate cron schedules for new dispatches
         var now = DateTime.UtcNow;
-        var windowStart = now.AddSeconds(-30);
 
         foreach (var job in _configLoader.Jobs.Jobs)
         {
@@ -43,13 +46,19 @@ public class IngestionTimerFunction
             try
             {
                 var cron = CronExpression.Parse(job.Cron);
-                var nextOccurrence = cron.GetNextOccurrence(windowStart, inclusive: true);
+
+                // Use the last dispatch time (or 2 minutes ago on first run) as the
+                // baseline. GetNextOccurrence returns the next time AFTER the baseline,
+                // so a job will only match once per cron occurrence.
+                var lastRun = _lastDispatched.GetValueOrDefault(job.Name, now.AddMinutes(-2));
+                var nextOccurrence = cron.GetNextOccurrence(lastRun);
 
                 if (nextOccurrence == null || nextOccurrence > now)
                     continue;
 
                 _logger.LogInformation("Job {Job} is due, dispatching", job.Name);
                 await _runExecutor.ExecuteAsync(job, "scheduled", triggeredBy: null);
+                _lastDispatched[job.Name] = now;
             }
             catch (Exception ex)
             {

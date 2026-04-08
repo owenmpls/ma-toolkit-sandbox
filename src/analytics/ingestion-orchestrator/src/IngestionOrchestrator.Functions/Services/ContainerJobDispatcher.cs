@@ -48,12 +48,25 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
         var jobUrl = $"{ArmBaseUrl}/subscriptions/{_settings.SubscriptionId}/resourceGroups/{_settings.ResourceGroupName}" +
                      $"/providers/Microsoft.App/jobs/{containerJobName}?api-version={ArmApiVersion}";
         var jobResponse = await _httpClient.GetAsync(jobUrl);
-        jobResponse.EnsureSuccessStatusCode();
+        if (!jobResponse.IsSuccessStatusCode)
+        {
+            var errorBody = await jobResponse.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(
+                $"Failed to get ACA Job config for {containerJobName}: {jobResponse.StatusCode} - {errorBody}");
+        }
+
         var jobJson = await jobResponse.Content.ReadAsStringAsync();
         var jobDoc = JsonDocument.Parse(jobJson);
-        var image = jobDoc.RootElement
-            .GetProperty("properties").GetProperty("template").GetProperty("containers")[0]
-            .GetProperty("image").GetString()!;
+
+        if (!jobDoc.RootElement.TryGetProperty("properties", out var props) ||
+            !props.TryGetProperty("template", out var template) ||
+            !template.TryGetProperty("containers", out var containers) ||
+            containers.GetArrayLength() == 0 ||
+            containers[0].GetProperty("image").GetString() is not { } image)
+        {
+            throw new InvalidOperationException(
+                $"ACA Job {containerJobName} response missing expected properties.template.containers[0].image");
+        }
 
         // 2. Build env vars
         var envVars = BuildEnvVars(tenant, entityNames, storage);
@@ -77,11 +90,17 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
 
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
         var startResponse = await _httpClient.PostAsync(startUrl, content);
-        startResponse.EnsureSuccessStatusCode();
+        if (!startResponse.IsSuccessStatusCode)
+        {
+            var errorBody = await startResponse.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(
+                $"Failed to start ACA Job {containerJobName}: {startResponse.StatusCode} - {errorBody}");
+        }
 
         var startJson = await startResponse.Content.ReadAsStringAsync();
         var startDoc = JsonDocument.Parse(startJson);
-        var executionId = startDoc.RootElement.GetProperty("id").GetString()!;
+        var executionId = startDoc.RootElement.GetProperty("id").GetString()
+            ?? throw new InvalidOperationException($"ACA Job start response missing 'id' field");
         var executionName = executionId.Split('/').Last();
 
         _logger.LogInformation("Started ACA Job {Job} execution {Execution} for tenant {Tenant}",
@@ -98,11 +117,17 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
                   $"/providers/Microsoft.App/jobs/{containerJobName}/executions/{executionName}?api-version={ArmApiVersion}";
 
         var response = await _httpClient.GetAsync(url);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(
+                $"Failed to get execution status for {containerJobName}/{executionName}: {response.StatusCode} - {errorBody}");
+        }
 
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
-        return doc.RootElement.GetProperty("properties").GetProperty("status").GetString()!;
+        return doc.RootElement.GetProperty("properties").GetProperty("status").GetString()
+            ?? throw new InvalidOperationException($"Execution status response missing properties.status");
     }
 
     private Dictionary<string, string> BuildEnvVars(TenantConfig tenant,

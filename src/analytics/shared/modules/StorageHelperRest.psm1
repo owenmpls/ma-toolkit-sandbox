@@ -14,7 +14,7 @@ function Write-ToAdlsRest {
         $spCertName  = $env:STORAGE_SP_CERT_NAME
         $spTenantId  = $env:STORAGE_SP_TENANT_ID
         $spClientId  = $env:STORAGE_SP_CLIENT_ID
-        $spCertBytes = Get-CertificateBytesFromKeyVault -VaultName $env:KEYVAULT_NAME -CertName $spCertName
+        $spCertBytes = Get-CertificateBytes -VaultName $env:KEYVAULT_NAME -CertName $spCertName
 
         $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
             $spCertBytes, [string]::Empty,

@@ -42,7 +42,11 @@ public record TrackedTask
 public class RunTracker : IRunTracker
 {
     private static readonly TimeSpan RunTimeout = TimeSpan.FromHours(8);
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = false,
+        PropertyNameCaseInsensitive = true
+    };
     private const string TrackingPrefix = "_orchestrator/tracking/";
 
     private readonly BlobContainerClient _container;

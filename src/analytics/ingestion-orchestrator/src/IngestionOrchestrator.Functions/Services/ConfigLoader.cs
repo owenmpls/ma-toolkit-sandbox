@@ -76,7 +76,24 @@ public class ConfigLoader : IConfigLoader
             throw new InvalidOperationException(
                 $"Duplicate tenant keys in tenants.json: {string.Join(", ", duplicateTenants)}");
 
+        // Validate storage auth
+        if (Storage.Auth.Method is not ("managed_identity" or "service_principal"))
+            throw new InvalidOperationException(
+                $"Invalid storage auth method: '{Storage.Auth.Method}' (must be 'managed_identity' or 'service_principal')");
+
+        if (Storage.Auth.Method == "service_principal")
+        {
+            if (string.IsNullOrWhiteSpace(Storage.Auth.TenantId))
+                throw new InvalidOperationException("Storage auth: service_principal requires tenant_id");
+            if (string.IsNullOrWhiteSpace(Storage.Auth.ClientId))
+                throw new InvalidOperationException("Storage auth: service_principal requires client_id");
+            if (string.IsNullOrWhiteSpace(Storage.Auth.CertName))
+                throw new InvalidOperationException("Storage auth: service_principal requires cert_name");
+        }
+
         // Validate job references
+        var tenantKeys = Tenants.Tenants.Select(t => t.TenantKey).ToHashSet();
+
         foreach (var job in Jobs.Jobs)
         {
             if (string.IsNullOrWhiteSpace(job.Name))
@@ -96,8 +113,7 @@ public class ConfigLoader : IConfigLoader
                         $"Job '{job.Name}' references unknown entity '{exclude}' in exclude_entities");
             }
 
-            // Validate tenant selector
-            var tenantKeys = Tenants.Tenants.Select(t => t.TenantKey).ToHashSet();
+            // Validate tenant selector references
             foreach (var key in job.TenantSelector.TenantKeys ?? [])
             {
                 if (!tenantKeys.Contains(key))
@@ -111,19 +127,20 @@ public class ConfigLoader : IConfigLoader
                         $"Job '{job.Name}' references unknown tenant '{key}' in exclude_keys");
             }
 
-            // Validate storage auth
-            if (Storage.Auth.Method is not ("managed_identity" or "service_principal"))
+            // Validate tenant selector mode has required fields
+            if (job.TenantSelector.Mode == "specific" && (job.TenantSelector.TenantKeys == null || job.TenantSelector.TenantKeys.Count == 0))
                 throw new InvalidOperationException(
-                    $"Invalid storage auth method: '{Storage.Auth.Method}' (must be 'managed_identity' or 'service_principal')");
+                    $"Job '{job.Name}' uses mode 'specific' but has no tenant_keys");
+            if (job.TenantSelector.Mode == "all_except" && (job.TenantSelector.ExcludeKeys == null || job.TenantSelector.ExcludeKeys.Count == 0))
+                throw new InvalidOperationException(
+                    $"Job '{job.Name}' uses mode 'all_except' but has no exclude_keys");
 
-            if (Storage.Auth.Method == "service_principal")
+            // Validate include_tiers range
+            foreach (var tier in job.EntitySelector.IncludeTiers ?? [])
             {
-                if (string.IsNullOrWhiteSpace(Storage.Auth.TenantId))
-                    throw new InvalidOperationException("Storage auth: service_principal requires tenant_id");
-                if (string.IsNullOrWhiteSpace(Storage.Auth.ClientId))
-                    throw new InvalidOperationException("Storage auth: service_principal requires client_id");
-                if (string.IsNullOrWhiteSpace(Storage.Auth.CertName))
-                    throw new InvalidOperationException("Storage auth: service_principal requires cert_name");
+                if (tier is < 1 or > 5)
+                    throw new InvalidOperationException(
+                        $"Job '{job.Name}' has invalid include_tier {tier} (must be 1-5)");
             }
         }
     }

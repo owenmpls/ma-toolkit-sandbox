@@ -16,7 +16,6 @@ on:
           - hybrid-worker
           - analytics
           - ingestion-orchestrator
-          - tenant-registry
 
   push:
     branches: [main]
@@ -52,7 +51,6 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
       analytics: ${{ steps.filter.outputs.analytics }}
       ingestion_orchestrator: ${{ steps.filter.outputs.ingestion_orchestrator }}
-      tenant_registry: ${{ steps.filter.outputs.tenant_registry }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -76,8 +74,6 @@ jobs:
             ingestion_orchestrator:
               - 'src/analytics/ingestion-orchestrator/**'
               - 'config/ingestion/**'
-            tenant_registry:
-              - 'config/tenant-registry.json'
 
   # ---------------------------------------------------------------
   # Build, test, and publish .NET projects
@@ -95,7 +91,6 @@ jobs:
       deploy_hybrid_worker: ${{ steps.resolve.outputs.hybrid_worker }}
       deploy_analytics: ${{ steps.resolve.outputs.analytics }}
       deploy_ingestion_orchestrator: ${{ steps.resolve.outputs.ingestion_orchestrator }}
-      deploy_tenant_registry: ${{ steps.resolve.outputs.tenant_registry }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -130,7 +125,6 @@ jobs:
             echo "hybrid_worker=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "hybrid-worker" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "analytics=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "analytics" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "ingestion_orchestrator=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "ingestion-orchestrator" ] || [ "$COMPONENT" = "analytics" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "tenant_registry=$( [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "tenant-registry" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           else
             # Push trigger — deploy components whose files changed (or all .NET if shared changed)
             SHARED="${{ needs.changes.outputs.shared }}"
@@ -141,7 +135,6 @@ jobs:
             echo "hybrid_worker=$( [ "${{ needs.changes.outputs.hybrid_worker }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "analytics=$( [ "${{ needs.changes.outputs.analytics }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "ingestion_orchestrator=$( [ "${{ needs.changes.outputs.ingestion_orchestrator }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-            echo "tenant_registry=$( [ "${{ needs.changes.outputs.tenant_registry }}" = "true" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup .NET 8 SDK
@@ -964,59 +957,5 @@ jobs:
       # ADF steps removed — ADF replaced by ingestion orchestrator.
       # DLT pipelines now run on their own Databricks Workflows schedule.
 
-  # ---------------------------------------------------------------
-  # Deploy tenant registry to Key Vault
-  # ---------------------------------------------------------------
-  deploy-tenant-registry:
-    runs-on: ubuntu-latest
-    environment: dev
-    needs: [build-and-test]
-    if: >-
-      always() && needs.build-and-test.result == 'success' &&
-      needs.build-and-test.outputs.deploy_tenant_registry == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Fetch Key Vault name
-        id: kv
-        run: |
-          outputs=$(az deployment group show \
-            --name shared-infra \
-            --resource-group "$RESOURCE_GROUP" \
-            --query properties.outputs \
-            --output json)
-          echo "name=$(echo "$outputs" | jq -r '.keyVaultName.value')" >> "$GITHUB_OUTPUT"
-
-      - name: Upload tenant registry to Key Vault
-        run: |
-          KV_NAME="${{ steps.kv.outputs.name }}"
-
-          # Temporarily open the firewall (runner is not on the VNet)
-          az keyvault update --name "$KV_NAME" \
-            --public-network-access Enabled \
-            --default-action Allow \
-            --output none
-
-          # Wait for firewall change to propagate
-          sleep 15
-
-          az keyvault secret set \
-            --vault-name "$KV_NAME" \
-            --name tenant-registry \
-            --file config/tenant-registry.json \
-            --content-type application/json \
-            --output none
-
-          # Re-lock the firewall
-          az keyvault update --name "$KV_NAME" \
-            --default-action Deny \
-            --public-network-access Disabled \
-            --output none
+  # Tenant registry KV deployment removed — tenant config now deployed
+  # with the ingestion orchestrator Function App via config/ingestion/tenants.json.
