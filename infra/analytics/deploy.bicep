@@ -150,10 +150,6 @@ resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
-    networkAcls: {
-      defaultAction: 'Deny'
-      bypass: 'AzureServices'   // Allows Kudu zip deployment + Function App runtime access
-    }
   }
 }
 
