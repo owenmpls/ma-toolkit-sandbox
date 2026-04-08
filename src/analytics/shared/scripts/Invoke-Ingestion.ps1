@@ -191,8 +191,12 @@ try {
         }
         catch {
             $status = 'failed'
-            $errors += $_.Exception.Message
-            Write-Log "Entity '$entityName' failed: $($_.Exception.Message)" -Level ERROR -Entity $entityName -TenantKey $tenantKey
+            $errMsg = $_.Exception.Message
+            $errors += $errMsg
+            Write-Log "Entity '$entityName' failed: $errMsg" -Level ERROR -Entity $entityName -TenantKey $tenantKey
+            # Also write to stdout directly in case Write-Log formatting fails
+            [Console]::Error.WriteLine("ENTITY_ERROR [$entityName]: $errMsg")
+            [Console]::Error.WriteLine("ENTITY_ERROR [$entityName]: $($_.ScriptStackTrace)")
         }
 
         # --- Write and upload manifest ---
