@@ -17,6 +17,12 @@ function Invoke-Phase1 {
     )
 
     $count = 0
+    # Diagnostic: test with and without PropertySets
+    $testBasic = @(Get-EXOMailbox -ResultSize 1 -ErrorAction SilentlyContinue)
+    [Console]::Error.WriteLine("EXO_DIAG_MAILBOX: basic query returned $($testBasic.Count) (limit 1)")
+    if ($testBasic.Count -gt 0) {
+        [Console]::Error.WriteLine("EXO_DIAG_MAILBOX: first=$($testBasic[0].UserPrincipalName)")
+    }
     Get-EXOMailbox -PropertySets All -ResultSize Unlimited | ForEach-Object {
         $Writer.WriteLine(($_ | ConvertTo-Json -Compress -Depth 5))
         $EntityIds.Add($_.ExternalDirectoryObjectId)
