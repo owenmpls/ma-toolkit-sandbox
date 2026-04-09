@@ -14,48 +14,43 @@ Import-Module (Join-Path $modulesPath 'LogHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'RetryHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'KeyVaultHelper.psm1') -Force
 Import-Module (Join-Path $modulesPath 'WorkerPool.psm1') -Force
-# StorageHelperRest is loaded by Connect-ToService.ps1
+# StorageHelper or StorageHelperRest is loaded by Connect-ToService.ps1
 
-# --- Read environment (all config passed by orchestrator as env vars) ---
-$tenantKey         = $env:TENANT_KEY
-$tenantId          = $env:TENANT_ID
-$organization      = $env:ORGANIZATION
-$clientId          = $env:CLIENT_ID
-$certName          = $env:CERT_NAME
-$adminUrl          = $env:ADMIN_URL
-$kvName            = $env:KEYVAULT_NAME
-$maxParallelism    = [int]($env:MAX_PARALLELISM ?? '10')
-$containerName     = $env:LANDING_CONTAINER ?? 'landing'
-$storageAccountUrl = $env:STORAGE_ACCOUNT_URL
-$runId             = [guid]::NewGuid().ToString('N').Substring(0, 8)
+# --- Read environment ---
+$tenantKey = $env:TENANT_KEY
+$scheduleTier = $env:SCHEDULE_TIER
+$kvName = $env:KEYVAULT_NAME
+$storageAcct = $env:STORAGE_ACCOUNT_NAME
+$maxParallelism = [int]($env:MAX_PARALLELISM ?? '10')
+$containerName = $env:LANDING_CONTAINER ?? 'landing'
+$runId = [guid]::NewGuid().ToString('N').Substring(0, 8)
 
-# Entity list from orchestrator (required)
-$wantedEntities    = ($env:ENTITY_NAMES -split ',') | ForEach-Object { $_.Trim() }
-
-Write-Log "Starting ingestion run=$runId tenant=$tenantKey entities=$($wantedEntities.Count)"
+Write-Log "Starting ingestion run=$runId tenant=$tenantKey tier=$scheduleTier"
 
 # --- Authenticate to Azure (managed identity) ---
 Write-Log "Connecting to Azure with managed identity"
 Connect-AzAccount -Identity -WarningAction SilentlyContinue | Out-Null
 Write-Log "Azure authentication successful"
 
+# --- Load tenant registry ---
+Write-Log "Loading tenant registry from Key Vault '$kvName'"
+$registry = Get-TenantRegistry -VaultName $kvName
+$tenant = $registry.tenants | Where-Object { $_.tenant_key -eq $tenantKey }
+if (-not $tenant) { throw "Tenant '$tenantKey' not found in registry" }
+if (-not $tenant.enabled) {
+    Write-Log "Tenant '$tenantKey' is disabled, exiting" -Level WARN
+    exit 0
+}
+
 # --- Load certificate ---
 $certPath = $null
 try {
-    # Warm up Key Vault token cache — Get-AzKeyVaultSecret primes the managed
-    # identity credential chain in a way that Connect-ExchangeOnline depends on.
-    Get-AzKeyVaultSecret -VaultName $kvName -Name 'tenant-registry' -AsPlainText -ErrorAction SilentlyContinue | Out-Null
-
-    Write-Log "Loading certificate '$certName' from Key Vault"
-    $certPath = Get-CertificateFromKeyVault -VaultName $kvName -CertName $certName
+    Write-Log "Loading certificate '$($tenant.cert_name)' from Key Vault"
+    $certPath = Get-CertificateFromKeyVault -VaultName $kvName -CertName $tenant.cert_name
 
     # --- Connect to service (container-specific) ---
     $connectScript = Join-Path $PSScriptRoot 'Connect-ToService.ps1'
-    $acceptedParams = (Get-Command $connectScript).Parameters.Keys
-    $connectParams = @{ CertificatePath = $certPath; TenantId = $tenantId; ClientId = $clientId }
-    if ($organization -and $acceptedParams -contains 'Organization') { $connectParams['Organization'] = $organization }
-    if ($adminUrl -and $acceptedParams -contains 'AdminUrl')         { $connectParams['AdminUrl'] = $adminUrl }
-    . $connectScript @connectParams
+    . $connectScript -TenantConfig $tenant -CertificatePath $certPath
 
     # --- Discover entity modules ---
     $entitiesPath = Join-Path $PSScriptRoot 'entities'
@@ -68,17 +63,6 @@ try {
 
     Write-Log "Discovered $($entityModules.Count) entity modules"
 
-    # --- EXO diagnostic: test if cmdlets work right after connect ---
-    if (Get-Command Get-EXOMailbox -ErrorAction SilentlyContinue) {
-        try {
-            $testCount = (Get-EXOMailbox -ResultSize 1 -ErrorAction Stop | Measure-Object).Count
-            Write-Log "EXO diagnostic: Get-EXOMailbox returned $testCount (limit 1)" -TenantKey $tenantKey
-        } catch {
-            [Console]::Error.WriteLine("EXO_DIAG_ERROR: Get-EXOMailbox failed: $($_.Exception.Message)")
-            [Console]::Error.WriteLine("EXO_DIAG_ERROR: $($_.ScriptStackTrace)")
-        }
-    }
-
     # --- Inject auth state into entity modules (for non-Graph APIs like MDE) ---
     foreach ($entityEntry in $entityModules.Values) {
         & $entityEntry.Module {
@@ -87,18 +71,24 @@ try {
         } $script:CertBytes $script:AuthConfig
     }
 
-    # --- Filter to entities requested by orchestrator ---
+    # --- Filter to entities for this tenant + tier ---
+    $wantedEntities = switch ($scheduleTier) {
+        'core'             { $tenant.core_entities }
+        'core_enrichment'  { $tenant.core_enrichment_entities }
+        'enrichment'       { $tenant.enrichment_entities }
+        default            { throw "Unknown schedule tier: $scheduleTier" }
+    }
     $toRun = $wantedEntities | Where-Object { $entityModules.ContainsKey($_) }
     Write-Log "Will process $($toRun.Count) entities: $($toRun -join ', ')"
 
     if ($toRun.Count -eq 0) {
-        Write-Log "No matching entities to process, exiting" -Level WARN
+        Write-Log "No entities to process for tier '$scheduleTier', exiting" -Level WARN
         exit 0
     }
 
     # --- Expose tenant-level config as environment variables for entity modules ---
-    if ($env:SIGN_IN_LOOKBACK_DAYS) {
-        # Already set by orchestrator — entity modules read it directly
+    if ($tenant.sign_in_lookback_days) {
+        $env:SIGN_IN_LOOKBACK_DAYS = $tenant.sign_in_lookback_days
     }
 
     # --- Process each entity ---
@@ -116,7 +106,7 @@ try {
 
         Write-Log "Processing entity '$entityName'" -Entity $entityName -TenantKey $tenantKey
 
-        $basePath = "$($config.Name)/$tenantKey/$date"
+        $basePath = "$scheduleTier/$($config.Name)/$tenantKey/$date"
         $recordCount = 0
         $phase2Count = 0
         $phase2Chunks = 0
@@ -147,7 +137,7 @@ try {
             if ($recordCount -gt 0) {
                 $blobPath = "$basePath/$($config.OutputFile)_${runId}.jsonl"
                 Write-Log "Uploading Phase 1 to $blobPath" -Entity $entityName
-                & $script:UploadFunction -StorageAccountUrl $storageAccountUrl `
+                & $script:UploadFunction -StorageAccountName $storageAcct `
                     -ContainerName $containerName `
                     -BlobPath $blobPath `
                     -LocalFile $localFile
@@ -193,7 +183,7 @@ try {
                 # Upload Phase 2 chunks
                 Get-ChildItem $phase2Dir -Filter '*.jsonl' | ForEach-Object {
                     $chunkBlobPath = "$basePath/$($config.DetailType)/$($_.Name)"
-                    & $script:UploadFunction -StorageAccountUrl $storageAccountUrl `
+                    & $script:UploadFunction -StorageAccountName $storageAcct `
                         -ContainerName $containerName `
                         -BlobPath $chunkBlobPath `
                         -LocalFile $_.FullName
@@ -205,20 +195,17 @@ try {
         }
         catch {
             $status = 'failed'
-            $errMsg = $_.Exception.Message
-            $errors += $errMsg
-            Write-Log "Entity '$entityName' failed: $errMsg" -Level ERROR -Entity $entityName -TenantKey $tenantKey
-            # Also write to stdout directly in case Write-Log formatting fails
-            [Console]::Error.WriteLine("ENTITY_ERROR [$entityName]: $errMsg")
-            [Console]::Error.WriteLine("ENTITY_ERROR [$entityName]: $($_.ScriptStackTrace)")
+            $errors += $_.Exception.Message
+            Write-Log "Entity '$entityName' failed: $($_.Exception.Message)" -Level ERROR -Entity $entityName -TenantKey $tenantKey
         }
 
         # --- Write and upload manifest ---
         $manifest = @{
             run_id              = $runId
             tenant_key          = $tenantKey
-            tenant_id           = $tenantId
+            tenant_id           = $tenant.tenant_id
             entity_type         = $config.Name
+            schedule_tier       = $scheduleTier
             phase1_record_count = $recordCount
             phase2_record_count  = $phase2Count
             phase2_chunk_count   = $phase2Chunks
@@ -234,7 +221,7 @@ try {
         [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.Encoding]::UTF8)
 
         $manifestBlobPath = "$basePath/_manifest_${runId}.json"
-        & $script:UploadFunction -StorageAccountUrl $storageAccountUrl `
+        & $script:UploadFunction -StorageAccountName $storageAcct `
             -ContainerName $containerName `
             -BlobPath $manifestBlobPath `
             -LocalFile $manifestPath
