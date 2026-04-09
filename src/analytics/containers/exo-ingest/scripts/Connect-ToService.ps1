@@ -25,6 +25,13 @@ $exoParams = @{
 }
 Connect-ExchangeOnline @exoParams
 
+# Diagnostic: verify cmdlets are available
+$exoCmds = Get-Command -Module ExchangeOnlineManagement -ErrorAction SilentlyContinue
+$exoMailboxCmd = Get-Command Get-EXOMailbox -ErrorAction SilentlyContinue
+$distGroupCmd = Get-Command Get-DistributionGroup -ErrorAction SilentlyContinue
+[Console]::Error.WriteLine("EXO_DIAG: Module commands=$($exoCmds.Count), Get-EXOMailbox=$(if($exoMailboxCmd){'found'}else{'NOT FOUND'}), Get-DistributionGroup=$(if($distGroupCmd){'found'}else{'NOT FOUND'})")
+[Console]::Error.WriteLine("EXO_DIAG: Loaded modules=$(Get-Module | Select-Object -ExpandProperty Name | Where-Object { $_ -like '*Exchange*' -or $_ -like '*tmp*' })")
+
 Write-Log "Connected to Exchange Online for tenant '$($env:TENANT_KEY)'" -TenantKey $env:TENANT_KEY
 
 # Store auth config for RunspacePool reconnection
