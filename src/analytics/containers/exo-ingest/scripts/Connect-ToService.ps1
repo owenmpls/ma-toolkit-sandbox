@@ -5,6 +5,10 @@ param(
     [Parameter(Mandatory)][string]$CertificatePath
 )
 
+# Import Az.Storage early — its .NET assemblies must be loaded before
+# Connect-ExchangeOnline to avoid REST client conflicts.
+Import-Module Az.Storage -ErrorAction SilentlyContinue
+
 Import-Module (Join-Path $PSScriptRoot 'modules/StorageHelperRest.psm1') -Force
 
 # Set upload function reference for Invoke-Ingestion.ps1
