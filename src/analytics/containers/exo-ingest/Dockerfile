@@ -1,7 +1,7 @@
-FROM mcr.microsoft.com/powershell:lts-ubuntu-22.04
+FROM mcr.microsoft.com/powershell:lts-7.4-ubuntu-22.04
 
 RUN pwsh -Command "Set-PSRepository PSGallery -InstallationPolicy Trusted; \
-    Install-Module ExchangeOnlineManagement -Force -Scope AllUsers; \
+    Install-Module ExchangeOnlineManagement -RequiredVersion 3.7.2 -Force -Scope AllUsers; \
     Install-Module Az.Accounts, Az.KeyVault -Force -Scope AllUsers"
 
 # Copy shared modules and entry point
