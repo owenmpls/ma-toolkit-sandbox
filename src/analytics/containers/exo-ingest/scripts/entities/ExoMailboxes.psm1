@@ -17,14 +17,6 @@ function Invoke-Phase1 {
     )
 
     $count = 0
-    # Diagnostic: test Get-EXOMailbox with error details
-    try {
-        $testBasic = @(Get-EXOMailbox -ResultSize 1 -ErrorAction Stop)
-        [Console]::Error.WriteLine("EXO_DIAG_MAILBOX: basic query returned $($testBasic.Count)")
-    } catch {
-        [Console]::Error.WriteLine("EXO_DIAG_MAILBOX_ERROR: $($_.Exception.GetType().Name): $($_.Exception.Message)")
-        [Console]::Error.WriteLine("EXO_DIAG_MAILBOX_INNER: $($_.Exception.InnerException.Message)")
-    }
     Get-EXOMailbox -PropertySets All -ResultSize Unlimited | ForEach-Object {
         $Writer.WriteLine(($_ | ConvertTo-Json -Compress -Depth 5))
         $EntityIds.Add($_.ExternalDirectoryObjectId)
