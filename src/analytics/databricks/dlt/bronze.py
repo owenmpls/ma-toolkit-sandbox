@@ -20,13 +20,6 @@ BRONZE_TABLE_PROPERTIES = {
 }
 
 
-# Minimal fallback schema for entities without explicit schemas. Prevents
-# CF_EMPTY_DIR_FOR_SCHEMA_INFERENCE when landing directories are empty.
-# Auto Loader infers the real schema once files arrive; extra columns
-# beyond this stub go to _rescued_data and are picked up on next refresh.
-_FALLBACK_SCHEMA = StructType([StructField("id", StringType())])
-
-
 def _read_landing(entity_type, detail_type=None, file_pattern="*.jsonl", schema=None):
     """Read JSONL files from the landing container using Auto Loader.
 
@@ -41,8 +34,9 @@ def _read_landing(entity_type, detail_type=None, file_pattern="*.jsonl", schema=
                       pattern like "spo_sites_*.jsonl" when Phase 2 chunks exist in
                       subdirectories and Auto Loader's recursive listing would mix schemas.
         schema: Optional StructType to provide when the landing path may be empty.
-                Bypasses Auto Loader's schema inference so tables can be defined
-                before data arrives. Falls back to _FALLBACK_SCHEMA if not specified.
+                Bypasses Auto Loader's schema inference (CF_EMPTY_DIR_FOR_SCHEMA_INFERENCE)
+                so tables can be defined before data arrives. When files appear later,
+                Auto Loader picks them up automatically.
     """
     if detail_type:
         landing_path = f"{BASE_PATH}/{entity_type}/*/*/{detail_type}/"
@@ -54,8 +48,9 @@ def _read_landing(entity_type, detail_type=None, file_pattern="*.jsonl", schema=
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
         .option("pathGlobFilter", file_pattern)
-        .schema(schema or _FALLBACK_SCHEMA)
     )
+    if schema:
+        reader = reader.schema(schema)
     return (
         reader
         .load(landing_path)
