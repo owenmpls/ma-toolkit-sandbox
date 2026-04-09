@@ -1,5 +1,7 @@
 param(
-    [Parameter(Mandatory)][psobject]$TenantConfig,
+    [Parameter(Mandatory)][string]$TenantId,
+    [Parameter(Mandatory)][string]$ClientId,
+    [Parameter(Mandatory)][string]$Organization,
     [Parameter(Mandatory)][string]$CertificatePath
 )
 
@@ -17,17 +19,17 @@ $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
 
 $exoParams = @{
     Certificate  = $cert
-    AppId        = $TenantConfig.client_id
-    Organization = $TenantConfig.organization
+    AppId        = $ClientId
+    Organization = $Organization
     ShowBanner   = $false
 }
 Connect-ExchangeOnline @exoParams
 
-Write-Log "Connected to Exchange Online for tenant '$($TenantConfig.tenant_key)'" -TenantKey $TenantConfig.tenant_key
+Write-Log "Connected to Exchange Online for tenant '$($env:TENANT_KEY)'" -TenantKey $env:TENANT_KEY
 
 # Store auth config for RunspacePool reconnection
 $script:AuthConfig = @{
-    ClientId     = $TenantConfig.client_id
-    Organization = $TenantConfig.organization
+    ClientId     = $ClientId
+    Organization = $Organization
 }
 $script:CertBytes = $certBytes
