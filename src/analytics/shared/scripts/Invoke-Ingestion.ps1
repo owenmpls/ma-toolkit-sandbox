@@ -64,6 +64,17 @@ try {
 
     Write-Log "Discovered $($entityModules.Count) entity modules"
 
+    # --- EXO diagnostic: test if cmdlets work right after connect ---
+    if (Get-Command Get-EXOMailbox -ErrorAction SilentlyContinue) {
+        try {
+            $testCount = (Get-EXOMailbox -ResultSize 1 -ErrorAction Stop | Measure-Object).Count
+            Write-Log "EXO diagnostic: Get-EXOMailbox returned $testCount (limit 1)" -TenantKey $tenantKey
+        } catch {
+            [Console]::Error.WriteLine("EXO_DIAG_ERROR: Get-EXOMailbox failed: $($_.Exception.Message)")
+            [Console]::Error.WriteLine("EXO_DIAG_ERROR: $($_.ScriptStackTrace)")
+        }
+    }
+
     # --- Inject auth state into entity modules (for non-Graph APIs like MDE) ---
     foreach ($entityEntry in $entityModules.Values) {
         & $entityEntry.Module {
