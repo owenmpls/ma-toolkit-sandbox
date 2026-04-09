@@ -1,3 +1,12 @@
+function Get-TenantRegistry {
+    param(
+        [Parameter(Mandatory)][string]$VaultName
+    )
+
+    $registryJson = Get-AzKeyVaultSecret -VaultName $VaultName -Name 'tenant-registry' -AsPlainText
+    return ($registryJson | ConvertFrom-Json)
+}
+
 function Get-CertificateFromKeyVault {
     param(
         [Parameter(Mandatory)][string]$VaultName,
@@ -37,4 +46,4 @@ function Remove-CertificateFile {
     }
 }
 
-Export-ModuleMember -Function Get-CertificateFromKeyVault, Get-CertificateBytes, Remove-CertificateFile
+Export-ModuleMember -Function Get-TenantRegistry, Get-CertificateFromKeyVault, Get-CertificateBytes, Remove-CertificateFile
