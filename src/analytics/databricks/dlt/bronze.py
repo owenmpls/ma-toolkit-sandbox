@@ -129,7 +129,7 @@ def exo_mailboxes():
     comment="Raw Exchange Online mail contacts from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_contacts():
     return _read_landing("exo_contacts")
 
@@ -139,7 +139,7 @@ def exo_contacts():
     comment="Raw Exchange Online mail users from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_mail_users():
     return _read_landing("exo_mail_users")
 
@@ -149,7 +149,7 @@ def exo_mail_users():
     comment="Raw Exchange Online distribution groups from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_distribution_groups():
     return _read_landing("exo_distribution_groups")
 
@@ -159,7 +159,7 @@ def exo_distribution_groups():
     comment="Raw Exchange Online unified (M365) groups from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "ExternalDirectoryObjectId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_unified_groups():
     return _read_landing("exo_unified_groups")
 
@@ -619,7 +619,7 @@ def exo_mailbox_statistics():
     comment="Raw SPO site permissions, groups, sharing links from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "siteUrl IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def spo_site_permissions():
     return _read_landing("spo_site_permissions", detail_type="permissions")
 
