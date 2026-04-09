@@ -119,7 +119,7 @@ def entra_contacts():
     comment="Raw Exchange Online mailboxes from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "ExchangeGuid IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_mailboxes():
     return _read_landing("exo_mailboxes")
 
@@ -181,7 +181,7 @@ def spo_sites():
 #     comment="Raw SharePoint site usage (storage, item counts) from all tenants",
 #     table_properties=BRONZE_TABLE_PROPERTIES,
 # )
-# @dlt.expect("valid_record", "siteUrl IS NOT NULL")
+# @dlt.expect("valid_record", "id IS NOT NULL")
 # def spo_site_usage():
 #     return _read_landing("spo_sites", detail_type="usage")
 
@@ -471,7 +471,7 @@ _TEAMS_CHANNEL_TABS_SCHEMA = StructType(
     comment="Raw entra_group_members from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "groupId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_group_members():
     return _read_landing(
         "entra_group_members",
@@ -485,7 +485,7 @@ def entra_group_members():
     comment="Raw entra_group_owners from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "groupId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_group_owners():
     return _read_landing(
         "entra_group_owners",
@@ -499,7 +499,7 @@ def entra_group_owners():
     comment="Raw Exchange Online group memberships from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "groupIdentity IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_group_members():
     return _read_landing(
         "exo_group_members",
@@ -513,7 +513,7 @@ def exo_group_members():
     comment="Raw Teams channels (all types) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "teamId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def teams_channels():
     return _read_landing(
         "teams_channels",
@@ -564,7 +564,7 @@ _ENTRA_APP_OWNERS_SCHEMA = StructType(
     comment="Raw user/group/SP assignments to enterprise apps from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_sp_assignments():
     return _read_landing(
         "entra_sp_assignments",
@@ -578,7 +578,7 @@ def entra_sp_assignments():
     comment="Raw service principal owners from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_sp_owners():
     return _read_landing(
         "entra_sp_owners",
@@ -592,7 +592,7 @@ def entra_sp_owners():
     comment="Raw application registration owners from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "applicationId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_app_owners():
     return _read_landing(
         "entra_app_owners",
@@ -609,7 +609,7 @@ def entra_app_owners():
     comment="Raw Exchange Online mailbox statistics from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "MailboxGuid IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_mailbox_statistics():
     return _read_landing("exo_mailbox_statistics", detail_type="statistics")
 
@@ -629,7 +629,7 @@ def spo_site_permissions():
     comment="Raw Exchange Online mailbox permissions from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "exchangeGuid IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def exo_mailbox_permissions():
     return _read_landing("exo_mailbox_permissions", detail_type="permissions")
 
@@ -639,7 +639,7 @@ def exo_mailbox_permissions():
     comment="Raw Teams private/shared channel members from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "teamId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def teams_channel_members():
     return _read_landing(
         "teams_channel_members",
@@ -653,7 +653,7 @@ def teams_channel_members():
     comment="Raw Teams installed apps from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "teamId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def teams_installed_apps():
     return _read_landing(
         "teams_installed_apps",
@@ -667,7 +667,7 @@ def teams_installed_apps():
     comment="Raw Teams channel tabs from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "teamId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def teams_channel_tabs():
     return _read_landing(
         "teams_channel_tabs",
@@ -726,7 +726,7 @@ _ENTRA_DELEGATED_PERMISSION_CLASSIFICATIONS_SCHEMA = StructType(
     comment="Raw application permissions granted to service principals from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_application_permission_grants():
     return _read_landing(
         "entra_application_permission_grants",
@@ -740,7 +740,7 @@ def entra_application_permission_grants():
     comment="Raw claims mapping policies per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_sp_claims_mapping_policies():
     return _read_landing(
         "entra_sp_claims_mapping_policies",
@@ -754,7 +754,7 @@ def entra_sp_claims_mapping_policies():
     comment="Raw delegated permission classifications per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_delegated_permission_classifications():
     return _read_landing(
         "entra_delegated_permission_classifications",
@@ -778,7 +778,7 @@ def entra_sign_in_logs():
     comment="Raw Application Proxy configuration (beta) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "applicationId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_app_proxy_config():
     return _read_landing(
         "entra_app_proxy_config",
@@ -801,7 +801,7 @@ _ENTRA_PROVISIONING_JOBS_SCHEMA = StructType(
     comment="Raw provisioning/synchronization jobs per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
-@dlt.expect("valid_record", "servicePrincipalId IS NOT NULL")
+@dlt.expect("valid_record", "id IS NOT NULL")
 def entra_provisioning_jobs():
     return _read_landing(
         "entra_provisioning_jobs",
