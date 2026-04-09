@@ -17,6 +17,11 @@ $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
     [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
 )
 
+# Disconnect Azure context before connecting to EXO — the managed identity
+# context from Connect-AzAccount can interfere with EXO's certificate-based
+# token acquisition, causing 401 on REST API calls.
+Disconnect-AzAccount -ErrorAction SilentlyContinue | Out-Null
+
 $exoParams = @{
     Certificate  = $cert
     AppId        = $ClientId
@@ -24,6 +29,9 @@ $exoParams = @{
     ShowBanner   = $false
 }
 Connect-ExchangeOnline @exoParams
+
+# Reconnect to Azure (needed for Key Vault cert loading in Phase 2 and storage uploads)
+Connect-AzAccount -Identity -WarningAction SilentlyContinue | Out-Null
 
 # Diagnostic: verify cmdlets are available
 $exoCmds = Get-Command -Module ExchangeOnlineManagement -ErrorAction SilentlyContinue
