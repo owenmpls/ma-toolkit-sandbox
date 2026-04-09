@@ -1,5 +1,9 @@
 FROM mcr.microsoft.com/powershell:lts-7.4-ubuntu-22.04
 
+# PINNED: ExchangeOnlineManagement 3.7.2 — versions 3.9.x have a REST client
+# bug where certificate-based app auth returns HTTP 401 on all cmdlet calls
+# when running on updated PowerShell base images. See #64.
+# TODO: Remove -RequiredVersion pin once Microsoft ships a fixed EXO module.
 RUN pwsh -Command "Set-PSRepository PSGallery -InstallationPolicy Trusted; \
     Install-Module ExchangeOnlineManagement -RequiredVersion 3.7.2 -Force -Scope AllUsers; \
     Install-Module Az.Accounts, Az.KeyVault -Force -Scope AllUsers"
