@@ -56,13 +56,10 @@ function Write-ToAdlsRest {
             }
         $token = $tokenResponse.access_token
     } else {
-        # ACA managed identity token — use Invoke-WebRequest + manual JSON parse
-        # to avoid ExchangeOnlineManagement's Invoke-RestMethod proxy conflict.
-        $response = Invoke-WebRequest `
+        # ACA managed identity token
+        $tokenResponse = Invoke-RestMethod `
             -Uri "$($env:IDENTITY_ENDPOINT)?resource=https://storage.azure.com/&api-version=2019-08-01" `
-            -Headers @{ 'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER } `
-            -UseBasicParsing
-        $tokenResponse = $response.Content | ConvertFrom-Json
+            -Headers @{ 'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER }
         $token = $tokenResponse.access_token
     }
 
@@ -74,21 +71,18 @@ function Write-ToAdlsRest {
     $baseUrl = "$StorageAccountUrl/$ContainerName/$BlobPath"
     $content = [System.IO.File]::ReadAllBytes($LocalFile)
 
-    # Use Invoke-WebRequest instead of Invoke-RestMethod to avoid
-    # ExchangeOnlineManagement's Invoke-RestMethod proxy conflict.
-
     # 1. Create file
-    Invoke-WebRequest -Uri "${baseUrl}?resource=file" `
-        -Method PUT -Headers $headers -UseBasicParsing | Out-Null
+    Invoke-RestMethod -Uri "${baseUrl}?resource=file" `
+        -Method PUT -Headers $headers
 
     # 2. Append data
-    Invoke-WebRequest -Uri "${baseUrl}?action=append&position=0" `
+    Invoke-RestMethod -Uri "${baseUrl}?action=append&position=0" `
         -Method PATCH -Headers $headers `
-        -Body $content -ContentType 'application/octet-stream' -UseBasicParsing | Out-Null
+        -Body $content -ContentType 'application/octet-stream'
 
     # 3. Flush (finalize)
-    Invoke-WebRequest -Uri "${baseUrl}?action=flush&position=$($content.Length)" `
-        -Method PATCH -Headers $headers -UseBasicParsing | Out-Null
+    Invoke-RestMethod -Uri "${baseUrl}?action=flush&position=$($content.Length)" `
+        -Method PATCH -Headers $headers
 }
 
 Export-ModuleMember -Function Write-ToAdlsRest
