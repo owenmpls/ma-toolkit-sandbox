@@ -42,6 +42,10 @@ Write-Log "Azure authentication successful"
 # --- Load certificate ---
 $certPath = $null
 try {
+    # Warm up Key Vault token cache — Get-AzKeyVaultSecret primes the managed
+    # identity credential chain in a way that Connect-ExchangeOnline depends on.
+    Get-AzKeyVaultSecret -VaultName $kvName -Name 'tenant-registry' -AsPlainText -ErrorAction SilentlyContinue | Out-Null
+
     Write-Log "Loading certificate '$certName' from Key Vault"
     $certPath = Get-CertificateFromKeyVault -VaultName $kvName -CertName $certName
 
