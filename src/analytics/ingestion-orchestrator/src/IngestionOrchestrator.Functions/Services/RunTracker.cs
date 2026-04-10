@@ -13,6 +13,7 @@ public interface IRunTracker
 {
     Task TrackAsync(TrackedRun run);
     Task CheckActiveRunsAsync();
+    Task<bool> IsJobActiveAsync(string jobName);
 }
 
 public record TrackedRun
@@ -205,5 +206,33 @@ public class RunTracker : IRunTracker
                 }
             }
         }
+    }
+
+    public async Task<bool> IsJobActiveAsync(string jobName)
+    {
+        await foreach (var blobItem in _container.GetBlobsAsync(prefix: TrackingPrefix))
+        {
+            try
+            {
+                var blob = _container.GetBlobClient(blobItem.Name);
+                var response = await blob.DownloadContentAsync();
+                var run = JsonSerializer.Deserialize<TrackedRun>(
+                    response.Value.Content.ToString(), JsonOptions);
+                if (run != null &&
+                    string.Equals(run.JobName, jobName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation(
+                        "Job {JobName} has active run {RunId} (started {StartedAt})",
+                        jobName, run.RunId, run.StartedAt);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read tracking blob {Blob} during overlap check",
+                    blobItem.Name);
+            }
+        }
+        return false;
     }
 }

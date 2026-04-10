@@ -80,9 +80,14 @@ public class ManualRunFunction
 
         // Dispatch ACA Jobs and return. Containers run independently —
         // the orchestrator doesn't poll or wait for completion.
-        await _runExecutor.ExecuteAsync(
+        var dispatched = await _runExecutor.ExecuteAsync(
             job, "manual", triggeredBy,
-            body.TenantKeys, entityOverride);
+            body.TenantKeys, entityOverride,
+            force: body.Force);
+
+        if (!dispatched)
+            return new ConflictObjectResult(new { job_name = job.Name, status = "skipped_overlap",
+                message = $"Job '{job.Name}' already has an active run. Use force=true to override." });
 
         return new OkObjectResult(new { job_name = job.Name, status = "dispatched" });
     }
@@ -92,6 +97,7 @@ public class ManualRunFunction
         [property: JsonPropertyName("tenant_keys")] IReadOnlyList<string>? TenantKeys = null,
         [property: JsonPropertyName("include_tiers")] IReadOnlyList<int>? IncludeTiers = null,
         [property: JsonPropertyName("entity_names")] IReadOnlyList<string>? EntityNames = null,
-        [property: JsonPropertyName("exclude_entities")] IReadOnlyList<string>? ExcludeEntities = null
+        [property: JsonPropertyName("exclude_entities")] IReadOnlyList<string>? ExcludeEntities = null,
+        [property: JsonPropertyName("force")] bool Force = false
     );
 }

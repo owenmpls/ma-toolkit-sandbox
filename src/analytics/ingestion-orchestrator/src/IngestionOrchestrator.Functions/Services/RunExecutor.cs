@@ -5,9 +5,10 @@ namespace IngestionOrchestrator.Functions.Services;
 
 public interface IRunExecutor
 {
-    Task ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
+    Task<bool> ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
         IReadOnlyList<string>? tenantKeyOverrides = null,
-        EntitySelector? entitySelectorOverride = null);
+        EntitySelector? entitySelectorOverride = null,
+        bool force = false);
 }
 
 public class RunExecutor : IRunExecutor
@@ -35,12 +36,20 @@ public class RunExecutor : IRunExecutor
         _logger = logger;
     }
 
-    public async Task ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
+    public async Task<bool> ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
         IReadOnlyList<string>? tenantKeyOverrides = null,
-        EntitySelector? entitySelectorOverride = null)
+        EntitySelector? entitySelectorOverride = null,
+        bool force = false)
     {
         var runId = Guid.NewGuid().ToString("N")[..8];
         var startedAt = DateTimeOffset.UtcNow;
+
+        // Check for active run of the same job (unless forced)
+        if (!force && await _runTracker.IsJobActiveAsync(job.Name))
+        {
+            _logger.LogInformation("Skipping job {Job}: active run exists (use force to override)", job.Name);
+            return false;
+        }
 
         // Resolve tenants
         IReadOnlyList<TenantConfig> tenants;
@@ -62,7 +71,7 @@ public class RunExecutor : IRunExecutor
         if (tenants.Count == 0 || entities.Count == 0)
         {
             _logger.LogWarning("Job {Job} resolved to 0 tenants or 0 entities, skipping", job.Name);
-            return;
+            return false;
         }
 
         // Group entities by container type
@@ -131,5 +140,7 @@ public class RunExecutor : IRunExecutor
             ResolvedTenants = tenants.Select(t => t.TenantKey).ToList(),
             Tasks = trackedTasks
         });
+
+        return true;
     }
 }
