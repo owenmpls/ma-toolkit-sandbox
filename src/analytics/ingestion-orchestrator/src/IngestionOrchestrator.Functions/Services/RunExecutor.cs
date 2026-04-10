@@ -3,9 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace IngestionOrchestrator.Functions.Services;
 
+public enum DispatchResult { Dispatched, SkippedOverlap, SkippedEmpty }
+
 public interface IRunExecutor
 {
-    Task<bool> ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
+    Task<DispatchResult> ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
         IReadOnlyList<string>? tenantKeyOverrides = null,
         EntitySelector? entitySelectorOverride = null,
         bool force = false);
@@ -36,7 +38,7 @@ public class RunExecutor : IRunExecutor
         _logger = logger;
     }
 
-    public async Task<bool> ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
+    public async Task<DispatchResult> ExecuteAsync(JobDefinition job, string triggerType, string? triggeredBy,
         IReadOnlyList<string>? tenantKeyOverrides = null,
         EntitySelector? entitySelectorOverride = null,
         bool force = false)
@@ -48,7 +50,7 @@ public class RunExecutor : IRunExecutor
         if (!force && await _runTracker.IsJobActiveAsync(job.Name))
         {
             _logger.LogInformation("Skipping job {Job}: active run exists (use force to override)", job.Name);
-            return false;
+            return DispatchResult.SkippedOverlap;
         }
 
         // Resolve tenants
@@ -71,7 +73,7 @@ public class RunExecutor : IRunExecutor
         if (tenants.Count == 0 || entities.Count == 0)
         {
             _logger.LogWarning("Job {Job} resolved to 0 tenants or 0 entities, skipping", job.Name);
-            return false;
+            return DispatchResult.SkippedEmpty;
         }
 
         // Group entities by container type
@@ -141,6 +143,6 @@ public class RunExecutor : IRunExecutor
             Tasks = trackedTasks
         });
 
-        return true;
+        return DispatchResult.Dispatched;
     }
 }

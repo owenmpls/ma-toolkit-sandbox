@@ -80,16 +80,21 @@ public class ManualRunFunction
 
         // Dispatch ACA Jobs and return. Containers run independently —
         // the orchestrator doesn't poll or wait for completion.
-        var dispatched = await _runExecutor.ExecuteAsync(
+        var result = await _runExecutor.ExecuteAsync(
             job, "manual", triggeredBy,
             body.TenantKeys, entityOverride,
             force: body.Force);
 
-        if (!dispatched)
-            return new ConflictObjectResult(new { job_name = job.Name, status = "skipped_overlap",
-                message = $"Job '{job.Name}' already has an active run. Use force=true to override." });
-
-        return new OkObjectResult(new { job_name = job.Name, status = "dispatched" });
+        return result switch
+        {
+            DispatchResult.SkippedOverlap => new ConflictObjectResult(new { job_name = job.Name,
+                status = "skipped_overlap",
+                message = $"Job '{job.Name}' already has an active run. Use force=true to override." }),
+            DispatchResult.SkippedEmpty => new BadRequestObjectResult(new { job_name = job.Name,
+                status = "skipped_empty",
+                message = "Resolved to 0 tenants or 0 entities. Check tenant_keys and entity selectors." }),
+            _ => new OkObjectResult(new { job_name = job.Name, status = "dispatched" })
+        };
     }
 
     private record ManualRunRequest(

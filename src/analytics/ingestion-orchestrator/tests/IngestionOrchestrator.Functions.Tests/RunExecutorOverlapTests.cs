@@ -56,7 +56,7 @@ public class RunExecutorOverlapTests
 
         var result = await _executor.ExecuteAsync(SampleJob, "scheduled", null);
 
-        Assert.False(result);
+        Assert.Equal(DispatchResult.SkippedOverlap, result);
         await _dispatcher.DidNotReceive().StartJobAsync(
             Arg.Any<string>(), Arg.Any<TenantConfig>(),
             Arg.Any<IReadOnlyList<string>>(), Arg.Any<StorageConfig>());
@@ -70,7 +70,7 @@ public class RunExecutorOverlapTests
 
         var result = await _executor.ExecuteAsync(SampleJob, "scheduled", null);
 
-        Assert.True(result);
+        Assert.Equal(DispatchResult.Dispatched, result);
         await _dispatcher.Received(1).StartJobAsync(
             "graph-ingest", Arg.Any<TenantConfig>(),
             Arg.Any<IReadOnlyList<string>>(), Arg.Any<StorageConfig>());
@@ -85,7 +85,7 @@ public class RunExecutorOverlapTests
         var result = await _executor.ExecuteAsync(SampleJob, "manual", "user@test.com",
             force: true);
 
-        Assert.True(result);
+        Assert.Equal(DispatchResult.Dispatched, result);
         await _runTracker.DidNotReceive().IsJobActiveAsync(Arg.Any<string>());
         await _dispatcher.Received(1).StartJobAsync(
             "graph-ingest", Arg.Any<TenantConfig>(),
