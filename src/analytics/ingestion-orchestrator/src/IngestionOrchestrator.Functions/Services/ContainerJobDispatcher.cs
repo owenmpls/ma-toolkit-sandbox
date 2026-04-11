@@ -42,12 +42,15 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
     public async Task<string> StartJobAsync(string containerJobName, TenantConfig tenant,
         IReadOnlyList<string> entityNames, StorageConfig storage)
     {
-        await SetAuthHeaderAsync();
+        var token = await GetAccessTokenAsync();
 
         // 1. Get current job config to read the container image
         var jobUrl = $"{ArmBaseUrl}/subscriptions/{_settings.SubscriptionId}/resourceGroups/{_settings.ResourceGroupName}" +
                      $"/providers/Microsoft.App/jobs/{containerJobName}?api-version={ArmApiVersion}";
-        var jobResponse = await _httpClient.GetAsync(jobUrl);
+
+        var getRequest = new HttpRequestMessage(HttpMethod.Get, jobUrl);
+        getRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var jobResponse = await _httpClient.SendAsync(getRequest);
         if (!jobResponse.IsSuccessStatusCode)
         {
             var errorBody = await jobResponse.Content.ReadAsStringAsync();
@@ -88,8 +91,10 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
             }
         };
 
-        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var startResponse = await _httpClient.PostAsync(startUrl, content);
+        var startRequest = new HttpRequestMessage(HttpMethod.Post, startUrl);
+        startRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        startRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        var startResponse = await _httpClient.SendAsync(startRequest);
         if (!startResponse.IsSuccessStatusCode)
         {
             var errorBody = await startResponse.Content.ReadAsStringAsync();
@@ -111,12 +116,14 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
 
     public async Task<string> GetExecutionStatusAsync(string containerJobName, string executionName)
     {
-        await SetAuthHeaderAsync();
+        var token = await GetAccessTokenAsync();
 
         var url = $"{ArmBaseUrl}/subscriptions/{_settings.SubscriptionId}/resourceGroups/{_settings.ResourceGroupName}" +
                   $"/providers/Microsoft.App/jobs/{containerJobName}/executions/{executionName}?api-version={ArmApiVersion}";
 
-        var response = await _httpClient.GetAsync(url);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _httpClient.SendAsync(request);
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync();
@@ -162,11 +169,10 @@ public class ContainerJobDispatcher : IContainerJobDispatcher
         return vars;
     }
 
-    private async Task SetAuthHeaderAsync()
+    private async Task<string> GetAccessTokenAsync()
     {
         var token = await _credential.GetTokenAsync(
             new Azure.Core.TokenRequestContext(["https://management.azure.com/.default"]));
-        _httpClient.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", token.Token);
+        return token.Token;
     }
 }
