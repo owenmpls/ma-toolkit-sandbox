@@ -4,11 +4,16 @@ function New-WorkerPool {
         [Parameter(Mandatory)][int]$PoolSize,
         [Parameter(Mandatory)][hashtable]$AuthConfig,
         [byte[]]$CertBytes = $null,
-        [switch]$SkipPreAuth
+        [switch]$SkipPreAuth,
+        [switch]$IncludeRetryHelper
     )
 
     $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
     $iss.ImportPSModule($ModuleName)
+    if ($IncludeRetryHelper) {
+        $retryHelperPath = Join-Path $PSScriptRoot 'RetryHelper.psm1'
+        $iss.ImportPSModule($retryHelperPath)
+    }
 
     $pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(
         $PoolSize, $PoolSize, $iss, (Get-Host)

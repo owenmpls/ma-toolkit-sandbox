@@ -70,7 +70,7 @@ function Invoke-Phase2 {
     )
 
     $pool = New-WorkerPool -ModuleName 'PnP.PowerShell' `
-        -PoolSize $PoolSize -AuthConfig $AuthConfig -CertBytes $CertBytes -SkipPreAuth
+        -PoolSize $PoolSize -AuthConfig $AuthConfig -CertBytes $CertBytes -SkipPreAuth -IncludeRetryHelper
 
     try {
         # --- Pre-authenticate each runspace to admin URL to validate credentials ---
@@ -127,14 +127,6 @@ function Invoke-Phase2 {
                 param($SiteUrls, $OutputDir, $ChunkNum, $RunId, $AuthCfg)
 
                 $MaxRetries = 5
-                $BaseDelay = 2
-                $MaxDelay = 120
-
-                $authPatterns = @('401', 'Unauthorized', 'token.*expired', 'Access token has expired')
-                $throttlePatterns = @(
-                    'TooManyRequests', '429', 'throttled', 'Too many requests',
-                    'Rate limit', 'Server Busy', 'ServerBusyException'
-                )
 
                 $cfg = $AuthCfg
 
@@ -206,20 +198,10 @@ function Invoke-Phase2 {
                                 $siteDone = $true
                             }
                             catch {
-                                $ex = $_.Exception
-                                $innermost = $ex
-                                while ($innermost.InnerException) { $innermost = $innermost.InnerException }
-                                $errorMessage = if (-not [string]::IsNullOrWhiteSpace($innermost.Message)) {
-                                    $innermost.Message
-                                } elseif (-not [string]::IsNullOrWhiteSpace($ex.Message)) {
-                                    $ex.Message
-                                } else {
-                                    $ex.GetType().FullName
-                                }
-                                $matchText = "$($ex.Message) $($innermost.Message)"
+                                $class = Get-ErrorClassification -ErrorRecord $_ -ApiFamily 'spo'
 
-                                # Not found / locked / no access — skip
-                                if ($matchText -match '404|403|locked|no access|does not exist|Cannot find site') {
+                                # Not found / skippable — skip this site
+                                if ($class.Category -eq 'Skippable') {
                                     $skipped++
                                     $siteDone = $true
                                     continue
@@ -227,44 +209,25 @@ function Invoke-Phase2 {
 
                                 # Max retries exhausted
                                 if ($attempt -ge $MaxRetries) {
-                                    $errors.Add("site=$siteUrl attempt=${attempt}: $errorMessage")
+                                    $errors.Add("site=$siteUrl attempt=${attempt}: $($class.Message)")
                                     $skipped++
                                     $siteDone = $true
                                     continue
                                 }
 
-                                # Auth error — retry (PnP reconnects per-site anyway)
-                                $isAuthError = $false
-                                foreach ($p in $authPatterns) {
-                                    if ($matchText -match $p) { $isAuthError = $true; break }
-                                }
-                                if ($isAuthError) {
+                                # Auth error — retry (PnP reconnects per-site at top of loop)
+                                if ($class.Category -eq 'Auth') {
                                     continue
                                 }
 
-                                # Throttle — exponential backoff with jitter
-                                $isThrottled = $false
-                                foreach ($p in $throttlePatterns) {
-                                    if ($matchText -match $p) { $isThrottled = $true; break }
-                                }
-                                if ($isThrottled) {
-                                    $retryAfter = 0
-                                    if ($matchText -match 'Retry-After[:\s]+(\d+)') {
-                                        $retryAfter = [int]$Matches[1]
-                                    }
-                                    $delay = if ($retryAfter -gt 0) {
-                                        $retryAfter
-                                    } else {
-                                        $exp = [math]::Min($BaseDelay * [math]::Pow(2, $attempt - 1), $MaxDelay)
-                                        $jitter = Get-Random -Minimum 0.0 -Maximum ($exp * 0.3)
-                                        [math]::Round($exp + $jitter, 1)
-                                    }
-                                    Start-Sleep -Seconds $delay
+                                # Throttle — backoff and retry
+                                if ($class.Category -eq 'Throttle') {
+                                    Start-Sleep -Seconds (Get-RetryDelay -Classification $class -Attempt $attempt)
                                     continue
                                 }
 
                                 # Unrecognized error — record and skip
-                                $errors.Add("site=$siteUrl attempt=${attempt}: $errorMessage")
+                                $errors.Add("site=$siteUrl attempt=${attempt}: $($class.Message)")
                                 $skipped++
                                 $siteDone = $true
                             }

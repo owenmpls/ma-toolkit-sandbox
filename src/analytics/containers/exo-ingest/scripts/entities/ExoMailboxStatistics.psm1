@@ -36,7 +36,7 @@ function Invoke-Phase2 {
     )
 
     $pool = New-WorkerPool -ModuleName 'ExchangeOnlineManagement' `
-        -PoolSize $PoolSize -AuthConfig $AuthConfig -CertBytes $CertBytes -SkipPreAuth
+        -PoolSize $PoolSize -AuthConfig $AuthConfig -CertBytes $CertBytes -SkipPreAuth -IncludeRetryHelper
 
     try {
         # --- Pre-authenticate each runspace with graceful degradation ---
@@ -104,15 +104,6 @@ function Invoke-Phase2 {
                 param($Guids, $OutputDir, $ChunkNum, $RunId)
 
                 $MaxRetries = 5
-                $BaseDelay = 2
-                $MaxDelay = 120
-
-                $authPatterns = @('401', 'Unauthorized', 'token.*expired', 'Access token has expired')
-                $throttlePatterns = @(
-                    'TooManyRequests', '429', 'throttled', 'Too many requests',
-                    'Rate limit', 'Server Busy', 'ServerBusyException',
-                    'MicroDelay', 'BackoffException', 'Too many concurrent'
-                )
 
                 # Inline reconnection helper using globals stored during pre-auth
                 function Reconnect-IngestAuth {
@@ -156,20 +147,10 @@ function Invoke-Phase2 {
                                 $mbxDone = $true
                             }
                             catch {
-                                $ex = $_.Exception
-                                $innermost = $ex
-                                while ($innermost.InnerException) { $innermost = $innermost.InnerException }
-                                $errorMessage = if (-not [string]::IsNullOrWhiteSpace($innermost.Message)) {
-                                    $innermost.Message
-                                } elseif (-not [string]::IsNullOrWhiteSpace($ex.Message)) {
-                                    $ex.Message
-                                } else {
-                                    $ex.GetType().FullName
-                                }
-                                $matchText = "$($ex.Message) $($innermost.Message)"
+                                $class = Get-ErrorClassification -ErrorRecord $_ -ApiFamily 'exo'
 
-                                # Not found — deleted/inactive mailbox, skip
-                                if ($matchText -match 'MapiExceptionNotFound|couldn''t be found|mailbox.*doesn''t exist') {
+                                # Not found / skippable — skip this entity
+                                if ($class.Category -eq 'Skippable') {
                                     $skipped++
                                     $mbxDone = $true
                                     continue
@@ -177,46 +158,27 @@ function Invoke-Phase2 {
 
                                 # Max retries exhausted
                                 if ($attempt -ge $MaxRetries) {
-                                    $errors.Add("mbx=$guid attempt=${attempt}: $errorMessage")
+                                    $errors.Add("mbx=$guid attempt=${attempt}: $($class.Message)")
                                     $skipped++
                                     $mbxDone = $true
                                     continue
                                 }
 
                                 # Auth error — reconnect and retry
-                                $isAuthError = $false
-                                foreach ($p in $authPatterns) {
-                                    if ($matchText -match $p) { $isAuthError = $true; break }
-                                }
-                                if ($isAuthError) {
+                                if ($class.Category -eq 'Auth') {
                                     try { Reconnect-IngestAuth }
                                     catch { Write-Warning "Reconnect failed (attempt $attempt): $($_.Exception.Message)" }
                                     continue
                                 }
 
-                                # Throttle — exponential backoff with jitter, then retry
-                                $isThrottled = $false
-                                foreach ($p in $throttlePatterns) {
-                                    if ($matchText -match $p) { $isThrottled = $true; break }
-                                }
-                                if ($isThrottled) {
-                                    $retryAfter = 0
-                                    if ($matchText -match 'Retry-After[:\s]+(\d+)') {
-                                        $retryAfter = [int]$Matches[1]
-                                    }
-                                    $delay = if ($retryAfter -gt 0) {
-                                        $retryAfter
-                                    } else {
-                                        $exp = [math]::Min($BaseDelay * [math]::Pow(2, $attempt - 1), $MaxDelay)
-                                        $jitter = Get-Random -Minimum 0.0 -Maximum ($exp * 0.3)
-                                        [math]::Round($exp + $jitter, 1)
-                                    }
-                                    Start-Sleep -Seconds $delay
+                                # Throttle — backoff and retry
+                                if ($class.Category -eq 'Throttle') {
+                                    Start-Sleep -Seconds (Get-RetryDelay -Classification $class -Attempt $attempt)
                                     continue
                                 }
 
                                 # Unrecognized error — record and skip
-                                $errors.Add("mbx=$guid attempt=${attempt}: $errorMessage")
+                                $errors.Add("mbx=$guid attempt=${attempt}: $($class.Message)")
                                 $skipped++
                                 $mbxDone = $true
                             }
