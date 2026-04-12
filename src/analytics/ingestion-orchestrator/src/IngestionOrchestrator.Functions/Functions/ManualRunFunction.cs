@@ -62,6 +62,20 @@ public class ManualRunFunction
                     TenantKeys: body.TenantKeys));
         }
 
+        // Validate entity names against registry
+        if (body.EntityNames is { Count: > 0 })
+        {
+            var knownEntities = _configLoader.EntityRegistry.Entities
+                .Select(e => e.Name).ToHashSet();
+            var unknown = body.EntityNames.Where(n => !knownEntities.Contains(n)).ToList();
+            if (unknown.Count > 0)
+                return new BadRequestObjectResult(new {
+                    status = "invalid_entities",
+                    unknown_entities = unknown,
+                    message = $"Unknown entities: {string.Join(", ", unknown)}"
+                });
+        }
+
         var triggeredBy = req.Headers.TryGetValue("X-MS-CLIENT-PRINCIPAL-NAME", out var name)
             ? name.ToString() : "manual";
 
