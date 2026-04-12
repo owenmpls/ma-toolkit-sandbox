@@ -19,6 +19,12 @@ param blobPrivateDnsZoneId string = ''
 @description('Private DNS zone ID for DFS (ADLS Gen2)')
 param dfsPrivateDnsZoneId string = ''
 
+@description('Private DNS zone ID for queue storage')
+param queuePrivateDnsZoneId string = ''
+
+@description('Private DNS zone ID for table storage')
+param tablePrivateDnsZoneId string = ''
+
 @description('VNet ID for Databricks VNet injection (optional)')
 param vnetId string = ''
 
@@ -140,7 +146,9 @@ var orchestratorPlanName = '${orchestratorBaseName}-plan'
 var orchestratorAiName = '${orchestratorBaseName}-ai'
 var orchestratorTags = union(tags, { component: 'ingestion-orchestrator' })
 
-resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+var createOrchestratorPes = !empty(privateEndpointSubnetId) && !empty(blobPrivateDnsZoneId)
+
+resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: orchestratorStorageName
   location: location
   tags: orchestratorTags
@@ -150,11 +158,117 @@ resource orchestratorStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
+    publicNetworkAccess: createOrchestratorPes ? 'Disabled' : 'Enabled'
+    networkAcls: !empty(orchestratorSubnetId) ? {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+      virtualNetworkRules: [
+        { id: orchestratorSubnetId, action: 'Allow' }
+      ]
+    } : {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 
 resource orchestratorDeployContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   name: '${orchestratorStorage.name}/default/deployment'
+}
+
+// --- Private endpoints for orchestrator storage (blob, queue, table) ---
+
+resource orchStBlobPe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createOrchestratorPes) {
+  name: '${orchestratorBaseName}-pe-st-blob'
+  location: location
+  tags: orchestratorTags
+  properties: {
+    subnet: { id: privateEndpointSubnetId }
+    privateLinkServiceConnections: [
+      {
+        name: '${orchestratorBaseName}-plsc-st-blob'
+        properties: {
+          privateLinkServiceId: orchestratorStorage.id
+          groupIds: ['blob']
+        }
+      }
+    ]
+  }
+}
+
+resource orchStBlobDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createOrchestratorPes) {
+  parent: orchStBlobPe
+  name: 'st-blob-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-blob-config'
+        properties: { privateDnsZoneId: blobPrivateDnsZoneId }
+      }
+    ]
+  }
+}
+
+resource orchStQueuePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createOrchestratorPes) {
+  name: '${orchestratorBaseName}-pe-st-queue'
+  location: location
+  tags: orchestratorTags
+  properties: {
+    subnet: { id: privateEndpointSubnetId }
+    privateLinkServiceConnections: [
+      {
+        name: '${orchestratorBaseName}-plsc-st-queue'
+        properties: {
+          privateLinkServiceId: orchestratorStorage.id
+          groupIds: ['queue']
+        }
+      }
+    ]
+  }
+}
+
+resource orchStQueueDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createOrchestratorPes) {
+  parent: orchStQueuePe
+  name: 'st-queue-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-queue-config'
+        properties: { privateDnsZoneId: queuePrivateDnsZoneId }
+      }
+    ]
+  }
+}
+
+resource orchStTablePe 'Microsoft.Network/privateEndpoints@2023-11-01' = if (createOrchestratorPes) {
+  name: '${orchestratorBaseName}-pe-st-table'
+  location: location
+  tags: orchestratorTags
+  properties: {
+    subnet: { id: privateEndpointSubnetId }
+    privateLinkServiceConnections: [
+      {
+        name: '${orchestratorBaseName}-plsc-st-table'
+        properties: {
+          privateLinkServiceId: orchestratorStorage.id
+          groupIds: ['table']
+        }
+      }
+    ]
+  }
+}
+
+resource orchStTableDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (createOrchestratorPes) {
+  parent: orchStTablePe
+  name: 'st-table-dns-group'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'st-table-config'
+        properties: { privateDnsZoneId: tablePrivateDnsZoneId }
+      }
+    ]
+  }
 }
 
 resource orchestratorAppInsights 'Microsoft.Insights/components@2020-02-02' = {
@@ -426,6 +540,17 @@ resource orchestratorOwnStorageRole 'Microsoft.Authorization/roleAssignments@202
   scope: orchestratorStorage
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+    principalId: orchestratorFunc.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Storage Table Data Contributor on orchestrator's own storage (Functions runtime)
+resource orchestratorOwnStorageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(orchestratorStorage.id, orchestratorFuncName, '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')
+  scope: orchestratorStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')
     principalId: orchestratorFunc.identity.principalId
     principalType: 'ServicePrincipal'
   }

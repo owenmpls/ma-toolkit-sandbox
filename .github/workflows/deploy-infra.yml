@@ -251,7 +251,10 @@ jobs:
             --parameters vnetId="${{ steps.shared.outputs.vnet_id }}" \
             --parameters databricksHostSubnetName="${{ steps.shared.outputs.databricks_host_subnet_name }}" \
             --parameters databricksContainerSubnetName="${{ steps.shared.outputs.databricks_container_subnet_name }}" \
-            --parameters orchestratorSubnetId="${{ steps.shared.outputs.scheduler_subnet_id }}"
+            --parameters orchestratorSubnetId="${{ steps.shared.outputs.scheduler_subnet_id }}" \
+            --parameters queuePrivateDnsZoneId="${{ steps.shared.outputs.st_queue_dns_zone_id }}" \
+            --parameters tablePrivateDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}" \
+            --parameters logAnalyticsWorkspaceId="${{ steps.shared.outputs.log_analytics_workspace_id }}"
 
       # ADF Contributor roles removed — ADF replaced by ingestion orchestrator.
       # The orchestrator's managed identity gets Contributor at RG level via Bicep.
