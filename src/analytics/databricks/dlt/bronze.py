@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import col, current_timestamp, lit, regexp_extract
+from pyspark.sql.functions import col, current_timestamp, lit, regexp_extract, when
 from pyspark.sql.types import ArrayType, BooleanType, StringType, StructField, StructType
 
 STORAGE_ACCOUNT = spark.conf.get("analytics.storage_account_name")
@@ -56,7 +56,10 @@ def _read_landing(entity_type, detail_type=None, file_pattern="*.jsonl", schema=
         .load(landing_path)
         .withColumn(
             "_tenant_key",
-            regexp_extract(col("_metadata.file_path"), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1),
+            when(
+                regexp_extract(col("_metadata.file_path"), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1) != "",
+                regexp_extract(col("_metadata.file_path"), r"/([^/]+)/\d{4}-\d{2}-\d{2}/", 1),
+            ),
         )
         .withColumn("_source_file", col("_metadata.file_path"))
         .withColumn("_source_system", lit("graph_api"))
@@ -84,6 +87,7 @@ def _read_landing(entity_type, detail_type=None, file_pattern="*.jsonl", schema=
     comment="Raw entra_users data from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_users():
     return _read_landing("entra_users")
 
@@ -93,6 +97,7 @@ def entra_users():
     comment="Raw entra_groups data from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_groups():
     return _read_landing("entra_groups")
 
@@ -102,6 +107,7 @@ def entra_groups():
     comment="Raw entra_contacts (organizational contacts) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_contacts():
     return _read_landing("entra_contacts")
 
@@ -111,6 +117,7 @@ def entra_contacts():
     comment="Raw Exchange Online mailboxes from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_mailboxes():
     return _read_landing("exo_mailboxes")
 
@@ -120,6 +127,7 @@ def exo_mailboxes():
     comment="Raw Exchange Online mail contacts from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_contacts():
     return _read_landing("exo_contacts")
 
@@ -129,6 +137,7 @@ def exo_contacts():
     comment="Raw Exchange Online mail users from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_mail_users():
     return _read_landing("exo_mail_users")
 
@@ -138,6 +147,7 @@ def exo_mail_users():
     comment="Raw Exchange Online distribution groups from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_distribution_groups():
     return _read_landing("exo_distribution_groups")
 
@@ -147,6 +157,7 @@ def exo_distribution_groups():
     comment="Raw Exchange Online unified (M365) groups from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_unified_groups():
     return _read_landing("exo_unified_groups")
 
@@ -156,6 +167,7 @@ def exo_unified_groups():
     comment="Raw SharePoint Online sites from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def spo_sites():
     return _read_landing("spo_sites", file_pattern="spo_sites_*.jsonl")
 
@@ -177,6 +189,7 @@ def spo_sites():
     comment="Raw Teams-enabled groups (Phase 1 inventory) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def teams_teams():
     return _read_landing("teams_teams", file_pattern="teams_teams_*.jsonl")
 
@@ -258,6 +271,7 @@ _INTUNE_MANAGED_DEVICES_SCHEMA = StructType(
     comment="Raw Entra ID device objects from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_devices():
     return _read_landing("entra_devices", schema=_ENTRA_DEVICES_SCHEMA)
 
@@ -267,6 +281,7 @@ def entra_devices():
     comment="Raw Intune managed devices from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def intune_managed_devices():
     return _read_landing(
         "intune_managed_devices", schema=_INTUNE_MANAGED_DEVICES_SCHEMA
@@ -303,6 +318,7 @@ _MDE_DEVICES_SCHEMA = StructType(
     comment="Raw Microsoft Defender for Endpoint device inventory from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def mde_devices():
     return _read_landing("mde_devices", schema=_MDE_DEVICES_SCHEMA)
 
@@ -312,6 +328,7 @@ def mde_devices():
     comment="Raw Entra app registrations from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_applications():
     return _read_landing("entra_applications")
 
@@ -321,6 +338,7 @@ def entra_applications():
     comment="Raw Entra service principals (enterprise apps) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_service_principals():
     return _read_landing("entra_service_principals")
 
@@ -342,6 +360,7 @@ _ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA = StructType(
     comment="Raw OAuth2 delegated permission grants from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_delegated_permission_grants():
     return _read_landing(
         "entra_delegated_permission_grants", schema=_ENTRA_DELEGATED_PERMISSION_GRANTS_SCHEMA
@@ -450,6 +469,7 @@ _TEAMS_CHANNEL_TABS_SCHEMA = StructType(
     comment="Raw entra_group_members from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_group_members():
     return _read_landing(
         "entra_group_members",
@@ -463,6 +483,7 @@ def entra_group_members():
     comment="Raw entra_group_owners from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_group_owners():
     return _read_landing(
         "entra_group_owners",
@@ -476,6 +497,7 @@ def entra_group_owners():
     comment="Raw Exchange Online group memberships from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_group_members():
     return _read_landing(
         "exo_group_members",
@@ -489,6 +511,7 @@ def exo_group_members():
     comment="Raw Teams channels (all types) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def teams_channels():
     return _read_landing(
         "teams_channels",
@@ -539,6 +562,7 @@ _ENTRA_APP_OWNERS_SCHEMA = StructType(
     comment="Raw user/group/SP assignments to enterprise apps from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_sp_assignments():
     return _read_landing(
         "entra_sp_assignments",
@@ -552,6 +576,7 @@ def entra_sp_assignments():
     comment="Raw service principal owners from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_sp_owners():
     return _read_landing(
         "entra_sp_owners",
@@ -565,6 +590,7 @@ def entra_sp_owners():
     comment="Raw application registration owners from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_app_owners():
     return _read_landing(
         "entra_app_owners",
@@ -581,6 +607,7 @@ def entra_app_owners():
     comment="Raw Exchange Online mailbox statistics from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_mailbox_statistics():
     return _read_landing("exo_mailbox_statistics", detail_type="statistics")
 
@@ -590,6 +617,7 @@ def exo_mailbox_statistics():
     comment="Raw SPO site permissions, groups, sharing links from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def spo_site_permissions():
     return _read_landing("spo_site_permissions", detail_type="permissions")
 
@@ -599,6 +627,7 @@ def spo_site_permissions():
     comment="Raw Exchange Online mailbox permissions from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def exo_mailbox_permissions():
     return _read_landing("exo_mailbox_permissions", detail_type="permissions")
 
@@ -608,6 +637,7 @@ def exo_mailbox_permissions():
     comment="Raw Teams private/shared channel members from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def teams_channel_members():
     return _read_landing(
         "teams_channel_members",
@@ -621,6 +651,7 @@ def teams_channel_members():
     comment="Raw Teams installed apps from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def teams_installed_apps():
     return _read_landing(
         "teams_installed_apps",
@@ -634,6 +665,7 @@ def teams_installed_apps():
     comment="Raw Teams channel tabs from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def teams_channel_tabs():
     return _read_landing(
         "teams_channel_tabs",
@@ -692,6 +724,7 @@ _ENTRA_DELEGATED_PERMISSION_CLASSIFICATIONS_SCHEMA = StructType(
     comment="Raw application permissions granted to service principals from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_application_permission_grants():
     return _read_landing(
         "entra_application_permission_grants",
@@ -705,6 +738,7 @@ def entra_application_permission_grants():
     comment="Raw claims mapping policies per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_sp_claims_mapping_policies():
     return _read_landing(
         "entra_sp_claims_mapping_policies",
@@ -718,6 +752,7 @@ def entra_sp_claims_mapping_policies():
     comment="Raw delegated permission classifications per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_delegated_permission_classifications():
     return _read_landing(
         "entra_delegated_permission_classifications",
@@ -731,6 +766,7 @@ def entra_delegated_permission_classifications():
     comment="Raw Entra sign-in logs from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_sign_in_logs():
     return _read_landing("entra_sign_in_logs")
 
@@ -740,6 +776,7 @@ def entra_sign_in_logs():
     comment="Raw Application Proxy configuration (beta) from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_app_proxy_config():
     return _read_landing(
         "entra_app_proxy_config",
@@ -762,6 +799,7 @@ _ENTRA_PROVISIONING_JOBS_SCHEMA = StructType(
     comment="Raw provisioning/synchronization jobs per service principal from all tenants",
     table_properties=BRONZE_TABLE_PROPERTIES,
 )
+@dlt.expect("valid_tenant_key", "_tenant_key IS NOT NULL")
 def entra_provisioning_jobs():
     return _read_landing(
         "entra_provisioning_jobs",
