@@ -86,7 +86,7 @@ $record = [ordered]@{
     siteUrl = $siteUrl
 }
 
-$pnpSite = Get-PnPSite -Includes Usage, GroupId, HubSiteId, IsHubSite, IsTeamsConnected, Owner, ReadOnly -ErrorAction Stop
+$pnpSite = Get-PnPSite -Includes Usage, GroupId, HubSiteId, IsHubSite, Owner, ReadOnly -ErrorAction Stop
 $pnpWeb = Get-PnPWeb -Includes WebTemplate, Configuration, Language -ErrorAction Stop
 
 # Usage
@@ -112,8 +112,6 @@ $gid = $pnpSite.GroupId
 $empty = [guid]::Empty
 $record.groupId = if ($gid -and $gid -ne $empty) { $gid.ToString() } else { $null }
 $record.isGroupConnected = [bool]($gid -and $gid -ne $empty)
-$record.isTeamsConnected = [bool]$pnpSite.IsTeamsConnected
-
 # Hub site
 $hid = $pnpSite.HubSiteId
 $record.hubSiteId = if ($hid -and $hid -ne $empty) { $hid.ToString() } else { $null }
