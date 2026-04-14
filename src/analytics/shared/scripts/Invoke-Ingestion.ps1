@@ -239,4 +239,8 @@ catch {
 finally {
     # Certificate cleanup - secure zero-fill before deletion
     if ($certPath) { Remove-CertificateFile -Path $certPath }
+    if ($script:CertBytes) {
+        [Array]::Clear($script:CertBytes, 0, $script:CertBytes.Length)
+        $script:CertBytes = $null
+    }
 }
