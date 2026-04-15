@@ -225,7 +225,16 @@
       "WebFetch(domain:www.bloggingforlogging.com)",
       "WebFetch(domain:techcommunity.microsoft.com)",
       "WebFetch(domain:www.mobzystems.com)",
-      "WebFetch(domain:pnp.github.io)"
+      "WebFetch(domain:pnp.github.io)",
+      "WebFetch(domain:azure.microsoft.com)",
+      "WebFetch(domain:atlasgo.io)",
+      "WebFetch(domain:docs.databricks.com)",
+      "WebFetch(domain:srinimf.com)",
+      "Bash(openssl:*)",
+      "Bash(az keyvault:*)",
+      "Bash(az datafactory:*)",
+      "Bash(do python3:*)",
+      "Bash(gh variable:*)"
     ]
   }
 }
