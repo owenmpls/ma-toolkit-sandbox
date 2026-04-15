@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using IngestionOrchestrator.Functions.Models;
 using IngestionOrchestrator.Functions.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -25,9 +27,10 @@ public class ManualRunFunction
         _logger = logger;
     }
 
+    [Authorize(Policy = "RequireAdminRole")]
     [Function("ManualRun")]
     public async Task<IActionResult> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "run")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "run")] HttpRequest req)
     {
         var body = await JsonSerializer.DeserializeAsync<ManualRunRequest>(req.Body);
         if (body == null)
@@ -76,8 +79,9 @@ public class ManualRunFunction
                 });
         }
 
-        var triggeredBy = req.Headers.TryGetValue("X-MS-CLIENT-PRINCIPAL-NAME", out var name)
-            ? name.ToString() : "manual";
+        var triggeredBy = req.HttpContext.User?.FindFirst("preferred_username")?.Value
+            ?? req.HttpContext.User?.FindFirst("name")?.Value
+            ?? "unknown";
 
         _logger.LogInformation("Manual run triggered for job {Job} by {User}", job.Name, triggeredBy);
 

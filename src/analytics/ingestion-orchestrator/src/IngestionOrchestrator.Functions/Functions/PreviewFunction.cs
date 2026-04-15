@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using IngestionOrchestrator.Functions.Models;
 using IngestionOrchestrator.Functions.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -24,9 +25,10 @@ public class PreviewFunction
         _tenantResolver = tenantResolver;
     }
 
+    [Authorize(Policy = "RequireAuthenticated")]
     [Function("Preview")]
     public async Task<IActionResult> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "preview")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "preview")] HttpRequest req)
     {
         var body = await JsonSerializer.DeserializeAsync<PreviewRequest>(req.Body);
         if (body == null)
@@ -67,9 +69,10 @@ public class PreviewFunction
         });
     }
 
+    [Authorize(Policy = "RequireAuthenticated")]
     [Function("Config")]
     public IActionResult GetConfig(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "config")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "config")] HttpRequest req)
     {
         return new OkObjectResult(new
         {

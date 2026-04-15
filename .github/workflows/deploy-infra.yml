@@ -254,7 +254,10 @@ jobs:
             --parameters orchestratorSubnetId="${{ steps.shared.outputs.scheduler_subnet_id }}" \
             --parameters queuePrivateDnsZoneId="${{ steps.shared.outputs.st_queue_dns_zone_id }}" \
             --parameters tablePrivateDnsZoneId="${{ steps.shared.outputs.st_table_dns_zone_id }}" \
-            --parameters logAnalyticsWorkspaceId="${{ steps.shared.outputs.log_analytics_workspace_id }}"
+            --parameters logAnalyticsWorkspaceId="${{ steps.shared.outputs.log_analytics_workspace_id }}" \
+            --parameters entraIdTenantId="${{ vars.ENTRA_ID_TENANT_ID }}" \
+            --parameters entraIdClientId="${{ vars.INGEST_ORCH_CLIENT_ID }}" \
+            --parameters entraIdAudience="api://${{ vars.INGEST_ORCH_CLIENT_ID }}"
 
       # ADF Contributor roles removed — ADF replaced by ingestion orchestrator.
       # The orchestrator's managed identity gets Contributor at RG level via Bicep.

@@ -139,6 +139,15 @@ module networkSecurityPerimeter 'modules/network-security-perimeter/main.bicep' 
 @description('Subnet resource ID for orchestrator VNet integration. Leave empty to skip.')
 param orchestratorSubnetId string = ''
 
+@description('Entra ID tenant ID for orchestrator authentication')
+param entraIdTenantId string = ''
+
+@description('Entra ID client ID (app registration) for orchestrator authentication')
+param entraIdClientId string = ''
+
+@description('Entra ID audience URI for orchestrator authentication')
+param entraIdAudience string = ''
+
 var orchestratorBaseName = '${baseName}-ingest-orch'
 var orchestratorStorageName = take(replace('${orchestratorBaseName}st', '-', ''), 24)
 var orchestratorFuncName = '${orchestratorBaseName}-func-${take(uniqueSuffix, 8)}'
@@ -319,6 +328,10 @@ resource orchestratorFunc 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Ingestion__SubscriptionId', value: subscription().subscriptionId }
         { name: 'Ingestion__ResourceGroupName', value: resourceGroup().name }
         { name: 'Ingestion__ConfigPath', value: 'Config' }
+        { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
+        { name: 'AzureAd__TenantId', value: entraIdTenantId }
+        { name: 'AzureAd__ClientId', value: entraIdClientId }
+        { name: 'AzureAd__Audience', value: entraIdAudience }
       ]
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
