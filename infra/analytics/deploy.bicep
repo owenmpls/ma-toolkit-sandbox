@@ -328,10 +328,6 @@ resource orchestratorFunc 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Ingestion__SubscriptionId', value: subscription().subscriptionId }
         { name: 'Ingestion__ResourceGroupName', value: resourceGroup().name }
         { name: 'Ingestion__ConfigPath', value: 'Config' }
-        { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
-        { name: 'AzureAd__TenantId', value: entraIdTenantId }
-        { name: 'AzureAd__ClientId', value: entraIdClientId }
-        { name: 'AzureAd__Audience', value: entraIdAudience }
       ]
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'

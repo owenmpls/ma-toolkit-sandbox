@@ -1,25 +1,13 @@
 using IngestionOrchestrator.Functions.Services;
 using IngestionOrchestrator.Functions.Settings;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Microsoft.Identity.Web;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
-
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("RequireAdminRole", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("RequireAuthenticated", policy => policy.RequireAuthenticatedUser());
-});
 
 builder.Services.AddOptions<IngestionSettings>()
     .Bind(builder.Configuration.GetSection(IngestionSettings.SectionName))
