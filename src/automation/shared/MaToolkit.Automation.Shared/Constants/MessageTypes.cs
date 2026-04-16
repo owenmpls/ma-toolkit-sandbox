@@ -11,4 +11,5 @@ public static class MessageTypes
     public const string MemberRemoved = "member-removed";
     public const string PollCheck = "poll-check";
     public const string RetryCheck = "retry-check";
+    public const string DispatchTimeout = "dispatch-timeout";
 }

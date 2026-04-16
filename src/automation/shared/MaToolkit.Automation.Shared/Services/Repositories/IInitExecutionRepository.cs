@@ -10,6 +10,7 @@ public interface IInitExecutionRepository
     Task<IEnumerable<InitExecutionRecord>> GetByBatchAsync(int batchId);
     Task<IEnumerable<InitExecutionRecord>> GetPendingByBatchAsync(int batchId);
     Task<IEnumerable<InitExecutionRecord>> GetPollingStepsDueAsync(DateTime now);
+    Task<IEnumerable<InitExecutionRecord>> GetDispatchedStepsOlderThanAsync(DateTime cutoff);
     Task<int> InsertAsync(InitExecutionRecord record, IDbTransaction? transaction = null);
     Task<bool> SetDispatchedAsync(int id, string jobId);
     Task<bool> SetSucceededAsync(int id, string? resultJson);

@@ -9,4 +9,5 @@ public interface IServiceBusPublisher
     Task PublishMemberAddedAsync(MemberAddedMessage message);
     Task PublishMemberRemovedAsync(MemberRemovedMessage message);
     Task PublishPollCheckAsync(PollCheckMessage message);
+    Task PublishDispatchTimeoutAsync(DispatchTimeoutMessage message);
 }

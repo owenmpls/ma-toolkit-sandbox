@@ -13,6 +13,7 @@ public interface IStepExecutionRepository
     Task<IEnumerable<StepExecutionRecord>> GetPendingByMemberAsync(int batchMemberId);
     Task<IEnumerable<StepExecutionRecord>> GetByPhaseAndMemberAsync(int phaseExecutionId, int batchMemberId);
     Task<IEnumerable<StepExecutionRecord>> GetPollingStepsDueAsync(DateTime now);
+    Task<IEnumerable<StepExecutionRecord>> GetDispatchedStepsOlderThanAsync(DateTime cutoff);
     Task<int> InsertAsync(StepExecutionRecord record, IDbTransaction? transaction = null);
     Task<bool> SetDispatchedAsync(int id, string jobId);
     Task<bool> SetSucceededAsync(int id, string? resultJson);

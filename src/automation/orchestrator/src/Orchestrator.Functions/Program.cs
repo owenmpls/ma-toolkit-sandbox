@@ -52,6 +52,7 @@ builder.Services.AddScoped<IRetryScheduler, RetryScheduler>();
 builder.Services.AddScoped<IRetryCheckHandler, RetryCheckHandler>();
 
 // Message handlers
+builder.Services.AddScoped<IDispatchTimeoutHandler, DispatchTimeoutHandler>();
 builder.Services.AddScoped<IBatchInitHandler, BatchInitHandler>();
 builder.Services.AddScoped<IPhaseDueHandler, PhaseDueHandler>();
 builder.Services.AddScoped<IMemberAddedHandler, MemberAddedHandler>();
